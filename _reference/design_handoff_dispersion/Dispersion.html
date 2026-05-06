@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dispersion · Design + Handoff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; font-family: 'Inter', system-ui, sans-serif; }
+    em { font-style: italic; }
+    code { font-family: ui-monospace, 'JetBrains Mono', monospace; }
+    /* artboard frames look like soft physical cards */
+    .ab-frame {
+        background: #fff;
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.06), 0 8px 30px rgba(0,0,0,0.06);
+        border-radius: 14px;
+        overflow: hidden;
+        height: 100%;
+    }
+    .ab-mobile { border-radius: 28px; }
+    /* speaker-notes-style intro */
+    .intro-wrap {
+        max-width: 880px; margin: 0 auto; padding: 20px 24px;
+    }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "course",
+  "displayFont": "Fraunces",
+  "uiFont": "Inter",
+  "vizPalette": "fairway",
+  "vizFacets": 20,
+  "vizContours": 7,
+  "showHandoff": true
+}/*EDITMODE-END*/;
+</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="dispersion-viz.jsx"></script>
+<script type="text/babel" src="topo-bg.jsx"></script>
+<script type="text/babel" src="mock-data.jsx"></script>
+<script type="text/babel" src="screen-calc.jsx"></script>
+<script type="text/babel" src="screen-clubs.jsx"></script>
+<script type="text/babel" src="screen-misc.jsx"></script>
+<script type="text/babel" src="screen-range.jsx"></script>
+<script type="text/babel" src="screen-course.jsx"></script>
+<script type="text/babel" src="handoff-cards.jsx"></script>
+
+<script type="text/babel">
+const PALETTES = {
+    fairway: ['#0b3d2e', '#16624a', '#2c8a5e', '#62b375', '#a9d18e', '#f0e7b8'],
+    sunset:  ['#2a1c2e', '#5a2a48', '#a3445d', '#e07b5d', '#f3b878', '#fce6a0'],
+    ocean:   ['#062338', '#0e3a5e', '#236789', '#4a9bb8', '#9bd0d6', '#e6f4ec'],
+    mono:    ['#0e1a13', '#293429', '#4a5949', '#7c8a7b', '#b3bcaf', '#e6e3d6'],
+};
+
+function App() {
+    const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+    const palette = PALETTES[t.vizPalette] || PALETTES.fairway;
+
+    // Inject typography vars at the root for screens to inherit.
+    React.useEffect(() => {
+        const r = document.documentElement;
+        r.style.setProperty('--display-font', `"${t.displayFont}", serif`);
+        r.style.setProperty('--ui-font', `"${t.uiFont}", system-ui, sans-serif`);
+    }, [t.displayFont, t.uiFont]);
+
+    // Override DispersionViz default palette via a wrapping context-ish: we
+    // re-render with palette prop where used. Calc/Onboarding get it through
+    // their own props since they use viz directly. We pass a global override.
+    React.useEffect(() => {
+        window.__VIZ_PALETTE = palette;
+        window.__VIZ_FACETS = t.vizFacets;
+        window.__VIZ_CONTOURS = t.vizContours;
+    }, [palette, t.vizFacets, t.vizContours]);
+
+    return (
+        <div>
+            <Intro />
+            <DesignCanvas defaultZoom={0.7}>
+                <DCSection id="hero" title="Dispersion" subtitle="Course-coded · poly · heat-mapped · local-first">
+
+                    <DCArtboard id="hero-calc" label="Calculator · mobile" width={390} height={780}>
+                        <div className="ab-frame ab-mobile">
+                            <CalcScreen device="mobile" distance={168} zone={MOCK_PRESETS[0]} />
+                        </div>
+                    </DCArtboard>
+
+                    <DCArtboard id="hero-calc-desktop" label="Calculator · desktop" width={1100} height={720}>
+                        <div className="ab-frame">
+                            <CalcScreen device="desktop" distance={168} zone={MOCK_PRESETS[0]} />
+                        </div>
+                    </DCArtboard>
+
+                </DCSection>
+
+                <DCSection id="course" title="On course · Premium" subtitle="Real course data, GPS distances, per-shot landing tracking — paid tier">
+
+                    <DCArtboard id="course-play" label="Hole 7 · live · mobile" width={390} height={780}>
+                        <div className="ab-frame ab-mobile"><CourseScreen device="mobile" /></div>
+                    </DCArtboard>
+
+                    <DCArtboard id="course-upgrade" label="Premium upgrade prompt" width={390} height={780}>
+                        <div className="ab-frame ab-mobile"><PremiumUpgradeScreen device="mobile" /></div>
+                    </DCArtboard>
+
+                </DCSection>
+
+                <DCSection id="logging" title="Shot logging" subtitle="The thing you'll actually do every time you swing — at Golf Galaxy and on course">
+
+                    <DCArtboard id="log-range-m" label="Range mode · tap to log · mobile" width={390} height={780}>
+                        <div className="ab-frame ab-mobile"><RangeScreen device="mobile" /></div>
+                    </DCArtboard>
+
+                    <DCArtboard id="log-range-d" label="Range mode · desktop / iPad in bay" width={1100} height={720}>
+                        <div className="ab-frame"><RangeScreen device="desktop" /></div>
+                    </DCArtboard>
+
+                    <DCArtboard id="log-quick" label="Course · quick-log sheet" width={390} height={780}>
+                        <div className="ab-frame ab-mobile"><CalcScreen device="mobile" distance={168} zone={MOCK_PRESETS[0]} showLog={true} /></div>
+                    </DCArtboard>
+
+                    <DCArtboard id="log-history" label="Shot log · history" width={390} height={780}>
+                        <div className="ab-frame ab-mobile"><ShotLogScreen device="mobile" /></div>
+                    </DCArtboard>
+
+                </DCSection>
+
+                <DCSection id="onboarding" title="Onboarding" subtitle="Empty-state first-run sequence — 4 steps">
+                    {[1, 2, 3, 4].map((step) => (
+                        <DCArtboard key={step} id={`ob-${step}`} label={`Step ${step}`} width={360} height={720}>
+                            <div className="ab-frame ab-mobile">
+                                <OnboardingScreen step={step} />
+                            </div>
+                        </DCArtboard>
+                    ))}
+                </DCSection>
+
+                <DCSection id="calc-variants" title="Calculator · zone variations" subtitle="Same shot, different safe zones — see the recommendation shift">
+                    <DCArtboard id="cv-1" label="Tucked pin · 12×14" width={360} height={780}>
+                        <div className="ab-frame ab-mobile"><CalcScreen device="mobile" distance={168} zone={MOCK_PRESETS[3]} /></div>
+                    </DCArtboard>
+                    <DCArtboard id="cv-2" label="Tight fairway · 24×60" width={360} height={780}>
+                        <div className="ab-frame ab-mobile"><CalcScreen device="mobile" distance={168} zone={MOCK_PRESETS[1]} /></div>
+                    </DCArtboard>
+                    <DCArtboard id="cv-3" label="Wide fairway · 50×80" width={360} height={780}>
+                        <div className="ab-frame ab-mobile"><CalcScreen device="mobile" distance={168} zone={MOCK_PRESETS[2]} /></div>
+                    </DCArtboard>
+                </DCSection>
+
+                <DCSection id="clubs" title="Clubs" subtitle="List + detail/edit">
+                    <DCArtboard id="clubs-list-m" label="List · mobile" width={390} height={780}>
+                        <div className="ab-frame ab-mobile"><ClubsScreen device="mobile" mode="list" /></div>
+                    </DCArtboard>
+                    <DCArtboard id="clubs-edit-m" label="Edit · mobile" width={390} height={780}>
+                        <div className="ab-frame ab-mobile"><ClubsScreen device="mobile" mode="edit" /></div>
+                    </DCArtboard>
+                    <DCArtboard id="clubs-list-d" label="List · desktop" width={720} height={760}>
+                        <div className="ab-frame"><ClubsScreen device="desktop" mode="list" /></div>
+                    </DCArtboard>
+                </DCSection>
+
+                <DCSection id="settings" title="Settings" subtitle="Theme · units · data · dev tools">
+                    <DCArtboard id="settings-m" label="Settings · mobile" width={390} height={780}>
+                        <div className="ab-frame ab-mobile"><SettingsScreen device="mobile" /></div>
+                    </DCArtboard>
+                </DCSection>
+
+                {t.showHandoff && (
+                    <DCSection id="handoff" title="Handoff" subtitle="Tokens, type, math spec, component anatomy — for Phase 1 scaffold">
+                        <DCArtboard id="ho-tokens" label="Color tokens" width={420} height={620}>
+                            <TokenCard />
+                        </DCArtboard>
+                        <DCArtboard id="ho-type" label="Type system" width={420} height={520}>
+                            <TypeCard />
+                        </DCArtboard>
+                        <DCArtboard id="ho-math" label="Math spec" width={520} height={520}>
+                            <MathCard />
+                        </DCArtboard>
+                        <DCArtboard id="ho-anatomy" label="Component anatomy" width={460} height={520}>
+                            <AnatomyCard />
+                        </DCArtboard>
+                        <DCArtboard id="ho-phases" label="Build phases" width={460} height={520}>
+                            <PhasesCard />
+                        </DCArtboard>
+                    </DCSection>
+                )}
+
+            </DesignCanvas>
+
+            <TweaksPanel title="Tweaks">
+                <TweakSection label="Heat map" />
+                <TweakSelect label="Palette" value={t.vizPalette}
+                             options={[
+                                 { label: 'Fairway', value: 'fairway' },
+                                 { label: 'Sunset',  value: 'sunset' },
+                                 { label: 'Ocean',   value: 'ocean' },
+                                 { label: 'Mono',    value: 'mono' },
+                             ]}
+                             onChange={(v) => setTweak('vizPalette', v)} />
+                <TweakSlider label="Facets" value={t.vizFacets} min={6} max={36} step={2}
+                             onChange={(v) => setTweak('vizFacets', v)} />
+                <TweakSlider label="Contours" value={t.vizContours} min={3} max={10}
+                             onChange={(v) => setTweak('vizContours', v)} />
+
+                <TweakSection label="Type" />
+                <TweakSelect label="Display" value={t.displayFont}
+                             options={['Fraunces', 'Bricolage Grotesque', 'Source Serif 4', 'Instrument Serif']}
+                             onChange={(v) => setTweak('displayFont', v)} />
+                <TweakSelect label="UI" value={t.uiFont}
+                             options={['Inter', 'IBM Plex Sans', 'Geist', 'Space Grotesk']}
+                             onChange={(v) => setTweak('uiFont', v)} />
+
+                <TweakSection label="Canvas" />
+                <TweakToggle label="Show handoff section" value={t.showHandoff}
+                             onChange={(v) => setTweak('showHandoff', v)} />
+            </TweaksPanel>
+        </div>
+    );
+}
+
+function Intro() {
+    return (
+        <div className="intro-wrap">
+            <div style={{ fontSize: 10, letterSpacing: '0.24em', textTransform: 'uppercase', color: '#2c8a5e', marginBottom: 8, fontWeight: 600 }}>
+                ◆ Design package · for Claude Code handoff
+            </div>
+            <h1 style={{ fontFamily: '"Fraunces", serif', fontSize: 44, fontWeight: 400, lineHeight: 1.05, letterSpacing: '-0.02em', margin: '0 0 14px', color: '#0e1a13' }}>
+                Dispersion <em style={{ color: '#62b375' }}>—</em> log every shot. Trust the math.
+            </h1>
+            <p style={{ fontSize: 15, lineHeight: 1.55, color: 'rgba(14,26,19,0.75)', margin: '0 0 8px', maxWidth: 720, textWrap: 'pretty' }}>
+                A course-coded, mobile-first, local-only React app. Two loops feed each other: <strong>range mode</strong> at Golf Galaxy where you tap-log every shot to build live dispersion, and <strong>course mode</strong> where the calculator picks the highest-probability club and you log the outcome with one tap. Tokens, type, and math spec at the bottom.
+            </p>
+            <p style={{ fontSize: 13, lineHeight: 1.5, color: 'rgba(14,26,19,0.55)', margin: '0', maxWidth: 720, textWrap: 'pretty' }}>
+                Scroll/pan to compare. Open any artboard fullscreen with the ⛶ button. Tweaks (top-right) swaps the heat-map palette, type pairing, and viz facets. Numbers are illustrative — Phase 1 ships the real probability function.
+            </p>
+        </div>
+    );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

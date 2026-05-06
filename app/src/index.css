@@ -1,0 +1,196 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@import "@fontsource-variable/fraunces/index.css";
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/jetbrains-mono/index.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+    --font-display: "Fraunces Variable", ui-serif, Georgia, serif;
+    --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", monospace;
+
+    /* Brand palette */
+    --color-fairway-50: #f4efe3;
+    --color-bentgrass: #62b375;
+    --color-fairway-shadow: #2c8a5e;
+    --color-rough: #16624a;
+    --color-pine: #0b3d2e;
+    --color-soil-900: #1a2419;
+    --color-sand: #f0e7b8;
+    --color-flag: #e85d4d;
+    --color-water: #1f3a5f;
+    --color-ink: #0e1a13;
+    --color-cream: #f6f1e1;
+
+    /* Probability heatmap */
+    --color-heat-0: #0b3d2e;
+    --color-heat-1: #16624a;
+    --color-heat-2: #2c8a5e;
+    --color-heat-3: #62b375;
+    --color-heat-4: #a9d18e;
+    --color-heat-5: #f0e7b8;
+
+    --color-p-strong: #62b375;
+    --color-p-favored: #a9d18e;
+    --color-p-marginal: #e6c068;
+    --color-p-poor: #c87060;
+    --color-danger: #a23939;
+
+    /* shadcn semantic tokens (dark) */
+    --color-background: #0e1a13;
+    --color-foreground: #f6f1e1;
+    --color-card: #16201a;
+    --color-card-foreground: #f6f1e1;
+    --color-popover: #1a2419;
+    --color-popover-foreground: #f6f1e1;
+    --color-primary: #a9d18e;
+    --color-primary-foreground: #0a1410;
+    --color-secondary: #1f2a23;
+    --color-secondary-foreground: #f6f1e1;
+    --color-muted: #1a2419;
+    --color-muted-foreground: rgba(246, 241, 225, 0.55);
+    --color-accent: #62b375;
+    --color-accent-foreground: #0a1410;
+    --color-destructive: #e85d4d;
+    --color-destructive-foreground: #f6f1e1;
+    --color-border: rgba(246, 241, 225, 0.1);
+    --color-input: rgba(246, 241, 225, 0.08);
+    --color-ring: #62b375;
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-2xl: 28px;
+}
+
+:root {
+    --bg: var(--color-ink);
+    --fg: var(--color-cream);
+    --surface: rgba(246, 241, 225, 0.04);
+    --surface-strong: rgba(246, 241, 225, 0.07);
+    --border: rgba(246, 241, 225, 0.1);
+    --border-strong: rgba(246, 241, 225, 0.18);
+    --muted: rgba(246, 241, 225, 0.55);
+    --subtle: rgba(246, 241, 225, 0.4);
+    color-scheme: dark;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+    overscroll-behavior: none;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+    font-feature-settings: "ss01", "cv11";
+}
+
+input,
+textarea,
+[contenteditable] {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+@supports (padding: max(0px)) {
+    .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
+    .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+    .pl-safe { padding-left: max(env(safe-area-inset-left), 0px); }
+    .pr-safe { padding-right: max(env(safe-area-inset-right), 0px); }
+    .px-safe {
+        padding-left: max(env(safe-area-inset-left), 0px);
+        padding-right: max(env(safe-area-inset-right), 0px);
+    }
+}
+
+.bottom-safe { bottom: max(env(safe-area-inset-bottom), 0px); }
+.top-safe { top: max(env(safe-area-inset-top), 0px); }
+
+.screen-header {
+    padding-top: max(env(safe-area-inset-top), 14px);
+}
+
+@media (pointer: coarse) {
+    .cursor-readout { display: none; }
+}
+
+/* Editorial type utilities */
+.eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+.eyebrow-strong {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg);
+}
+.tabular {
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+}
+.headline {
+    font-family: var(--font-display);
+    letter-spacing: -0.025em;
+    line-height: 0.95;
+}
+
+/* Hairline divider used across redesign */
+.hairline {
+    border-top: 1px solid var(--border);
+}
+
+input[type="number"] {
+    font-feature-settings: "tnum";
+}
+
+/* Animations */
+@keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+.animate-sheet-up {
+    animation: sheet-up 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes card-stagger-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.card-stagger-in {
+    animation: card-stagger-in 360ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes number-pop {
+    0% { transform: scale(0.96); opacity: 0.6; }
+    100% { transform: scale(1); opacity: 1; }
+}
+.number-pop {
+    animation: number-pop 280ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .card-stagger-in,
+    .number-pop,
+    .animate-sheet-up {
+        animation: none;
+    }
+}
