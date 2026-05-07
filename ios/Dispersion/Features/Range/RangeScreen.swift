@@ -183,6 +183,14 @@ struct LiveRangeView: View {
                 .allowsHitTesting(false)
             }
 
+            // Bottom toolbar
+            if club != nil {
+                VStack {
+                    Spacer()
+                    rangeToolbar
+                }
+            }
+
             if let error {
                 VStack {
                     Text("Failed to log shot: \(error)")
@@ -239,9 +247,6 @@ struct LiveRangeView: View {
                 Text("Updates \(c.name)'s σ from \(taps.count) shots.")
             }
         }
-        .onAppear { registerDialActions() }
-        .onChange(of: taps.count) { _, _ in registerDialActions() }
-        .onChange(of: club?.id) { _, _ in registerDialActions() }
     }
 
     // MARK: floating cards
@@ -480,31 +485,56 @@ struct LiveRangeView: View {
 
     // MARK: dial
 
-    private func registerDialActions() {
-        let canSave = taps.count >= 2 && club != nil
-        dial.setActions([
-            DialAction(id: "switch", label: "Club", systemImage: "arrow.triangle.2.circlepath") {
-                switchClubOpen = true
-            },
-            DialAction(id: "target", label: "Target", systemImage: "scope") {
-                targetSheetOpen = true
-            },
-            DialAction(id: "manual", label: "Manual", systemImage: "pencil") {
-                addShotOpen = true
-            },
-            DialAction(id: "undo", label: "Undo", systemImage: "arrow.uturn.backward",
-                       isDisabled: taps.isEmpty) {
-                if !taps.isEmpty { taps.removeLast() }
-            },
-            DialAction(id: "save", label: "Calibrate", systemImage: "square.and.arrow.down",
-                       tone: .primary, isDisabled: !canSave) {
-                saveConfirm = true
-            },
-            DialAction(id: "end", label: "End", systemImage: "stop.circle.fill",
-                       tone: .danger, isDisabled: sessionId == nil) {
-                endConfirm = true
-            },
-        ])
+    @Environment(\.themeAccent) private var accent
+
+    private var rangeToolbar: some View {
+        HStack(spacing: 10) {
+            toolbarBtn("arrow.triangle.2.circlepath", label: "Club") { switchClubOpen = true }
+            toolbarBtn("scope", label: "Target") { targetSheetOpen = true }
+            toolbarBtn("pencil", label: "Manual") { addShotOpen = true }
+
+            if !taps.isEmpty {
+                toolbarBtn("arrow.uturn.backward", label: "Undo") {
+                    taps.removeLast(); Haptics.light()
+                }
+            }
+
+            if taps.count >= 2 {
+                toolbarBtn("square.and.arrow.down", label: "Save", tint: accent) {
+                    saveConfirm = true
+                }
+            }
+
+            if sessionId != nil {
+                toolbarBtn("stop.circle.fill", label: "End", tint: DesignTokens.destructive) {
+                    endConfirm = true
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .environment(\.colorScheme, .dark)
+        )
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+    }
+
+    private func toolbarBtn(_ icon: String, label: String, tint: Color = DesignTokens.foreground, action: @escaping () -> Void) -> some View {
+        Button { action(); Haptics.light() } label: {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundStyle(tint)
+                Text(label)
+                    .font(DispersionType.mono(8, weight: .medium))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: sheets
