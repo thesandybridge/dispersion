@@ -27,16 +27,35 @@ struct SessionDetailView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                if shots.isEmpty {
-                    emptyState
-                } else {
-                    shotsList
+        List {
+            Section { header }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+
+            if shots.isEmpty {
+                Section { emptyState }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            } else {
+                Section {
+                    ForEach(shots, id: \.id) { shot in
+                        shotRow(shot)
+                    }
+                    .onDelete { indexSet in
+                        for i in indexSet {
+                            try? ShotsRepo(context: modelContext).delete(id: shots[i].id)
+                        }
+                        Haptics.medium()
+                    }
                 }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .swipeBack { onBack() }
         .alert("Delete \(session?.label ?? "this session")?", isPresented: $deleteSessionConfirm) {
             Button("Delete session", role: .destructive) { deleteSession() }
@@ -110,12 +129,6 @@ struct SessionDetailView: View {
             .padding(.vertical, 48)
     }
 
-    private var shotsList: some View {
-        ForEach(shots, id: \.id) { shot in
-            shotRow(shot)
-        }
-    }
-
     private func shotRow(_ shot: Shot) -> some View {
         let club = clubMap[shot.clubId]
         let hasLanding = !(shot.longDelta == 0 && shot.latDelta == 0)
@@ -160,18 +173,10 @@ struct SessionDetailView: View {
             }
 
             Spacer()
-
-            Button { pendingShotDelete = shot.id } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(DesignTokens.destructive.opacity(0.7))
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
-        .overlay(alignment: .top) { DSeparator() }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(ThemedCardFill(cornerRadius: 12))
     }
 
     // MARK: actions
