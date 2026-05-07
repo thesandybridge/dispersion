@@ -114,6 +114,8 @@ public struct CourseScreen: View {
                                     .font(.system(size: 11))
                                     .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
                             }
+                            .padding(14)
+                            .background(ThemedCardFill(cornerRadius: 12))
                         }
                         .buttonStyle(.plain)
                     }
@@ -124,17 +126,53 @@ public struct CourseScreen: View {
                         Haptics.medium()
                     }
                 }
-                .listRowBackground(ThemedCardFill(cornerRadius: 10))
+                .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
             }
 
-            Section {
-                roundHistory
+            if !roundSessions.isEmpty {
+                Section {
+                    ForEach(roundSessions, id: \.id) { session in
+                        Button { viewingRoundId = session.id; Haptics.light() } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "flag.fill")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(accent)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(session.label)
+                                        .font(DispersionType.ui(14, weight: .medium))
+                                        .foregroundStyle(DesignTokens.foreground)
+                                    Text(session.createdAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                                        .font(DispersionType.mono(10))
+                                        .foregroundStyle(DesignTokens.mutedForeground)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
+                            }
+                            .padding(12)
+                            .background(ThemedCardFill(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .onDelete { indexSet in
+                        for i in indexSet {
+                            let s = roundSessions[i]
+                            try? ShotsRepo(context: modelContext).deleteBySession(s.id)
+                            try? SessionsRepo(context: modelContext).delete(id: s.id)
+                            UserDefaults.standard.removeObject(forKey: "roundScores.\(s.id)")
+                        }
+                        Haptics.medium()
+                    }
+                } header: {
+                    Text("Round history").eyebrow().textCase(nil)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
             }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
@@ -146,36 +184,4 @@ public struct CourseScreen: View {
             .filter { $0.kind == .round }
     }
 
-    @ViewBuilder
-    private var roundHistory: some View {
-        if !roundSessions.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Round history").eyebrow()
-                ForEach(roundSessions, id: \.id) { session in
-                    Button { viewingRoundId = session.id; Haptics.light() } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "flag.fill")
-                                .font(.system(size: 13))
-                                .foregroundStyle(accent)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(session.label)
-                                    .font(DispersionType.ui(14, weight: .medium))
-                                    .foregroundStyle(DesignTokens.foreground)
-                                Text(session.createdAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                                    .font(DispersionType.mono(10))
-                                    .foregroundStyle(DesignTokens.mutedForeground)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11))
-                                .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
-                        }
-                        .padding(12)
-                        .background(ThemedCardFill(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
 }

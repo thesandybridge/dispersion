@@ -115,7 +115,7 @@ struct ShotLogView: View {
                         .eyebrow()
                         .textCase(nil)
                 }
-                .listRowBackground(ThemedCardFill(cornerRadius: 10))
+                .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
             }
         }
@@ -180,7 +180,9 @@ struct ShotLogView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(DesignTokens.mutedForeground.opacity(0.4))
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(ThemedCardFill(cornerRadius: 12))
     }
 
     // MARK: - Helpers
