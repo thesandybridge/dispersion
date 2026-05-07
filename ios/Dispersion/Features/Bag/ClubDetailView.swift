@@ -57,7 +57,7 @@ struct ClubDetailView: View {
             .padding(.bottom, 100)
         }
         .background(DesignTokens.background.ignoresSafeArea())
-        .swipeBack { onBack() }
+        .enableInteractivePop()
         .alert("Update \(club.name) with measured σ?", isPresented: $saveConfirm) {
             Button("Update") { applyMeasured() }
             Button("Cancel", role: .cancel) {}

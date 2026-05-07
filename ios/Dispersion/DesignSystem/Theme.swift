@@ -117,19 +117,28 @@ public struct ThemedCardFill: View {
     }
 }
 
-// MARK: Swipe-back gesture
+// MARK: Interactive pop gesture fix
+
+/// Re-enables the native iOS interactive pop gesture when the navigation
+/// bar is hidden. Apply to any view inside a NavigationStack.
+public struct InteractivePopGesture: UIViewControllerRepresentable {
+    public func makeUIViewController(context: Context) -> UIViewController {
+        InteractivePopController()
+    }
+    public func updateUIViewController(_ vc: UIViewController, context: Context) {}
+}
+
+private class InteractivePopController: UIViewController {
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        navigationController?.interactivePopGestureRecognizer?.isEnabled = true
+        navigationController?.interactivePopGestureRecognizer?.delegate = nil
+    }
+}
 
 public extension View {
-    func swipeBack(_ action: @escaping () -> Void) -> some View {
-        self.gesture(
-            DragGesture(minimumDistance: 30, coordinateSpace: .local)
-                .onEnded { value in
-                    if value.translation.width > 80 && abs(value.translation.height) < 100 {
-                        Haptics.light()
-                        action()
-                    }
-                }
-        )
+    func enableInteractivePop() -> some View {
+        self.background(InteractivePopGesture())
     }
 }
 
