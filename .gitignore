@@ -8,8 +8,6 @@
 # Claude Code local config
 .claude/
 
-# Reference archives
-_reference/*.zip
 
 # ─────────────────────────────────────────────────────────────────────────────
 # iOS / SwiftUI app (./ios)

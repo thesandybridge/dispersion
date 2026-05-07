@@ -36,8 +36,7 @@ ios/                         SwiftUI app (iOS 17+)
     Resources/               App icon, asset catalog
   DispersionTests/           Swift Testing framework tests
   project.yml                XcodeGen spec
-_reference/
-  tauri-app/                 Original React + Tauri reference build
+_reference/tauri-app/        Original React + Tauri reference build (math spec)
 ```
 
 ## Tech stack

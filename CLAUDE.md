@@ -4,7 +4,6 @@ iOS-native golf shot dispersion and club recommendation app.
 
 - **`ios/`** — the SwiftUI app (iOS 17+, iPhone + iPad). This is the production build.
 - **`_reference/tauri-app/`** — the original React + Tauri reference build. Math and design spec.
-- **`_reference/`** — design handoff materials.
 
 ## Get the iOS project running
 

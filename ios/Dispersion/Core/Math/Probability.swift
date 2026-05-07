@@ -74,19 +74,31 @@ public enum Probability {
         return min(total, 1)
     }
 
+    /// Which clubs get partial swing variants — only wedges and short irons.
+    private static func swingsForClub(_ club: Club) -> [SwingType] {
+        let cat = ClubCategoryRegistry.categorize(name: club.name, carryYards: club.carryYards)
+        switch cat {
+        case .wedge:
+            return [.full, .threeQuarter, .half]
+        case .shortIron:
+            return [.full, .threeQuarter]
+        default:
+            return [.full]
+        }
+    }
+
     /// Rank a bag against a scenario by descending probability-in-zone.
-    /// Generates full + 3/4 + half swing variants for each club.
+    /// Generates partial swing variants only for wedges and short irons.
     public static func rankClubs(_ clubs: [Club], scenario: ShotScenario) -> [ClubResult] {
         var results: [ClubResult] = []
         for c in clubs {
-            for swing in SwingType.allCases {
+            for swing in swingsForClub(c) {
                 var virtual = c
                 virtual.carryYards = c.carryYards * swing.carryMultiplier
                 virtual.carrySd = c.carrySd * swing.sigmaMultiplier
                 virtual.lateralSd = c.lateralSd * swing.sigmaMultiplier
                 let pZone = probabilityInZone(club: virtual, scenario: scenario)
-                // Skip partial swings with negligible probability
-                if swing != .full && pZone < 0.02 { continue }
+                if swing != .full && pZone < 0.03 { continue }
                 results.append(ClubResult(
                     clubId: c.id,
                     swingType: swing,
