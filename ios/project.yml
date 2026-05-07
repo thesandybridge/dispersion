@@ -35,6 +35,7 @@ settings:
     INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
     INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
     INFOPLIST_KEY_UIUserInterfaceStyle: "Dark"
+    INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: "Dispersion uses your location to find nearby courses and track shots on the course."
     TARGETED_DEVICE_FAMILY: "1,2"  # iPhone + iPad
 targets:
   Dispersion:

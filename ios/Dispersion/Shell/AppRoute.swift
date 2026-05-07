@@ -7,6 +7,7 @@ public enum AppRoute: String, CaseIterable, Hashable, Identifiable {
     case calculator
     case bag
     case range
+    case course
     case settings
 
     public var id: String { rawValue }
@@ -16,6 +17,7 @@ public enum AppRoute: String, CaseIterable, Hashable, Identifiable {
         case .calculator: return "Calc"
         case .bag:        return "Bag"
         case .range:      return "Range"
+        case .course:     return "Course"
         case .settings:   return "Settings"
         }
     }
@@ -25,6 +27,7 @@ public enum AppRoute: String, CaseIterable, Hashable, Identifiable {
         case .calculator: return "scope"
         case .bag:        return "briefcase.fill"
         case .range:      return "flag.fill"
+        case .course:     return "map.fill"
         case .settings:   return "gearshape.fill"
         }
     }

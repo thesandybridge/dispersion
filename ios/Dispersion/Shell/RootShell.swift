@@ -49,6 +49,11 @@ public struct RootShell: View {
                     Label(AppRoute.range.label, systemImage: AppRoute.range.systemImage)
                 }
                 .tag(AppRoute.range)
+            CourseScreen()
+                .tabItem {
+                    Label(AppRoute.course.label, systemImage: AppRoute.course.systemImage)
+                }
+                .tag(AppRoute.course)
             SettingsScreen()
                 .tabItem {
                     Label(AppRoute.settings.label, systemImage: AppRoute.settings.systemImage)
