@@ -35,14 +35,14 @@ public struct BagScreen: View {
     public var body: some View {
         NavigationStack(path: $navPath) {
             bagListColumn
-                .navigationBarHidden(true)
+                .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: Club.self) { club in
                     ClubDetailView(
                         club: club,
                         onBack: { navPath.removeLast() },
                         onEdit: { editingClub = club }
                     )
-                    .navigationBarHidden(true)
+                    .toolbar(.hidden, for: .navigationBar)
                 }
         }
         .preferredColorScheme(.dark)
