@@ -99,6 +99,7 @@ public struct BagScreen: View {
                         clubList
                         putterSection
                         if regularClubs.count >= 2 { gappingSection }
+                        bagStatsSection
                     }
                 }
                 .padding(.horizontal, 16)
@@ -325,6 +326,72 @@ public struct BagScreen: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
+    }
+
+    // MARK: - Bag stats
+
+    @ViewBuilder
+    private var bagStatsSection: some View {
+        let allFilteredShots = shots.filter { abs($0.longDelta) < 100 && abs($0.latDelta) < 100 }
+        let sg = StrokesGained.aggregate(allFilteredShots)
+        let last30 = Calendar.current.date(byAdding: .day, value: -30, to: .now) ?? .now
+        let recent = allFilteredShots.filter { $0.timestamp >= last30 }
+
+        if sg.shotCount >= 5 || !recent.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Performance").eyebrow()
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    if sg.shotCount >= 2 {
+                        bagStatCard("Strokes gained",
+                                    value: String(format: "%+.2f", sg.avgSG),
+                                    sub: "per shot · \(sg.shotCount) total",
+                                    color: sg.avgSG >= 0 ? DesignTokens.primary : DesignTokens.pPoor)
+                    }
+
+                    bagStatCard("Total shots",
+                                value: "\(allFilteredShots.count)",
+                                sub: "\(recent.count) last 30 days",
+                                color: DesignTokens.foreground)
+
+                    // Per-club breakdown: best SG club
+                    let clubSGs = regularClubs.compactMap { club -> (Club, Double)? in
+                        let clubShots = allFilteredShots.filter { $0.clubId == club.id }
+                        let csg = StrokesGained.aggregate(clubShots)
+                        guard csg.shotCount >= 3 else { return nil }
+                        return (club, csg.avgSG)
+                    }
+                    if let best = clubSGs.max(by: { $0.1 < $1.1 }) {
+                        bagStatCard("Best club",
+                                    value: best.0.name,
+                                    sub: String(format: "%+.2f SG/shot", best.1),
+                                    color: DesignTokens.primary)
+                    }
+                    if let worst = clubSGs.min(by: { $0.1 < $1.1 }) {
+                        bagStatCard("Needs work",
+                                    value: worst.0.name,
+                                    sub: String(format: "%+.2f SG/shot", worst.1),
+                                    color: DesignTokens.pPoor)
+                    }
+                }
+            }
+        }
+    }
+
+    private func bagStatCard(_ label: String, value: String, sub: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).eyebrow()
+            Text(value)
+                .font(DispersionType.display(20, weight: .regular))
+                .foregroundStyle(color)
+                .monospacedDigit()
+            Text(sub)
+                .font(DispersionType.mono(9))
+                .foregroundStyle(DesignTokens.mutedForeground)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(ThemedCardFill(cornerRadius: 12))
     }
 
     // MARK: - Empty

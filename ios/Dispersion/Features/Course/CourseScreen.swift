@@ -10,6 +10,7 @@ public struct CourseScreen: View {
     @Query(sort: \CourseModel.name) private var courseModels: [CourseModel]
 
     @State private var selectedCourseId: String?
+    @State private var viewingRoundId: String?
     @State private var searchOpen = false
     @State private var dial = DialStore.shared
 
@@ -21,7 +22,14 @@ public struct CourseScreen: View {
         ZStack {
             DesignTokens.background.ignoresSafeArea()
 
-            if let id = selectedCourseId, courses.contains(where: { $0.id == id }) {
+            if let roundId = viewingRoundId {
+                let session = (try? SessionsRepo(context: modelContext).get(id: roundId))
+                RoundSummaryView(
+                    sessionId: roundId,
+                    courseName: session?.label ?? "Round",
+                    onBack: { viewingRoundId = nil }
+                )
+            } else if let id = selectedCourseId, courses.contains(where: { $0.id == id }) {
                 CoursePlayView(courseId: id, onBack: { selectedCourseId = nil; Haptics.light() })
             } else {
                 courseList
@@ -109,8 +117,49 @@ public struct CourseScreen: View {
                     }
                 }
             }
+            // Round history
+            roundHistory
+
             .padding(.horizontal, 18)
             .padding(.bottom, 100)
+        }
+    }
+
+    private var roundSessions: [Session] {
+        ((try? SessionsRepo(context: modelContext).list()) ?? [])
+            .filter { $0.kind == .round }
+    }
+
+    @ViewBuilder
+    private var roundHistory: some View {
+        if !roundSessions.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Round history").eyebrow()
+                ForEach(roundSessions, id: \.id) { session in
+                    Button { viewingRoundId = session.id; Haptics.light() } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "flag.fill")
+                                .font(.system(size: 13))
+                                .foregroundStyle(accent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(session.label)
+                                    .font(DispersionType.ui(14, weight: .medium))
+                                    .foregroundStyle(DesignTokens.foreground)
+                                Text(session.createdAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
+                                    .font(DispersionType.mono(10))
+                                    .foregroundStyle(DesignTokens.mutedForeground)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11))
+                                .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
+                        }
+                        .padding(12)
+                        .background(ThemedCardFill(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 }

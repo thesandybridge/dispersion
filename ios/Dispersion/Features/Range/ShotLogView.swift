@@ -32,6 +32,7 @@ struct ShotLogView: View {
                 clubCards
                 sessionsSection
             }
+            .padding(.bottom, 100)
         }
     }
 

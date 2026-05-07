@@ -25,8 +25,14 @@ public struct ClubEditSheet: View {
 
     private var unit: DistanceUnit { settings.unit }
     private var isEditing: Bool { initial != nil }
+    private var isPutter: Bool {
+        let n = name.lowercased()
+        return n.contains("putter") || n.contains("ptr")
+    }
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && carry > 0 && carrySd > 0 && lateralSd > 0
+        let nameOk = !name.trimmingCharacters(in: .whitespaces).isEmpty
+        if isPutter { return nameOk }
+        return nameOk && carry > 0 && carrySd > 0 && lateralSd > 0
     }
 
     public var body: some View {
@@ -37,37 +43,39 @@ public struct ClubEditSheet: View {
                 title: isEditing ? (initial?.name ?? "Club") : "Add a club"
             )
 
-            // Preview
-            preview
-
             // Fields
-            sheetField("Club name") {
-                TextField("e.g. 7 Iron, Driver, 56 Wedge", text: $name)
+            sheetField(isPutter ? "Putter name" : "Club name") {
+                TextField(isPutter ? "e.g. Scotty Cameron, Odyssey" : "e.g. 7 Iron, Driver, Putter", text: $name)
                     .textInputAutocapitalization(.words)
             }
 
-            sheetField("Carry distance (\(unit.label))", hint: "Average full-swing carry") {
-                TextField("165", value: $carry, format: .number.precision(.fractionLength(0...1)))
-                    .keyboardType(.decimalPad)
-                    .monospacedDigit()
-            }
+            if !isPutter {
+                // Preview
+                preview
 
-            HStack(spacing: 12) {
-                sheetField("σ long (\(unit.label))", hint: "Carry spread") {
-                    TextField("6", value: $carrySd, format: .number.precision(.fractionLength(0...1)))
+                sheetField("Carry distance (\(unit.label))", hint: "Average full-swing carry") {
+                    TextField("165", value: $carry, format: .number.precision(.fractionLength(0...1)))
                         .keyboardType(.decimalPad)
                         .monospacedDigit()
                 }
-                sheetField("σ lateral (\(unit.label))", hint: "Left/right") {
-                    TextField("8", value: $lateralSd, format: .number.precision(.fractionLength(0...1)))
-                        .keyboardType(.decimalPad)
-                        .monospacedDigit()
-                }
-            }
 
-            Text("Not sure about σ? Start with 4–8 for carry and 5–10 for lateral. Measure real values in Range mode.")
-                .font(DispersionType.ui(12))
-                .foregroundStyle(DesignTokens.mutedForeground)
+                HStack(spacing: 12) {
+                    sheetField("σ long (\(unit.label))", hint: "Carry spread") {
+                        TextField("6", value: $carrySd, format: .number.precision(.fractionLength(0...1)))
+                            .keyboardType(.decimalPad)
+                            .monospacedDigit()
+                    }
+                    sheetField("σ lateral (\(unit.label))", hint: "Left/right") {
+                        TextField("8", value: $lateralSd, format: .number.precision(.fractionLength(0...1)))
+                            .keyboardType(.decimalPad)
+                            .monospacedDigit()
+                    }
+                }
+
+                Text("Not sure about σ? Start with 4–8 for carry and 5–10 for lateral. Measure real values in Range mode.")
+                    .font(DispersionType.ui(12))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+            }
 
             // Actions
             VStack(spacing: 10) {
@@ -175,9 +183,9 @@ public struct ClubEditSheet: View {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard canSave else { return }
         let repo = ClubsRepo(context: modelContext)
-        let yC = Units.toYards(carry, from: unit)
-        let yCS = Units.toYards(carrySd, from: unit)
-        let yLS = Units.toYards(lateralSd, from: unit)
+        let yC = isPutter ? 0 : Units.toYards(carry, from: unit)
+        let yCS = isPutter ? 0.5 : Units.toYards(carrySd, from: unit)
+        let yLS = isPutter ? 0.5 : Units.toYards(lateralSd, from: unit)
         do {
             if let id = initial?.id {
                 try repo.update(id: id, patch: .init(

@@ -107,14 +107,6 @@ struct ClubDetailView: View {
                         .foregroundStyle(style.accentDeep)
                 }
                 Spacer()
-                if haveStats {
-                    Button { saveConfirm = true } label: {
-                        Text("Use measured")
-                            .font(DispersionType.mono(10, weight: .medium))
-                            .foregroundStyle(accent)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
 
             HStack(spacing: 0) {
@@ -188,9 +180,16 @@ struct ClubDetailView: View {
             distanceToTarget: club.carryYards,
             contours: 5,
             facets: 28,
-            background: DesignTokens.backgroundDeep
+            background: .clear
         )
         .aspectRatio(1.5, contentMode: .fit)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(LinearGradient(
+                    colors: [DesignTokens.ink, DesignTokens.pine, DesignTokens.ink],
+                    startPoint: .top, endPoint: .bottom
+                ))
+        )
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 

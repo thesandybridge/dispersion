@@ -692,21 +692,26 @@ struct CoursePlayView: View {
 
     // Project landing onto the start→target line to get long/lat deltas
     private func longDelta(from start: Coord, landing: Coord, target: Coord) -> Double {
-        let bearing = bearingRad(from: start, to: target)
-        let dist = haversineYards(from: start, to: landing)
-        let shotBearing = bearingRad(from: start, to: landing)
-        let angleDiff = shotBearing - bearing
-        let along = dist * cos(angleDiff)
         let targetDist = haversineYards(from: start, to: target)
+        let shotDist = haversineYards(from: start, to: landing)
+        let bearing = bearingRad(from: start, to: target)
+        let shotBearing = bearingRad(from: start, to: landing)
+        var angleDiff = shotBearing - bearing
+        // Normalize to -π...π
+        while angleDiff > .pi { angleDiff -= 2 * .pi }
+        while angleDiff < -.pi { angleDiff += 2 * .pi }
+        let along = shotDist * cos(angleDiff)
         return along - targetDist
     }
 
     private func latDelta(from start: Coord, landing: Coord, target: Coord) -> Double {
+        let shotDist = haversineYards(from: start, to: landing)
         let bearing = bearingRad(from: start, to: target)
-        let dist = haversineYards(from: start, to: landing)
         let shotBearing = bearingRad(from: start, to: landing)
-        let angleDiff = shotBearing - bearing
-        return dist * sin(angleDiff)
+        var angleDiff = shotBearing - bearing
+        while angleDiff > .pi { angleDiff -= 2 * .pi }
+        while angleDiff < -.pi { angleDiff += 2 * .pi }
+        return shotDist * sin(angleDiff)
     }
 
     private func undoShot() {
