@@ -71,23 +71,72 @@ public struct BagScreen: View {
     private var bagListColumn: some View {
         switch subTab {
         case .bag:
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+            List {
+                Section {
                     headerBar
-                    if regularClubs.isEmpty && putter == nil {
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                .listRowSeparator(.hidden)
+
+                if regularClubs.isEmpty && putter == nil {
+                    Section {
                         emptyState
-                    } else {
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                } else {
+                    Section {
                         heroCard
-                        clubList
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    .listRowSeparator(.hidden)
+
+                    Section {
+                        ForEach(regularClubs, id: \.id) { club in
+                            clubRow(club)
+                                .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+                        }
+                        .onDelete { indexSet in
+                            for i in indexSet {
+                                let club = regularClubs[i]
+                                try? ClubsRepo(context: modelContext).delete(id: club.id)
+                            }
+                            Haptics.medium()
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
+                    Section {
                         putterSection
-                        if regularClubs.count >= 2 { gappingSection }
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    .listRowSeparator(.hidden)
+
+                    if regularClubs.count >= 2 {
+                        Section {
+                            gappingSection
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                        .listRowSeparator(.hidden)
+                    }
+
+                    Section {
                         bagStatsSection
                     }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    .listRowSeparator(.hidden)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 100)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(DesignTokens.background)
+
         case .tag:
             VStack(spacing: 0) {
                 headerBar.padding(.horizontal, 16).padding(.top, 12)
@@ -223,13 +272,6 @@ public struct BagScreen: View {
             .background(ThemedCardFill(cornerRadius: 14))
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            Button { editingClub = club } label: { Label("Edit", systemImage: "pencil") }
-            Button(role: .destructive) {
-                try? ClubsRepo(context: modelContext).delete(id: club.id)
-                Haptics.medium()
-            } label: { Label("Delete", systemImage: "trash") }
-        }
     }
 
     // MARK: - Putter section

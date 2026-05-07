@@ -26,14 +26,13 @@ struct ShotLogView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                clubCards
-                sessionsSection
-            }
-            .padding(.bottom, 100)
+        List {
+            Section { header }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+            Section { clubCards }.listRowBackground(Color.clear).listRowSeparator(.hidden)
+            sessionsSection
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     // MARK: header
@@ -143,15 +142,14 @@ struct ShotLogView: View {
                         sessionRow(session)
                     }
                     .buttonStyle(.plain)
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            try? ShotsRepo(context: modelContext).deleteBySession(session.id)
-                            try? SessionsRepo(context: modelContext).delete(id: session.id)
-                            Haptics.medium()
-                        } label: {
-                            Label("Delete session", systemImage: "trash")
-                        }
+                }
+                .onDelete { indexSet in
+                    for i in indexSet {
+                        let s = sessions[i]
+                        try? ShotsRepo(context: modelContext).deleteBySession(s.id)
+                        try? SessionsRepo(context: modelContext).delete(id: s.id)
                     }
+                    Haptics.medium()
                 }
             }
         }

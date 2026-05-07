@@ -53,9 +53,8 @@ public struct CourseScreen: View {
     }
 
     private var courseList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                // Header
+        List {
+            Section {
                 HStack(alignment: .center) {
                     Text("Course")
                         .font(DispersionType.display(32, weight: .regular))
@@ -71,8 +70,12 @@ public struct CourseScreen: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
 
-                if courses.isEmpty {
+            if courses.isEmpty {
+                Section {
                     VStack(spacing: 12) {
                         Spacer().frame(height: 40)
                         Text("No courses yet")
@@ -88,8 +91,11 @@ public struct CourseScreen: View {
                         .buttonStyle(.dispersion(.primary))
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
-                } else {
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            } else {
+                Section {
                     ForEach(courses) { course in
                         Button { selectedCourseId = course.id; Haptics.light() } label: {
                             HStack(spacing: 12) {
@@ -106,27 +112,29 @@ public struct CourseScreen: View {
                                     .font(.system(size: 11))
                                     .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
                             }
-                            .padding(14)
-                            .background(ThemedCardFill(cornerRadius: 14))
                         }
                         .buttonStyle(.plain)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                try? CoursesRepo(context: modelContext).deleteCourse(id: course.id)
-                                Haptics.medium()
-                            } label: {
-                                Label("Delete course", systemImage: "trash")
-                            }
+                    }
+                    .onDelete { indexSet in
+                        for i in indexSet {
+                            try? CoursesRepo(context: modelContext).deleteCourse(id: courses[i].id)
                         }
+                        Haptics.medium()
                     }
                 }
+                .listRowBackground(ThemedCardFill(cornerRadius: 10))
+                .listRowSeparator(.hidden)
+            }
 
+            Section {
                 roundHistory
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 100)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(DesignTokens.background)
     }
 
     private var roundSessions: [Session] {
