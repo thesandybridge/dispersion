@@ -31,20 +31,11 @@ public enum Probability {
         return normalCdf((hi - mean) / sd) - normalCdf((lo - mean) / sd)
     }
 
-    /// DECADE-inspired bias: shift the zone center back by this fraction of
-    /// zone depth so that clubs carrying slightly past the pin score higher.
-    /// Most amateurs miss short, so "take more club" is the right default.
-    private static let decadeBias = 0.15
-
-    /// Probability the club lands inside the safe zone (assumes independent
-    /// long/lateral Gaussians). Zone is shifted back per DECADE to favor
-    /// clubs that carry slightly past the target.
+    /// Probability the club lands inside the safe zone, with DECADE
+    /// adjustment: clubs that come up short of the target are penalized.
     public static func probabilityInZone(club: Club, scenario: ShotScenario) -> Double {
-        // Shift the zone center toward the short side so clubs that fly
-        // past the pin by a bit get a higher probability score.
-        let bias = scenario.safeZoneDepthYards * decadeBias
-        let longLo = -scenario.safeZoneDepthYards / 2 - bias
-        let longHi = scenario.safeZoneDepthYards / 2 - bias
+        let longLo = -scenario.safeZoneDepthYards / 2
+        let longHi = scenario.safeZoneDepthYards / 2
         let latLo = -scenario.safeZoneWidthYards / 2
         let latHi = scenario.safeZoneWidthYards / 2
 
@@ -53,7 +44,18 @@ public enum Probability {
 
         let pLong = gaussianBand(mean: meanLong, sd: club.carrySd, lo: longLo, hi: longHi)
         let pLat = gaussianBand(mean: meanLat, sd: club.lateralSd, lo: latLo, hi: latHi)
-        return pLong * pLat
+        var p = pLong * pLat
+
+        // DECADE: penalize clubs whose carry is short of the target.
+        // A club 5y short gets ~75% of its raw score. 10y short ~55%.
+        // A club that carries to or past the target gets no penalty.
+        if meanLong < 0 {
+            let shortness = abs(meanLong)
+            let penalty = exp(-0.08 * shortness)
+            p *= penalty
+        }
+
+        return p
     }
 
     /// Probability of landing in any penalty zone — union, capped at 1.

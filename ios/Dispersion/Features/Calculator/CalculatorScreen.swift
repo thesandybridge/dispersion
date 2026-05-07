@@ -107,7 +107,7 @@ public struct CalculatorScreen: View {
             )
             .ignoresSafeArea()
 
-            // Full-bleed dispersion
+            // Full-bleed dispersion — drag to change target distance
             if let club = viewedClub, let vr = viewedResult {
                 DispersionViz(
                     carry: vr.expectedCarry,
@@ -121,6 +121,11 @@ public struct CalculatorScreen: View {
                     background: .clear
                 )
                 .ignoresSafeArea()
+                .overlay {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(targetDragGesture)
+                }
             }
 
 
@@ -241,7 +246,7 @@ public struct CalculatorScreen: View {
                 Spacer()
             }
 
-            distanceDragger
+            distanceDisplay
 
             HStack(spacing: 10) {
                 Text("Distance to target").eyebrow()
@@ -273,44 +278,44 @@ public struct CalculatorScreen: View {
 
     @State private var dragStartYards: Double = 0
 
-    private var distanceDragger: some View {
+    private var distanceDisplay: some View {
         let display = Units.roundForUnit(
             Units.from(yards: scenario.distance, in: settings.unit),
             unit: settings.unit
         )
-        // 6 points of drag per yard — slow and precise
-        let ptsPerYard: CGFloat = 6
-
-        return HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text("\(Int(display))")
-                .font(DispersionType.display(72, weight: .regular))
-                .tracking(-2.5)
-                .foregroundStyle(DesignTokens.foreground)
-                .monospacedDigit()
-                .contentTransition(.numericText(value: display))
-                .animation(.spring(response: 0.4, dampingFraction: 0.78), value: display)
-            Text(settings.unit.label.uppercased())
-                .font(DispersionType.display(20, weight: .regular))
-                .foregroundStyle(DesignTokens.foreground.opacity(0.5))
+        return Button { zoneOpen = true } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(Int(display))")
+                    .font(DispersionType.display(72, weight: .regular))
+                    .tracking(-2.5)
+                    .foregroundStyle(DesignTokens.foreground)
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: display))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.78), value: display)
+                Text(settings.unit.label.uppercased())
+                    .font(DispersionType.display(20, weight: .regular))
+                    .foregroundStyle(DesignTokens.foreground.opacity(0.5))
+            }
         }
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 6)
-                .onChanged { value in
-                    if dragStartYards == 0 { dragStartYards = scenario.distance }
-                    let deltaYards = Double(-value.translation.height / ptsPerYard)
-                    let newYards = (dragStartYards + deltaYards).rounded()
-                    let clamped = max(20, min(400, newYards))
-                    if clamped != scenario.distance {
-                        Haptics.light()
-                        scenario.update(.init(distance: clamped))
-                    }
+        .buttonStyle(.plain)
+    }
+
+    private var targetDragGesture: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                if dragStartYards == 0 { dragStartYards = scenario.distance }
+                let ptsPerYard: CGFloat = 5
+                let deltaYards = Double(-value.translation.height / ptsPerYard)
+                let newYards = (dragStartYards + deltaYards).rounded()
+                let clamped = max(20, min(400, newYards))
+                if clamped != scenario.distance {
+                    Haptics.light()
+                    scenario.update(.init(distance: clamped))
                 }
-                .onEnded { _ in
-                    dragStartYards = 0
-                }
-        )
-        .onTapGesture { zoneOpen = true }
+            }
+            .onEnded { _ in
+                dragStartYards = 0
+            }
     }
 
     private var conditionsRow: some View {
