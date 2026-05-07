@@ -45,7 +45,7 @@ struct ClubDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 statsCard
-                if haveStats && !isPutter { dispersionSection }
+                if !isPutter { dispersionSection }
                 if !isPutter { trendSection }
                 if !isPutter { missPatternSection }
                 strokesGainedSection
@@ -121,28 +121,25 @@ struct ClubDetailView: View {
                     Spacer()
                 }
             } else {
+                // Show measured values when available, stored values as fallback
+                let displayCarry = haveStats ? club.carryYards + stats.longBias : club.carryYards
+                let displayCarrySd = haveStats ? stats.carrySd : club.carrySd
+                let displayLatSd = haveStats ? stats.lateralSd : club.lateralSd
+
                 HStack(spacing: 0) {
-                    statCol("Carry", "\(Int(Units.from(yards: club.carryYards, in: unit)))\(unit.label)")
+                    statCol("Carry", "\(Int(Units.from(yards: displayCarry, in: unit)))\(unit.label)")
                     Spacer()
-                    statCol("σ long", "\(String(format: "%.1f", Units.from(yards: club.carrySd, in: unit)))\(unit.label)")
+                    statCol("σ long", "\(String(format: "%.1f", Units.from(yards: displayCarrySd, in: unit)))\(unit.label)")
                     Spacer()
-                    statCol("σ lateral", "\(String(format: "%.1f", Units.from(yards: club.lateralSd, in: unit)))\(unit.label)")
+                    statCol("σ lateral", "\(String(format: "%.1f", Units.from(yards: displayLatSd, in: unit)))\(unit.label)")
                     Spacer()
                     statCol("Shots", "\(allShots.count)")
                 }
 
                 if haveStats {
-                    DSeparator()
-                    HStack(spacing: 0) {
-                        measuredCol("Measured carry", value: Units.from(yards: club.carryYards + stats.longBias, in: unit),
-                                    delta: Units.from(yards: stats.longBias, in: unit))
-                        Spacer()
-                        measuredCol("Measured σ↕", value: Units.from(yards: stats.carrySd, in: unit),
-                                    delta: Units.from(yards: stats.carrySd - club.carrySd, in: unit))
-                        Spacer()
-                        measuredCol("Measured σ↔", value: Units.from(yards: stats.lateralSd, in: unit),
-                                    delta: Units.from(yards: stats.lateralSd - club.lateralSd, in: unit))
-                    }
+                    Text("Based on last \(taps.count) shots")
+                        .font(DispersionType.mono(9))
+                        .foregroundStyle(DesignTokens.mutedForeground.opacity(0.6))
                 }
             }
         }
@@ -164,31 +161,15 @@ struct ClubDetailView: View {
         }
     }
 
-    private func measuredCol(_ label: String, value: Double, delta: Double) -> some View {
-        let color: Color = abs(delta) < 0.5 ? DesignTokens.foreground.opacity(0.5)
-            : delta < 0 ? DesignTokens.primary : DesignTokens.pPoor
-        return VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(DispersionType.mono(8))
-                .foregroundStyle(DesignTokens.foreground.opacity(0.4))
-            HStack(spacing: 3) {
-                Text(String(format: "%.1f", value))
-                    .font(DispersionType.mono(13, weight: .medium))
-                    .foregroundStyle(DesignTokens.foreground)
-                Text("\(delta >= 0 ? "+" : "")\(String(format: "%.1f", delta))")
-                    .font(DispersionType.mono(9))
-                    .foregroundStyle(color)
-            }
-        }
-    }
-
     // MARK: - Dispersion viz
 
     private var dispersionSection: some View {
-        DispersionViz(
+        let cSd = haveStats ? stats.carrySd : club.carrySd
+        let lSd = haveStats ? stats.lateralSd : club.lateralSd
+        return DispersionViz(
             carry: club.carryYards,
-            carrySd: stats.carrySd,
-            lateralSd: stats.lateralSd,
+            carrySd: cSd,
+            lateralSd: lSd,
             distanceToTarget: club.carryYards,
             contours: 5,
             facets: 28,

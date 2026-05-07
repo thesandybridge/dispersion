@@ -259,6 +259,13 @@ public struct BagScreen: View {
                         .foregroundStyle(DesignTokens.mutedForeground)
                 }
                 Spacer()
+                DispersionGlyph(
+                    carrySd: club.carrySd,
+                    lateralSd: club.lateralSd,
+                    fill: style.accent.opacity(0.3),
+                    stroke: style.accentDeep
+                )
+                .frame(width: 28, height: 20)
                 Text("\(carry)")
                     .font(DispersionType.display(24, weight: .regular))
                     .foregroundStyle(DesignTokens.foreground)
