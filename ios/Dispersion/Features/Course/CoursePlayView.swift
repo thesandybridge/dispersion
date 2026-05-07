@@ -130,6 +130,10 @@ struct CoursePlayView: View {
                         tracker.setPar(hole: tb.holenumber, par: tb.par)
                     }
                 }
+                // Create/update session
+                let session = Session(id: tracker.sessionId, kind: .round, label: c.name)
+                _ = try? SessionsRepo(context: modelContext).create(session)
+                SessionStore.shared.setActive(ActiveSession(id: tracker.sessionId, kind: .round, label: c.name))
             }
         }
         .onChange(of: teeColor) { _, _ in
@@ -472,29 +476,27 @@ struct CoursePlayView: View {
                 .padding(.horizontal, 16)
             }
 
-            HStack(spacing: 6) {
+            HStack(spacing: 10) {
                 if !tracker.shotsForHole(tracker.currentHole).isEmpty {
                     Button { undoShot() } label: {
-                        Image(systemName: "arrow.uturn.backward").font(.system(size: 13))
+                        Image(systemName: "arrow.uturn.backward").font(.system(size: 14))
                     }
-                    .buttonStyle(.dispersion(.ghost, size: .lg))
-                    .frame(width: 44)
+                    .buttonStyle(.dispersion(.ghost, size: .icon))
                 }
 
                 Button { logShot() } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "scope").font(.system(size: 14))
-                        Text("Log")
+                        Text("Log shot")
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.dispersion(.primary, size: .lg))
+                .buttonStyle(.dispersion(.primary))
 
                 Button { logShotGPS() } label: {
                     Image(systemName: "location.fill").font(.system(size: 14))
                 }
-                .buttonStyle(.dispersion(.outline, size: .lg))
-                .frame(width: 48)
+                .buttonStyle(.dispersion(.outline, size: .icon))
 
                 Button {
                     let shots = tracker.shotsForHole(tracker.currentHole).count
@@ -503,11 +505,10 @@ struct CoursePlayView: View {
                 } label: {
                     Image(systemName: "flag.checkered").font(.system(size: 14))
                 }
-                .buttonStyle(.dispersion(.outline, size: .lg))
-                .frame(width: 48)
+                .buttonStyle(.dispersion(.outline, size: .icon))
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.bottom, 10)
 
             if location.capturing {
                 HStack(spacing: 6) {
@@ -547,6 +548,16 @@ struct CoursePlayView: View {
 
     private func loadHoleData() {
         cachedHolePolygons = (try? CoursesRepo(context: modelContext).polygons(courseId: courseId, hole: tracker.currentHole)) ?? []
+        recommendClubForHole()
+    }
+
+    private func recommendClubForHole() {
+        guard let ball = ballPosition, let flag = flagCoord else { return }
+        let dist = haversineYards(from: ball, to: flag)
+        if dist > 5, let best = cachedClubOptions.min(by: { abs($0.carry - dist) < abs($1.carry - dist) }) {
+            selectedClubId = best.club.id
+            selectedSwing = best.swing
+        }
     }
 
     // MARK: - Actions
@@ -576,7 +587,7 @@ struct CoursePlayView: View {
 
     @State private var lastShotOutcome: String?
 
-    private func completeShot(clubId: String?) {
+    private func completeShot(clubId: String?, swing: SwingType = .full) {
         guard let start = pendingShotStart, let end = pendingShotEnd else { return }
         tracker.logShot(from: start, to: end, clubId: clubId, accuracy: location.accuracy)
         if let shot = tracker.shots.last {
@@ -585,14 +596,14 @@ struct CoursePlayView: View {
 
         // Auto-detect shot outcome relative to target line
         if let flag = flagCoord {
-            lastShotOutcome = classifyShot(from: start, landing: end, target: flag, clubId: clubId)
+            lastShotOutcome = classifyShot(from: start, landing: end, target: flag, clubId: clubId, swing: swing)
 
             // Also log to the main Shot system with outcome tags
             if let clubId {
                 let tags = autoOutcomeTags(from: start, landing: end, target: flag)
                 let mainShot = Shot(
                     id: UUID().uuidString.lowercased(),
-                    sessionId: "", clubId: clubId,
+                    sessionId: tracker.sessionId, clubId: clubId,
                     targetDistanceYards: haversineYards(from: start, to: flag),
                     longDelta: longDelta(from: start, landing: end, target: flag),
                     latDelta: latDelta(from: start, landing: end, target: flag),
@@ -641,12 +652,13 @@ struct CoursePlayView: View {
         }
     }
 
-    private func classifyShot(from start: Coord, landing: Coord, target: Coord, clubId: String?) -> String {
+    private func classifyShot(from start: Coord, landing: Coord, target: Coord, clubId: String?, swing: SwingType = .full) -> String {
         let ld = longDelta(from: start, landing: landing, target: target)
         let lat = latDelta(from: start, landing: landing, target: target)
         let clubName = clubId.flatMap { id in clubs.first(where: { $0.id == id })?.name } ?? "Shot"
+        let swingLabel = swing == .full ? "" : " \(swing.label)"
 
-        var parts: [String] = [clubName]
+        var parts: [String] = [clubName + swingLabel]
         let totalDist = Int(haversineYards(from: start, to: landing))
         parts.append("\(totalDist)y")
 
@@ -717,12 +729,27 @@ struct CoursePlayView: View {
 
     private func finishRound() {
         tracker.state = .roundComplete
-        tracker.save()
+        // Persist scorecard data keyed by sessionId
+        if let data = try? JSONEncoder().encode(Array(tracker.scores.values)) {
+            UserDefaults.standard.set(data, forKey: "roundScores.\(tracker.sessionId)")
+        }
+        tracker.clearSave()
+        SessionStore.shared.clear()
+        Haptics.success()
         onBack()
     }
 
     private func cancelRound() {
+        // Delete all shots from this session
+        let shots = tracker.shots
+        for shot in shots {
+            try? CoursesRepo(context: modelContext).deleteShots(courseId: courseId, hole: shot.holeNumber)
+        }
+        if !tracker.sessionId.isEmpty {
+            try? SessionsRepo(context: modelContext).delete(id: tracker.sessionId)
+        }
         tracker.clearSave()
+        SessionStore.shared.clear()
         onBack()
     }
 
@@ -747,32 +774,51 @@ struct CoursePlayView: View {
 
     @ViewBuilder
     private var clubPickerContent: some View {
-        DSheetHeader(eyebrow: "Shot \(tracker.shotsForHole(tracker.currentHole).count + 1)", title: "What did you hit?")
+        let shotDist = (pendingShotStart != nil && pendingShotEnd != nil)
+            ? Int(haversineYards(from: pendingShotStart!, to: pendingShotEnd!)) : 0
 
-        if let start = pendingShotStart, let end = pendingShotEnd {
-            Text("\(Int(haversineYards(from: start, to: end))) yards")
-                .font(DispersionType.display(32, weight: .regular))
-                .monospacedDigit()
-                .foregroundStyle(DesignTokens.primary)
-        }
+        DSheetHeader(
+            eyebrow: "Shot \(tracker.shotsForHole(tracker.currentHole).count + 1) · \(shotDist)y",
+            title: "What did you hit?"
+        )
 
-        VStack(spacing: 6) {
-            ForEach(clubs, id: \.id) { club in
+        // Pre-select the currently selected club option
+        let preselected = selectedOption
+
+        VStack(spacing: 4) {
+            ForEach(clubOptions, id: \.id) { opt in
+                let isRecommended = opt.id == preselected?.id
                 Button {
-                    completeShot(clubId: club.id)
+                    completeShot(clubId: opt.club.id, swing: opt.swing)
                     showClubPicker = false
                 } label: {
-                    HStack {
-                        Text(club.name).font(DispersionType.ui(14, weight: .medium))
-                        Text("\(Int(club.carryYards))y").font(DispersionType.mono(11)).foregroundStyle(DesignTokens.mutedForeground)
+                    HStack(spacing: 8) {
+                        Text(opt.club.name)
+                            .font(DispersionType.ui(14, weight: .medium))
+                        if opt.swing != .full {
+                            Text(opt.swing.label)
+                                .font(DispersionType.mono(10, weight: .medium))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(DesignTokens.primary.opacity(0.15)))
+                                .foregroundStyle(DesignTokens.primary)
+                        }
                         Spacer()
+                        Text("\(Int(opt.carry))y")
+                            .font(DispersionType.mono(11))
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                        if isRecommended {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(DesignTokens.primary)
+                        }
                     }
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(DesignTokens.surface)
+                            .fill(isRecommended ? DesignTokens.primary.opacity(0.08) : DesignTokens.surface)
                             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(DesignTokens.border, lineWidth: 1))
+                                .strokeBorder(isRecommended ? DesignTokens.primary.opacity(0.3) : DesignTokens.border, lineWidth: 1))
                     )
                 }
                 .buttonStyle(.plain)
@@ -780,7 +826,7 @@ struct CoursePlayView: View {
         }
 
         Button {
-            completeShot(clubId: nil)
+            completeShot(clubId: nil, swing: .full)
             showClubPicker = false
         } label: {
             Text("Skip").frame(maxWidth: .infinity)
@@ -806,9 +852,11 @@ struct CoursePlayView: View {
 
         DSheetHeader(eyebrow: "Hole \(h) · Par \(holePar) · \(holeYardage)y", title: "Score")
 
+        let minScore = max(tracker.shotsForHole(h).count, 1)
+
         // Score stepper
         HStack {
-            Button { tracker.setScore(hole: h, score: max(1, score - 1)); Haptics.light() } label: {
+            Button { tracker.setScore(hole: h, score: max(minScore, score - 1)); Haptics.light() } label: {
                 Image(systemName: "minus").font(.system(size: 16, weight: .medium))
                     .frame(width: 44, height: 44).background(Circle().fill(DesignTokens.surface))
             }

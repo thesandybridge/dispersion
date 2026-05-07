@@ -40,4 +40,9 @@ public struct FaceStrikesRepo {
             try context.save()
         }
     }
+
+    public func deleteAll() throws {
+        try context.delete(model: FaceStrikeModel.self)
+        try context.save()
+    }
 }

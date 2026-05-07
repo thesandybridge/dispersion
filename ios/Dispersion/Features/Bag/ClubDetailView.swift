@@ -1,12 +1,12 @@
-// Port of ClubDetail from app/src/routes/clubs.tsx. Shows stored stats,
-// measured dispersion from logged shots, outcome breakdown, and an edit
-// action that opens ClubEditSheet.
+// Club detail view — shows key stats, dispersion viz, shot trends,
+// miss pattern, strokes gained, outcomes, and face strikes.
 
 import SwiftData
 import SwiftUI
 
 struct ClubDetailView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.themeAccent) private var accent
     @State private var settings = SettingsStore.shared
 
     var club: Club
@@ -19,10 +19,11 @@ struct ClubDetailView: View {
     @State private var deleteStrikeConfirm = false
 
     private var unit: DistanceUnit { settings.unit }
-    private var u: String { unit.label }
 
+    // Filter out garbage data — only shots with reasonable deltas
     private var allShots: [Shot] {
-        (try? ShotsRepo(context: modelContext).listByClub(club.id, limit: 500)) ?? []
+        let raw = (try? ShotsRepo(context: modelContext).listByClub(club.id, limit: 500)) ?? []
+        return raw.filter { abs($0.longDelta) < 100 && abs($0.latDelta) < 100 }
     }
 
     private var taps: [ShotXY] {
@@ -38,10 +39,8 @@ struct ClubDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
-                storedStatsCard
-                loggedShotsHeader
-                dispersionSection
-                if haveStats { measuredComparison }
+                statsCard
+                if haveStats { dispersionSection }
                 trendSection
                 missPatternSection
                 strokesGainedSection
@@ -53,15 +52,15 @@ struct ClubDetailView: View {
             .padding(.bottom, 100)
         }
         .background(DesignTokens.fairway50.ignoresSafeArea())
-        .alert("Replace \(club.name)'s σ with measured?", isPresented: $saveConfirm) {
-            Button("Update club") { applyMeasured() }
+        .alert("Update \(club.name) with measured σ?", isPresented: $saveConfirm) {
+            Button("Update") { applyMeasured() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Updates carry to \(String(format: "%.1f", club.carryYards + stats.longBias))y, σ↕ \(String(format: "%.1f", stats.carrySd)), σ↔ \(String(format: "%.1f", stats.lateralSd)) from \(taps.count) tracked shots.")
+            Text("σ↕ \(String(format: "%.1f", stats.carrySd)) · σ↔ \(String(format: "%.1f", stats.lateralSd)) from \(taps.count) shots")
         }
     }
 
-    // MARK: header
+    // MARK: - Header
 
     private var header: some View {
         HStack {
@@ -86,191 +85,122 @@ struct ClubDetailView: View {
         }
     }
 
-    // MARK: stored stats
+    // MARK: - Stats card (single, clean)
 
-    private var storedStatsCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Stored").eyebrow(color: DesignTokens.cream.opacity(0.5))
+    private var statsCard: some View {
+        let cat = ClubCategoryRegistry.categorize(name: club.name, carryYards: club.carryYards)
+        let style = ClubCategoryRegistry.style(for: cat)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(LinearGradient(gradient: style.gradient, startPoint: .top, endPoint: .bottom))
+                    .frame(width: 4, height: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(club.name)
+                        .font(DispersionType.display(24, weight: .regular))
+                        .foregroundStyle(DesignTokens.soil900)
+                    Text(style.label)
+                        .font(DispersionType.mono(9, weight: .medium))
+                        .tracking(1.5)
+                        .textCase(.uppercase)
+                        .foregroundStyle(style.accentDeep)
+                }
+                Spacer()
+                if haveStats {
+                    Button { saveConfirm = true } label: {
+                        Text("Use measured")
+                            .font(DispersionType.mono(10, weight: .medium))
+                            .foregroundStyle(accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             HStack(spacing: 0) {
-                statColumn(label: "Carry", value: "\(Int(Units.from(yards: club.carryYards, in: unit)))\(u)")
+                statCol("Carry", "\(Int(Units.from(yards: club.carryYards, in: unit)))\(unit.label)")
                 Spacer()
-                statColumn(label: "σ↕ long", value: "\(String(format: "%.1f", Units.from(yards: club.carrySd, in: unit)))\(u)")
+                statCol("σ long", "\(String(format: "%.1f", Units.from(yards: club.carrySd, in: unit)))\(unit.label)")
                 Spacer()
-                statColumn(label: "σ↔ lat", value: "\(String(format: "%.1f", Units.from(yards: club.lateralSd, in: unit)))\(u)")
+                statCol("σ lateral", "\(String(format: "%.1f", Units.from(yards: club.lateralSd, in: unit)))\(unit.label)")
+                Spacer()
+                statCol("Shots", "\(allShots.count)")
+            }
+
+            // Show measured if different from stored and we have data
+            if haveStats {
+                DSeparator()
+                HStack(spacing: 0) {
+                    measuredCol("Measured carry", value: Units.from(yards: club.carryYards + stats.longBias, in: unit),
+                                delta: Units.from(yards: stats.longBias, in: unit))
+                    Spacer()
+                    measuredCol("Measured σ↕", value: Units.from(yards: stats.carrySd, in: unit),
+                                delta: Units.from(yards: stats.carrySd - club.carrySd, in: unit))
+                    Spacer()
+                    measuredCol("Measured σ↔", value: Units.from(yards: stats.lateralSd, in: unit),
+                                delta: Units.from(yards: stats.lateralSd - club.lateralSd, in: unit))
+                }
             }
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(DesignTokens.backgroundDeep)
+                .fill(.white)
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(DesignTokens.soil900.opacity(0.07), lineWidth: 1))
+                .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
         )
     }
 
-    private func statColumn(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func statCol(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(DispersionType.mono(10, weight: .medium))
-                .tracking(1.8)
+                .font(DispersionType.mono(9, weight: .medium))
+                .tracking(1.2)
                 .textCase(.uppercase)
-                .foregroundStyle(DesignTokens.cream.opacity(0.5))
+                .foregroundStyle(DesignTokens.soil900.opacity(0.45))
             Text(value)
-                .font(DispersionType.display(28, weight: .regular))
-                .tracking(-0.56)
-                .foregroundStyle(DesignTokens.cream)
+                .font(DispersionType.display(18, weight: .regular))
+                .foregroundStyle(DesignTokens.soil900)
                 .monospacedDigit()
         }
     }
 
-    // MARK: logged shots
-
-    private var loggedShotsHeader: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Logged shots").eyebrow()
-                Text("\(allShots.count) total · \(taps.count) with landing data")
-                    .font(DispersionType.mono(12))
-                    .foregroundStyle(DesignTokens.soil900.opacity(0.6))
-            }
-            Spacer()
-            if haveStats {
-                Button { saveConfirm = true } label: {
-                    Text("Use measured σ")
-                        .font(DispersionType.mono(11))
-                        .tracking(1.6)
-                        .textCase(.uppercase)
-                        .foregroundStyle(DesignTokens.primary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    // MARK: dispersion viz
-
-    @ViewBuilder
-    private var dispersionSection: some View {
-        if haveStats {
-            DispersionViz(
-                carry: club.carryYards,
-                carrySd: stats.carrySd,
-                lateralSd: stats.lateralSd,
-                distanceToTarget: club.carryYards,
-                contours: 6,
-                facets: 28,
-                background: DesignTokens.backgroundDeep
-            )
-            .aspectRatio(1.5, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        } else {
-            Text("Log shots in Range mode to see real dispersion here.")
-                .font(DispersionType.ui(13))
-                .foregroundStyle(DesignTokens.soil900.opacity(0.55))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(DesignTokens.soil900.opacity(0.04))
-                )
-        }
-    }
-
-    // MARK: measured comparison
-
-    private var measuredComparison: some View {
-        HStack(spacing: 12) {
-            deltaColumn(
-                label: "Carry",
-                stored: Units.from(yards: club.carryYards, in: unit),
-                measured: Units.from(yards: club.carryYards + stats.longBias, in: unit)
-            )
-            Spacer()
-            deltaColumn(
-                label: "σ↕",
-                stored: Units.from(yards: club.carrySd, in: unit),
-                measured: Units.from(yards: stats.carrySd, in: unit)
-            )
-            Spacer()
-            deltaColumn(
-                label: "σ↔",
-                stored: Units.from(yards: club.lateralSd, in: unit),
-                measured: Units.from(yards: stats.lateralSd, in: unit)
-            )
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(DesignTokens.soil900.opacity(0.04))
-        )
-    }
-
-    private func deltaColumn(label: String, stored: Double, measured: Double) -> some View {
-        let delta = measured - stored
-        let color: Color = abs(delta) < 0.05 ? DesignTokens.soil900.opacity(0.5)
-            : delta < 0 ? DesignTokens.primary
-            : DesignTokens.pPoor
+    private func measuredCol(_ label: String, value: Double, delta: Double) -> some View {
+        let color: Color = abs(delta) < 0.5 ? DesignTokens.soil900.opacity(0.5)
+            : delta < 0 ? DesignTokens.primary : DesignTokens.pPoor
         return VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(DispersionType.mono(10, weight: .medium))
-                .tracking(1.8)
-                .textCase(.uppercase)
-                .foregroundStyle(DesignTokens.soil900.opacity(0.5))
-            HStack(spacing: 4) {
-                Text(String(format: "%.1f", measured))
-                    .font(DispersionType.display(18, weight: .regular))
+                .font(DispersionType.mono(8))
+                .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+            HStack(spacing: 3) {
+                Text(String(format: "%.1f", value))
+                    .font(DispersionType.mono(13, weight: .medium))
                     .foregroundStyle(DesignTokens.soil900)
-                    .monospacedDigit()
                 Text("\(delta >= 0 ? "+" : "")\(String(format: "%.1f", delta))")
-                    .font(DispersionType.mono(10))
+                    .font(DispersionType.mono(9))
                     .foregroundStyle(color)
             }
         }
     }
 
-    // MARK: outcome breakdown
+    // MARK: - Dispersion viz
 
-    @ViewBuilder
-    private var outcomeBreakdown: some View {
-        let withOutcomes = allShots.filter { !$0.outcomes.isEmpty }
-        if !withOutcomes.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Outcomes").eyebrow()
-                    .padding(.top, 8)
-                let counts = outcomeCounts(withOutcomes)
-                ForEach(counts, id: \.tag) { entry in
-                    HStack(spacing: 10) {
-                        Text(entry.tag.uppercased())
-                            .font(DispersionType.mono(10, weight: .medium))
-                            .tracking(1.5)
-                            .foregroundStyle(outcomeColor(entry.tag))
-                            .frame(width: 60, alignment: .leading)
-                        GeometryReader { g in
-                            Capsule()
-                                .fill(outcomeColor(entry.tag).opacity(0.25))
-                                .frame(width: g.size.width)
-                                .overlay(alignment: .leading) {
-                                    Capsule()
-                                        .fill(outcomeColor(entry.tag))
-                                        .frame(width: g.size.width * entry.fraction)
-                                }
-                        }
-                        .frame(height: 6)
-                        Text("\(Int(entry.fraction * 100))%")
-                            .font(DispersionType.mono(10))
-                            .foregroundStyle(DesignTokens.soil900.opacity(0.6))
-                            .frame(width: 36, alignment: .trailing)
-                    }
-                }
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(DesignTokens.soil900.opacity(0.04))
-            )
-        }
+    private var dispersionSection: some View {
+        DispersionViz(
+            carry: club.carryYards,
+            carrySd: stats.carrySd,
+            lateralSd: stats.lateralSd,
+            distanceToTarget: club.carryYards,
+            contours: 5,
+            facets: 28,
+            background: DesignTokens.backgroundDeep
+        )
+        .aspectRatio(1.5, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    // MARK: trend
+    // MARK: - Trend
 
     @ViewBuilder
     private var trendSection: some View {
@@ -286,10 +216,7 @@ struct ClubDetailView: View {
                 }
                 TrendChart(
                     points: summary.sessionPoints.map { TrendPoint(date: $0.date, value: $0.carrySd) },
-                    accent: DesignTokens.fairwayShadow,
-                    fill: DesignTokens.bentgrass,
                     label: "σ↕ carry",
-                    suffix: "y",
                     referenceValue: club.carrySd,
                     referenceLabel: "stored"
                 )
@@ -299,11 +226,10 @@ struct ClubDetailView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .padding(.top, 8)
         }
     }
 
-    // MARK: miss pattern
+    // MARK: - Miss pattern
 
     @ViewBuilder
     private var missPatternSection: some View {
@@ -317,9 +243,7 @@ struct ClubDetailView: View {
                         .foregroundStyle(analysis.dominantMiss == "centered"
                                          ? DesignTokens.primary : DesignTokens.pPoor)
                 }
-                .padding(.top, 8)
 
-                // Directional grid
                 HStack(spacing: 0) {
                     missBar(label: "Left", pct: analysis.pctLeft, color: DesignTokens.pPoor)
                     Spacer()
@@ -336,32 +260,22 @@ struct ClubDetailView: View {
                     Spacer()
                     missBar(label: "Right", pct: analysis.pctRight, color: DesignTokens.pPoor)
                 }
-                .padding(.vertical, 8)
 
-                // Aim recommendation
                 if analysis.dominantMiss != "centered" {
                     HStack(spacing: 8) {
                         Image(systemName: "scope")
                             .font(.system(size: 12))
-                            .foregroundStyle(DesignTokens.primary)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Aim recommendation").font(DispersionType.ui(12, weight: .medium))
-                            let latDir = analysis.aimOffsetLat < 0 ? "left" : "right"
-                            let longDir = analysis.aimOffsetLong > 0 ? "club up" : ""
-                            Text("Aim \(Int(abs(analysis.aimOffsetLat)))y \(latDir)\(longDir.isEmpty ? "" : ", \(longDir)")")
-                                .font(DispersionType.mono(11))
-                                .foregroundStyle(DesignTokens.soil900.opacity(0.6))
-                        }
+                            .foregroundStyle(accent)
+                        let latDir = analysis.aimOffsetLat < 0 ? "left" : "right"
+                        Text("Aim \(Int(abs(analysis.aimOffsetLat)))y \(latDir)")
+                            .font(DispersionType.mono(11))
+                            .foregroundStyle(DesignTokens.soil900.opacity(0.7))
                     }
-                    .padding(12)
+                    .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(DesignTokens.primary.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .strokeBorder(DesignTokens.primary.opacity(0.2), lineWidth: 1)
-                            )
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(accent.opacity(0.08))
                     )
                 }
             }
@@ -385,39 +299,24 @@ struct ClubDetailView: View {
         .frame(minWidth: 44)
     }
 
-    // MARK: strokes gained
+    // MARK: - Strokes gained
 
     @ViewBuilder
     private var strokesGainedSection: some View {
         let sg = StrokesGained.aggregate(allShots)
         if sg.shotCount >= 2 {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Strokes gained").eyebrow()
-                    .padding(.top, 8)
-                HStack(spacing: 20) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Per shot")
-                            .font(DispersionType.mono(9))
-                            .foregroundStyle(DesignTokens.soil900.opacity(0.5))
-                        Text(String(format: "%+.2f", sg.avgSG))
-                            .font(DispersionType.display(24, weight: .regular))
-                            .foregroundStyle(sg.avgSG >= 0 ? DesignTokens.primary : DesignTokens.pPoor)
-                            .monospacedDigit()
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Total (\(sg.shotCount) shots)")
-                            .font(DispersionType.mono(9))
-                            .foregroundStyle(DesignTokens.soil900.opacity(0.5))
-                        Text(String(format: "%+.1f", sg.totalSG))
-                            .font(DispersionType.display(24, weight: .regular))
-                            .foregroundStyle(sg.totalSG >= 0 ? DesignTokens.primary : DesignTokens.pPoor)
-                            .monospacedDigit()
-                    }
-                    Spacer()
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Strokes gained").eyebrow()
+                    Text(String(format: "%+.2f", sg.avgSG))
+                        .font(DispersionType.display(24, weight: .regular))
+                        .foregroundStyle(sg.avgSG >= 0 ? DesignTokens.primary : DesignTokens.pPoor)
+                        .monospacedDigit()
+                    Text("per shot · \(sg.shotCount) shots")
+                        .font(DispersionType.mono(10))
+                        .foregroundStyle(DesignTokens.soil900.opacity(0.5))
                 }
-                Text("vs. PGA Tour approach baseline")
-                    .font(DispersionType.ui(10))
-                    .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+                Spacer()
             }
             .padding(14)
             .background(
@@ -427,7 +326,44 @@ struct ClubDetailView: View {
         }
     }
 
-    // MARK: face strikes
+    // MARK: - Outcomes
+
+    @ViewBuilder
+    private var outcomeBreakdown: some View {
+        let withOutcomes = allShots.filter { !$0.outcomes.isEmpty }
+        if !withOutcomes.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Outcomes · \(withOutcomes.count) shots").eyebrow()
+                let counts = outcomeCounts(withOutcomes)
+                ForEach(counts, id: \.tag) { entry in
+                    HStack(spacing: 10) {
+                        Text(entry.tag.uppercased())
+                            .font(DispersionType.mono(10, weight: .medium))
+                            .tracking(1.5)
+                            .foregroundStyle(outcomeColor(entry.tag))
+                            .frame(width: 60, alignment: .leading)
+                        GeometryReader { g in
+                            Capsule().fill(outcomeColor(entry.tag).opacity(0.25))
+                            Capsule().fill(outcomeColor(entry.tag))
+                                .frame(width: g.size.width * entry.fraction)
+                        }
+                        .frame(height: 6)
+                        Text("\(Int(entry.fraction * 100))%")
+                            .font(DispersionType.mono(10))
+                            .foregroundStyle(DesignTokens.soil900.opacity(0.6))
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(DesignTokens.soil900.opacity(0.04))
+            )
+        }
+    }
+
+    // MARK: - Face strikes
 
     @ViewBuilder
     private var faceSection: some View {
@@ -436,15 +372,7 @@ struct ClubDetailView: View {
             + (pendingStrike.map { [$0] } ?? [])
 
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Face strikes").eyebrow()
-                Spacer()
-                Text("\(strikes.count)")
-                    .font(DispersionType.mono(10))
-                    .foregroundStyle(DesignTokens.soil900.opacity(0.5))
-            }
-            .padding(.top, 8)
-
+            Text("Face strikes · \(strikes.count)").eyebrow()
             ClubFaceViz(
                 strikes: displayStrikes,
                 selectedId: pendingStrike?.id ?? selectedStrikeId,
@@ -458,44 +386,29 @@ struct ClubDetailView: View {
                 }
             )
 
-            // Action bar
             HStack(spacing: 12) {
                 if let _ = pendingStrike {
-                    Button {
-                        savePendingStrike()
-                    } label: {
+                    Button { savePendingStrike() } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold))
                             Text("Save")
                         }
                     }
                     .buttonStyle(.dispersion(.primary, size: .sm))
-
-                    Button {
-                        pendingStrike = nil
-                    } label: {
-                        Text("Cancel")
-                    }
-                    .buttonStyle(.dispersion(.ghost, size: .sm))
+                    Button { pendingStrike = nil } label: { Text("Cancel") }
+                        .buttonStyle(.dispersion(.ghost, size: .sm))
                 } else if let _ = selectedStrikeId {
-                    Button {
-                        deleteStrikeConfirm = true
-                    } label: {
+                    Button { deleteStrikeConfirm = true } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "trash").font(.system(size: 11, weight: .medium))
+                            Image(systemName: "trash").font(.system(size: 11))
                             Text("Delete")
                         }
                     }
                     .buttonStyle(.dispersion(.destructive, size: .sm))
-
-                    Button {
-                        selectedStrikeId = nil
-                    } label: {
-                        Text("Deselect")
-                    }
-                    .buttonStyle(.dispersion(.ghost, size: .sm))
+                    Button { selectedStrikeId = nil } label: { Text("Deselect") }
+                        .buttonStyle(.dispersion(.ghost, size: .sm))
                 } else {
-                    Text("Tap the face to place a strike.")
+                    Text("Tap the face to place a strike")
                         .font(DispersionType.ui(11))
                         .foregroundStyle(DesignTokens.soil900.opacity(0.45))
                 }
@@ -515,45 +428,34 @@ struct ClubDetailView: View {
 
     private func savePendingStrike() {
         guard let p = pendingStrike else { return }
-        let strike = FaceStrike(
-            id: p.id,
-            clubId: club.id,
-            x: p.x,
-            y: p.y
+        _ = try? FaceStrikesRepo(context: modelContext).create(
+            FaceStrike(id: p.id, clubId: club.id, x: p.x, y: p.y)
         )
-        _ = try? FaceStrikesRepo(context: modelContext).create(strike)
         pendingStrike = nil
     }
 
-    // MARK: actions
+    // MARK: - Actions
 
     private func applyMeasured() {
-        let repo = ClubsRepo(context: modelContext)
-        try? repo.update(id: club.id, patch: .init(
+        try? ClubsRepo(context: modelContext).update(id: club.id, patch: .init(
             carryYards: club.carryYards + stats.longBias,
             carrySd: stats.carrySd,
             lateralSd: stats.lateralSd
         ))
+        Haptics.success()
     }
 
-    // MARK: helpers
+    // MARK: - Helpers
 
     private struct OutcomeCount: Equatable {
-        var tag: String
-        var count: Int
-        var fraction: Double
+        var tag: String; var count: Int; var fraction: Double
     }
 
     private func outcomeCounts(_ shots: [Shot]) -> [OutcomeCount] {
         let total = shots.count
         var tally: [String: Int] = [:]
-        for shot in shots {
-            for tag in shot.outcomes {
-                tally[tag.rawValue, default: 0] += 1
-            }
-        }
-        let order = ["in", "short", "long", "left", "right", "penalty"]
-        return order.compactMap { tag in
+        for shot in shots { for tag in shot.outcomes { tally[tag.rawValue, default: 0] += 1 } }
+        return ["in", "short", "long", "left", "right", "penalty"].compactMap { tag in
             guard let c = tally[tag], c > 0 else { return nil }
             return OutcomeCount(tag: tag, count: c, fraction: Double(c) / Double(total))
         }

@@ -17,18 +17,22 @@ public final class RoundTracker {
 
     public var state: State = .idle
     public var courseId: String = ""
+    public var sessionId: String = ""
     public var currentHole: Int = 1
     public var shots: [CourseShot] = []
-    public var scores: [Int: HoleScore] = [:]  // hole number → score
+    public var scores: [Int: HoleScore] = [:]
     public var lastPosition: Coord?
     public var holeCount: Int = 18
+    public var startedAt: Date = .now
 
     public func startRound(courseId: String, holeCount: Int) {
         self.courseId = courseId
+        self.sessionId = UUID().uuidString.lowercased()
         self.holeCount = holeCount
         self.currentHole = 1
         self.shots = []
         self.scores = [:]
+        self.startedAt = .now
         self.state = .awaitingTeeShot(hole: 1)
         initScores()
     }
@@ -120,10 +124,12 @@ public final class RoundTracker {
     public func save() {
         let data = RoundData(
             courseId: courseId,
+            sessionId: sessionId,
             currentHole: currentHole,
             holeCount: holeCount,
             scores: scores,
-            shots: shots
+            shots: shots,
+            startedAt: startedAt
         )
         if let encoded = try? JSONEncoder().encode(data) {
             UserDefaults.standard.set(encoded, forKey: saveKey)
@@ -136,10 +142,12 @@ public final class RoundTracker {
               let round = try? JSONDecoder().decode(RoundData.self, from: data)
         else { return false }
         self.courseId = round.courseId
+        self.sessionId = round.sessionId
         self.currentHole = round.currentHole
         self.holeCount = round.holeCount
         self.scores = round.scores
         self.shots = round.shots
+        self.startedAt = round.startedAt
         self.state = .holeInProgress(hole: currentHole, shotCount: shotsForHole(currentHole).count)
         return true
     }
@@ -171,8 +179,10 @@ public final class RoundTracker {
 
 private struct RoundData: Codable {
     var courseId: String
+    var sessionId: String
     var currentHole: Int
     var holeCount: Int
     var scores: [Int: HoleScore]
     var shots: [CourseShot]
+    var startedAt: Date
 }

@@ -248,11 +248,11 @@ public struct SettingsScreen: View {
     }
 
     private func clearAll() {
-        let repo = ClubsRepo(context: modelContext)
         do {
-            try repo.deleteAll()
+            try ClubsRepo(context: modelContext).deleteAll()
             try ShotsRepo(context: modelContext).deleteAll()
             try SessionsRepo(context: modelContext).deleteAll()
+            try FaceStrikesRepo(context: modelContext).deleteAll()
             status = (.ok, "All data cleared.")
         } catch {
             status = (.err, String(describing: error))
