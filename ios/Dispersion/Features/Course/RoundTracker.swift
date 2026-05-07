@@ -55,6 +55,17 @@ public final class RoundTracker {
         }
     }
 
+    public func undoLastShot() -> CourseShot? {
+        guard let last = shots.last, last.holeNumber == currentHole else { return nil }
+        shots.removeLast()
+        let remaining = shots.filter { $0.holeNumber == currentHole }.count
+        state = remaining > 0
+            ? .holeInProgress(hole: currentHole, shotCount: remaining)
+            : .awaitingTeeShot(hole: currentHole)
+        scores[currentHole]?.score = remaining
+        return last
+    }
+
     public func finishHole(score: Int? = nil) {
         if let s = score { scores[currentHole]?.score = s }
         state = .holeFinished(hole: currentHole)
@@ -101,4 +112,67 @@ public final class RoundTracker {
             scores[h] = HoleScore(hole: h, par: 4, score: 0)
         }
     }
+
+    // MARK: - Persistence
+
+    private var saveKey: String { "activeRound.\(courseId)" }
+
+    public func save() {
+        let data = RoundData(
+            courseId: courseId,
+            currentHole: currentHole,
+            holeCount: holeCount,
+            scores: scores,
+            shots: shots
+        )
+        if let encoded = try? JSONEncoder().encode(data) {
+            UserDefaults.standard.set(encoded, forKey: saveKey)
+        }
+    }
+
+    public func loadIfExists(courseId: String) -> Bool {
+        let key = "activeRound.\(courseId)"
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let round = try? JSONDecoder().decode(RoundData.self, from: data)
+        else { return false }
+        self.courseId = round.courseId
+        self.currentHole = round.currentHole
+        self.holeCount = round.holeCount
+        self.scores = round.scores
+        self.shots = round.shots
+        self.state = .holeInProgress(hole: currentHole, shotCount: shotsForHole(currentHole).count)
+        return true
+    }
+
+    public func clearSave() {
+        UserDefaults.standard.removeObject(forKey: saveKey)
+    }
+
+    // Round stats
+    public var totalPutts: Int {
+        scores.values.compactMap(\.putts).reduce(0, +)
+    }
+    public var fairwaysHit: Int {
+        scores.values.filter { $0.fairwayHit == true }.count
+    }
+    public var fairwaysTotal: Int {
+        scores.values.filter { $0.par >= 4 && $0.score > 0 }.count
+    }
+    public var greensHit: Int {
+        scores.values.filter { $0.girHit == true }.count
+    }
+    public var upAndDowns: Int {
+        scores.values.filter { $0.upAndDown == true }.count
+    }
+    public var upAndDownAttempts: Int {
+        scores.values.filter { $0.girHit == false && $0.score > 0 }.count
+    }
+}
+
+private struct RoundData: Codable {
+    var courseId: String
+    var currentHole: Int
+    var holeCount: Int
+    var scores: [Int: HoleScore]
+    var shots: [CourseShot]
 }

@@ -101,7 +101,7 @@ public struct CourseHole: Identifiable, Hashable, Sendable {
 
 // MARK: - Course shot (absolute GPS)
 
-public struct CourseShot: Identifiable, Hashable, Sendable {
+public struct CourseShot: Identifiable, Hashable, Codable, Sendable {
     public var id: String
     public var courseId: String
     public var holeNumber: Int
@@ -159,6 +159,22 @@ public func centroid(_ coords: [Coord]) -> Coord {
     let lat = coords.reduce(0.0) { $0 + $1.lat } / n
     let lng = coords.reduce(0.0) { $0 + $1.lng } / n
     return Coord(lat: lat, lng: lng)
+}
+
+/// Ray casting point-in-polygon test
+public func pointInPolygon(_ point: Coord, polygon: [Coord]) -> Bool {
+    guard polygon.count >= 3 else { return false }
+    var inside = false
+    var j = polygon.count - 1
+    for i in 0..<polygon.count {
+        let pi = polygon[i], pj = polygon[j]
+        if (pi.lng > point.lng) != (pj.lng > point.lng) {
+            let intersectLat = (pj.lat - pi.lat) * (point.lng - pi.lng) / (pj.lng - pi.lng) + pi.lat
+            if point.lat < intersectLat { inside.toggle() }
+        }
+        j = i
+    }
+    return inside
 }
 
 public func boundingBox(_ coords: [Coord]) -> (min: Coord, max: Coord) {

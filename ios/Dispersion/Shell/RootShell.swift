@@ -62,10 +62,12 @@ public struct RootShell: View {
         }
         .tint(settings.themeAccent.color) // also set via .themeAccent but needed here for TabView
         .overlay {
-            RadialDial(
-                route: $route,
-                disabledRoutes: clubModels.isEmpty ? protectedRoutes : []
-            )
+            if route != .course {
+                RadialDial(
+                    route: $route,
+                    disabledRoutes: clubModels.isEmpty ? protectedRoutes : []
+                )
+            }
         }
         .overlay(alignment: .topLeading) {
             if settings.debugOverlay {

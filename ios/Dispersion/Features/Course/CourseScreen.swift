@@ -98,6 +98,14 @@ public struct CourseScreen: View {
                             .background(ThemedCardFill(cornerRadius: 14))
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                try? CoursesRepo(context: modelContext).deleteCourse(id: course.id)
+                                Haptics.medium()
+                            } label: {
+                                Label("Delete course", systemImage: "trash")
+                            }
+                        }
                     }
                 }
             }

@@ -163,8 +163,10 @@ public struct HoleScore: Identifiable, Hashable, Codable, Sendable {
     public var fairwayHit: Bool?
     public var girHit: Bool?   // green in regulation
     public var putts: Int?
+    public var upAndDown: Bool?
+    public var penaltyStrokes: Int = 0
 
-    public init(hole: Int, par: Int = 4, score: Int = 0, fairwayHit: Bool? = nil, girHit: Bool? = nil, putts: Int? = nil) {
+    public init(hole: Int, par: Int = 4, score: Int = 0, fairwayHit: Bool? = nil, girHit: Bool? = nil, putts: Int? = nil, upAndDown: Bool? = nil) {
         self.hole = hole
         self.par = par
         self.score = score
@@ -176,12 +178,15 @@ public struct HoleScore: Identifiable, Hashable, Codable, Sendable {
     public var toPar: Int { score - par }
 
     public var label: String {
+        if score == 1 { return "Hole in One" }
         switch toPar {
-        case ..<(-1): return "Eagle"
+        case ..<(-2): return "Albatross"
+        case -2: return "Eagle"
         case -1: return "Birdie"
         case 0: return "Par"
         case 1: return "Bogey"
         case 2: return "Double"
+        case 3: return "Triple"
         default: return "+\(toPar)"
         }
     }
