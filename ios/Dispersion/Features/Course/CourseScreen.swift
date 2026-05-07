@@ -43,6 +43,7 @@ public struct CourseScreen: View {
             }
         }
         .onAppear {
+            viewingRoundId = nil
             dial.setActions([
                 DialAction(id: "search", label: "Find course", systemImage: "magnifyingglass", tone: .primary) {
                     searchOpen = true

@@ -37,6 +37,7 @@ struct SessionDetailView: View {
                 }
             }
         }
+        .swipeBack { onBack() }
         .alert("Delete \(session?.label ?? "this session")?", isPresented: $deleteSessionConfirm) {
             Button("Delete session", role: .destructive) { deleteSession() }
             Button("Cancel", role: .cancel) {}

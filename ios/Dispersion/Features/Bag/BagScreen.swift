@@ -15,10 +15,10 @@ public struct BagScreen: View {
     @State private var dial = DialStore.shared
 
     @State private var editingClub: Club?
-    @State private var detailClub: Club?
     @State private var creatingNewClub: Bool = false
     @State private var subTab: BagSubTab = .bag
     @State private var gappingExpanded = false
+    @State private var navPath = NavigationPath()
 
     enum BagSubTab { case bag, tag }
 
@@ -33,46 +33,24 @@ public struct BagScreen: View {
     private var isWide: Bool { sizeClass == .regular }
 
     public var body: some View {
-        ZStack {
-            DesignTokens.background.ignoresSafeArea()
-
-            if isWide {
-                HStack(spacing: 0) {
-                    bagListColumn.frame(maxWidth: 420)
-                    if let detail = detailClub {
-                        ClubDetailView(club: detail,
-                                       onBack: { withAnimation { detailClub = nil } },
-                                       onEdit: { editingClub = detail })
-                        .frame(maxWidth: .infinity)
-                    } else {
-                        VStack {
-                            Spacer()
-                            Text("Select a club").font(DispersionType.ui(15)).foregroundStyle(DesignTokens.mutedForeground)
-                            Spacer()
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
+        NavigationStack(path: $navPath) {
+            bagListColumn
+                .navigationBarHidden(true)
+                .navigationDestination(for: Club.self) { club in
+                    ClubDetailView(
+                        club: club,
+                        onBack: { navPath.removeLast() },
+                        onEdit: { editingClub = club }
+                    )
+                    .navigationBarHidden(true)
                 }
-            } else if let detail = detailClub {
-                ClubDetailView(club: detail,
-                               onBack: { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { detailClub = nil } },
-                               onEdit: { editingClub = detail })
-                .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else {
-                bagListColumn
-            }
         }
         .preferredColorScheme(.dark)
         .sheet(item: $editingClub) { c in
-            ClubEditSheet(initial: c, onClose: {
-                editingClub = nil
-                if let d = detailClub, d.id == c.id {
-                    detailClub = clubs.first(where: { $0.id == d.id })
-                }
-            })
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(.ultraThinMaterial)
+            ClubEditSheet(initial: c, onClose: { editingClub = nil })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
         }
         .sheet(isPresented: $creatingNewClub) {
             ClubEditSheet(initial: nil, onClose: { creatingNewClub = false })
@@ -80,7 +58,11 @@ public struct BagScreen: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(.ultraThinMaterial)
         }
-        .onAppear { registerDialActions() }
+        .onAppear {
+            registerDialActions()
+            subTab = .bag
+            navPath = NavigationPath()
+        }
     }
 
     // MARK: - List column
@@ -212,7 +194,7 @@ public struct BagScreen: View {
         let carry = Int(Units.from(yards: club.carryYards, in: unit))
 
         return Button {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { detailClub = club }
+            navPath.append(club)
             Haptics.light()
         } label: {
             HStack(spacing: 12) {
@@ -258,7 +240,7 @@ public struct BagScreen: View {
             Text("Putter").eyebrow()
             if let p = putter {
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { detailClub = p }
+                    navPath.append(p)
                     Haptics.light()
                 } label: {
                     HStack(spacing: 12) {

@@ -117,6 +117,22 @@ public struct ThemedCardFill: View {
     }
 }
 
+// MARK: Swipe-back gesture
+
+public extension View {
+    func swipeBack(_ action: @escaping () -> Void) -> some View {
+        self.gesture(
+            DragGesture(minimumDistance: 30, coordinateSpace: .local)
+                .onEnded { value in
+                    if value.translation.width > 80 && abs(value.translation.height) < 100 {
+                        Haptics.light()
+                        action()
+                    }
+                }
+        )
+    }
+}
+
 // MARK: Hex helper
 
 func hex(_ s: String) -> Color {

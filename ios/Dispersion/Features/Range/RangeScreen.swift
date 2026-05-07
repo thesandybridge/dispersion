@@ -43,6 +43,10 @@ public struct RangeScreen: View {
         .preferredColorScheme(tab == .live ? .dark : nil)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: openSessionId)
+        .onAppear {
+            tab = .live
+            openSessionId = nil
+        }
     }
 
     private var rangeHeader: some View {

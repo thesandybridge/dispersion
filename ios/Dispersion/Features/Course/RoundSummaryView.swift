@@ -159,6 +159,7 @@ struct RoundSummaryView: View {
             .padding(.bottom, 100)
         }
         .background(DesignTokens.background.ignoresSafeArea())
+        .swipeBack { onBack() }
     }
 
     // MARK: - Components
