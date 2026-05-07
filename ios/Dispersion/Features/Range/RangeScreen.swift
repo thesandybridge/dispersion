@@ -231,6 +231,10 @@ struct LiveRangeView: View {
         }
         .alert("End range session?", isPresented: $endConfirm) {
             Button("End session", role: .destructive) {
+                // Delete empty session
+                if taps.isEmpty, let id = sessionId {
+                    try? SessionsRepo(context: modelContext).delete(id: id)
+                }
                 session.clear()
                 taps = []
                 Haptics.medium()
