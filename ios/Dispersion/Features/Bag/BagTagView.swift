@@ -6,11 +6,12 @@ import SwiftUI
 
 struct BagTagView: View {
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.themeAccent) private var accent
     @Query(sort: \ClubModel.carryYards, order: .reverse) private var clubModels: [ClubModel]
 
     @State private var profile = ProfileStore.shared
     @State private var editing = false
+
+    private var accent: Color { profile.accent.color }
 
     private var clubs: [Club] { clubModels.map { $0.toValue() } }
     private var totalShots: Int { (try? ShotsRepo(context: modelContext).countAll()) ?? 0 }

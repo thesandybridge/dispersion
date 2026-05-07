@@ -24,6 +24,55 @@ public enum PinPosition: String, CaseIterable, Sendable {
     }
 }
 
+// MARK: Shot type — classifies shots for stat filtering
+
+public enum ShotType: String, Codable, CaseIterable, Sendable {
+    case full        // normal full swing — counts toward dispersion
+    case threeQtr    // 3/4 swing — counts toward dispersion
+    case half        // half swing — counts toward dispersion
+    case chip        // around the green — excluded from dispersion
+    case pitch       // short game — excluded from dispersion
+    case punch       // recovery punch out — excluded from dispersion
+    case sand        // bunker shot — excluded from dispersion
+    case penalty     // drop/penalty — excluded from everything
+    case putt        // on the green — excluded from dispersion
+
+    public var label: String {
+        switch self {
+        case .full: return "Full"
+        case .threeQtr: return "3/4"
+        case .half: return "Half"
+        case .chip: return "Chip"
+        case .pitch: return "Pitch"
+        case .punch: return "Punch"
+        case .sand: return "Sand"
+        case .penalty: return "Penalty"
+        case .putt: return "Putt"
+        }
+    }
+
+    public var countsForDispersion: Bool {
+        switch self {
+        case .full, .threeQtr, .half: return true
+        case .chip, .pitch, .punch, .sand, .penalty, .putt: return false
+        }
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .full: return "arrow.up.right"
+        case .threeQtr: return "arrow.up.right"
+        case .half: return "arrow.up.right"
+        case .chip: return "arrow.down.right"
+        case .pitch: return "arrow.up.forward"
+        case .punch: return "arrow.right"
+        case .sand: return "sun.dust"
+        case .penalty: return "exclamationmark.triangle"
+        case .putt: return "circle.bottomhalf.filled"
+        }
+    }
+}
+
 // MARK: Swing type
 
 public enum SwingType: String, Codable, CaseIterable, Sendable {

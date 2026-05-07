@@ -587,7 +587,9 @@ struct CoursePlayView: View {
 
     @State private var lastShotOutcome: String?
 
-    private func completeShot(clubId: String?, swing: SwingType = .full) {
+    @State private var selectedShotType: ShotType = .full
+
+    private func completeShot(clubId: String?, swing: SwingType = .full, shotType: ShotType = .full) {
         guard let start = pendingShotStart, let end = pendingShotEnd else { return }
         tracker.logShot(from: start, to: end, clubId: clubId, accuracy: location.accuracy)
         if let shot = tracker.shots.last {
@@ -598,8 +600,8 @@ struct CoursePlayView: View {
         if let flag = flagCoord {
             lastShotOutcome = classifyShot(from: start, landing: end, target: flag, clubId: clubId, swing: swing)
 
-            // Also log to the main Shot system with outcome tags
-            if let clubId {
+            // Log to main Shot system — only if shot type counts for dispersion
+            if let clubId, shotType.countsForDispersion {
                 let tags = autoOutcomeTags(from: start, landing: end, target: flag)
                 let mainShot = Shot(
                     id: UUID().uuidString.lowercased(),
@@ -787,14 +789,46 @@ struct CoursePlayView: View {
             title: "What did you hit?"
         )
 
-        // Pre-select the currently selected club option
+        // Shot type selector
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(ShotType.allCases, id: \.self) { type in
+                    Button {
+                        selectedShotType = type
+                        Haptics.light()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: type.systemImage).font(.system(size: 10))
+                            Text(type.label).font(DispersionType.mono(10, weight: .medium))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule().fill(selectedShotType == type
+                                           ? (type.countsForDispersion ? DesignTokens.primary : DesignTokens.pMarginal)
+                                           : DesignTokens.surface)
+                        )
+                        .foregroundStyle(selectedShotType == type
+                                         ? DesignTokens.primaryForeground : DesignTokens.foreground)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+
+        if !selectedShotType.countsForDispersion {
+            Text("This shot type won't affect club dispersion stats")
+                .font(DispersionType.mono(10))
+                .foregroundStyle(DesignTokens.pMarginal)
+        }
+
         let preselected = selectedOption
 
         VStack(spacing: 4) {
             ForEach(clubOptions, id: \.id) { opt in
                 let isRecommended = opt.id == preselected?.id
                 Button {
-                    completeShot(clubId: opt.club.id, swing: opt.swing)
+                    completeShot(clubId: opt.club.id, swing: opt.swing, shotType: selectedShotType)
                     showClubPicker = false
                 } label: {
                     HStack(spacing: 8) {
@@ -831,10 +865,10 @@ struct CoursePlayView: View {
         }
 
         Button {
-            completeShot(clubId: nil, swing: .full)
+            completeShot(clubId: nil, swing: .full, shotType: selectedShotType)
             showClubPicker = false
         } label: {
-            Text("Skip").frame(maxWidth: .infinity)
+            Text("Skip club selection").frame(maxWidth: .infinity)
         }
         .buttonStyle(.dispersion(.ghost))
     }
