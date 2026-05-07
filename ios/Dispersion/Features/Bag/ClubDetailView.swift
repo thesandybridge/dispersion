@@ -19,8 +19,10 @@ struct ClubDetailView: View {
     @State private var deleteStrikeConfirm = false
 
     private var unit: DistanceUnit { settings.unit }
+    private var isPutter: Bool {
+        ClubCategoryRegistry.categorize(name: club.name, carryYards: club.carryYards) == .putter
+    }
 
-    // Filter out garbage data — only shots with reasonable deltas
     private var allShots: [Shot] {
         let raw = (try? ShotsRepo(context: modelContext).listByClub(club.id, limit: 500)) ?? []
         return raw.filter { abs($0.longDelta) < 100 && abs($0.latDelta) < 100 }
@@ -40,12 +42,12 @@ struct ClubDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 statsCard
-                if haveStats { dispersionSection }
-                trendSection
-                missPatternSection
+                if haveStats && !isPutter { dispersionSection }
+                if !isPutter { trendSection }
+                if !isPutter { missPatternSection }
                 strokesGainedSection
                 outcomeBreakdown
-                faceSection
+                if !isPutter { faceSection }
             }
             .padding(.horizontal, 18)
             .padding(.top, 8)
@@ -109,28 +111,34 @@ struct ClubDetailView: View {
                 Spacer()
             }
 
-            HStack(spacing: 0) {
-                statCol("Carry", "\(Int(Units.from(yards: club.carryYards, in: unit)))\(unit.label)")
-                Spacer()
-                statCol("σ long", "\(String(format: "%.1f", Units.from(yards: club.carrySd, in: unit)))\(unit.label)")
-                Spacer()
-                statCol("σ lateral", "\(String(format: "%.1f", Units.from(yards: club.lateralSd, in: unit)))\(unit.label)")
-                Spacer()
-                statCol("Shots", "\(allShots.count)")
-            }
-
-            // Show measured if different from stored and we have data
-            if haveStats {
-                DSeparator()
+            if isPutter {
                 HStack(spacing: 0) {
-                    measuredCol("Measured carry", value: Units.from(yards: club.carryYards + stats.longBias, in: unit),
-                                delta: Units.from(yards: stats.longBias, in: unit))
+                    statCol("Shots", "\(allShots.count)")
                     Spacer()
-                    measuredCol("Measured σ↕", value: Units.from(yards: stats.carrySd, in: unit),
-                                delta: Units.from(yards: stats.carrySd - club.carrySd, in: unit))
+                }
+            } else {
+                HStack(spacing: 0) {
+                    statCol("Carry", "\(Int(Units.from(yards: club.carryYards, in: unit)))\(unit.label)")
                     Spacer()
-                    measuredCol("Measured σ↔", value: Units.from(yards: stats.lateralSd, in: unit),
-                                delta: Units.from(yards: stats.lateralSd - club.lateralSd, in: unit))
+                    statCol("σ long", "\(String(format: "%.1f", Units.from(yards: club.carrySd, in: unit)))\(unit.label)")
+                    Spacer()
+                    statCol("σ lateral", "\(String(format: "%.1f", Units.from(yards: club.lateralSd, in: unit)))\(unit.label)")
+                    Spacer()
+                    statCol("Shots", "\(allShots.count)")
+                }
+
+                if haveStats {
+                    DSeparator()
+                    HStack(spacing: 0) {
+                        measuredCol("Measured carry", value: Units.from(yards: club.carryYards + stats.longBias, in: unit),
+                                    delta: Units.from(yards: stats.longBias, in: unit))
+                        Spacer()
+                        measuredCol("Measured σ↕", value: Units.from(yards: stats.carrySd, in: unit),
+                                    delta: Units.from(yards: stats.carrySd - club.carrySd, in: unit))
+                        Spacer()
+                        measuredCol("Measured σ↔", value: Units.from(yards: stats.lateralSd, in: unit),
+                                    delta: Units.from(yards: stats.lateralSd - club.lateralSd, in: unit))
+                    }
                 }
             }
         }

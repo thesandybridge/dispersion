@@ -143,6 +143,15 @@ struct ShotLogView: View {
                         sessionRow(session)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            try? ShotsRepo(context: modelContext).deleteBySession(session.id)
+                            try? SessionsRepo(context: modelContext).delete(id: session.id)
+                            Haptics.medium()
+                        } label: {
+                            Label("Delete session", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
