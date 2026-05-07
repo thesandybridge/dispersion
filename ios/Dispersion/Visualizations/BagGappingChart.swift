@@ -66,12 +66,12 @@ public struct BagGappingChart: View {
                 p.move(to: CGPoint(x: sx(t), y: padTop - 6))
                 p.addLine(to: CGPoint(x: sx(t), y: size.height - padBottom + 4))
             }
-            ctx.stroke(line, with: .color(DesignTokens.soil900.opacity(0.06)),
+            ctx.stroke(line, with: .color(DesignTokens.foreground.opacity(0.06)),
                        style: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
             ctx.draw(
                 Text("\(Int(t))\(unit.label)")
                     .font(DispersionType.mono(9, weight: .regular))
-                    .foregroundStyle(DesignTokens.soil900.opacity(0.45)),
+                    .foregroundStyle(DesignTokens.foreground.opacity(0.45)),
                 at: CGPoint(x: sx(t), y: size.height - padBottom + 16)
             )
         }
@@ -89,7 +89,7 @@ public struct BagGappingChart: View {
             ctx.draw(
                 Text(truncateName(club.name))
                     .font(DispersionType.ui(11, weight: .medium))
-                    .foregroundStyle(DesignTokens.soil900.opacity(0.7)),
+                    .foregroundStyle(DesignTokens.foreground.opacity(0.7)),
                 at: CGPoint(x: padLeft - 8, y: y + rowHeight / 2 + 1),
                 anchor: .trailing
             )
@@ -106,11 +106,11 @@ public struct BagGappingChart: View {
                 p.move(to: CGPoint(x: xc, y: y + 2))
                 p.addLine(to: CGPoint(x: xc, y: y + rowHeight - 2))
             }
-            ctx.stroke(cm, with: .color(DesignTokens.soil900), lineWidth: 1)
+            ctx.stroke(cm, with: .color(DesignTokens.foreground), lineWidth: 1)
             ctx.draw(
                 Text("\(Int(carry))")
                     .font(DispersionType.mono(9, weight: .medium))
-                    .foregroundStyle(DesignTokens.soil900),
+                    .foregroundStyle(DesignTokens.foreground),
                 at: CGPoint(x: xc, y: y + rowHeight / 2 + 1)
             )
         }

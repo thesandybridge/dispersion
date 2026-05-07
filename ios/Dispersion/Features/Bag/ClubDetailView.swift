@@ -51,7 +51,7 @@ struct ClubDetailView: View {
             .padding(.top, 8)
             .padding(.bottom, 100)
         }
-        .background(DesignTokens.fairway50.ignoresSafeArea())
+        .background(DesignTokens.background.ignoresSafeArea())
         .alert("Update \(club.name) with measured σ?", isPresented: $saveConfirm) {
             Button("Update") { applyMeasured() }
             Button("Cancel", role: .cancel) {}
@@ -69,7 +69,7 @@ struct ClubDetailView: View {
                     .font(DispersionType.mono(12))
                     .tracking(1.6)
                     .textCase(.uppercase)
-                    .foregroundStyle(DesignTokens.soil900.opacity(0.6))
+                    .foregroundStyle(DesignTokens.foreground.opacity(0.6))
             }
             .buttonStyle(.plain)
             Spacer()
@@ -78,8 +78,8 @@ struct ClubDetailView: View {
                     .font(DispersionType.ui(13, weight: .medium))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(Capsule().fill(DesignTokens.soil900))
-                    .foregroundStyle(DesignTokens.fairway50)
+                    .background(Capsule().fill(DesignTokens.foreground))
+                    .foregroundStyle(DesignTokens.background)
             }
             .buttonStyle(.plain)
         }
@@ -99,7 +99,7 @@ struct ClubDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(club.name)
                         .font(DispersionType.display(24, weight: .regular))
-                        .foregroundStyle(DesignTokens.soil900)
+                        .foregroundStyle(DesignTokens.foreground)
                     Text(style.label)
                         .font(DispersionType.mono(9, weight: .medium))
                         .tracking(1.5)
@@ -143,13 +143,7 @@ struct ClubDetailView: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.white)
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(DesignTokens.soil900.opacity(0.07), lineWidth: 1))
-                .shadow(color: .black.opacity(0.04), radius: 2, y: 1)
-        )
+        .background(ThemedCardFill(cornerRadius: 16))
     }
 
     private func statCol(_ label: String, _ value: String) -> some View {
@@ -158,25 +152,25 @@ struct ClubDetailView: View {
                 .font(DispersionType.mono(9, weight: .medium))
                 .tracking(1.2)
                 .textCase(.uppercase)
-                .foregroundStyle(DesignTokens.soil900.opacity(0.45))
+                .foregroundStyle(DesignTokens.foreground.opacity(0.45))
             Text(value)
                 .font(DispersionType.display(18, weight: .regular))
-                .foregroundStyle(DesignTokens.soil900)
+                .foregroundStyle(DesignTokens.foreground)
                 .monospacedDigit()
         }
     }
 
     private func measuredCol(_ label: String, value: Double, delta: Double) -> some View {
-        let color: Color = abs(delta) < 0.5 ? DesignTokens.soil900.opacity(0.5)
+        let color: Color = abs(delta) < 0.5 ? DesignTokens.foreground.opacity(0.5)
             : delta < 0 ? DesignTokens.primary : DesignTokens.pPoor
         return VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(DispersionType.mono(8))
-                .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+                .foregroundStyle(DesignTokens.foreground.opacity(0.4))
             HStack(spacing: 3) {
                 Text(String(format: "%.1f", value))
                     .font(DispersionType.mono(13, weight: .medium))
-                    .foregroundStyle(DesignTokens.soil900)
+                    .foregroundStyle(DesignTokens.foreground)
                 Text("\(delta >= 0 ? "+" : "")\(String(format: "%.1f", delta))")
                     .font(DispersionType.mono(9))
                     .foregroundStyle(color)
@@ -212,7 +206,7 @@ struct ClubDetailView: View {
                     Spacer()
                     Text("\(summary.sessionCount) sessions")
                         .font(DispersionType.mono(10))
-                        .foregroundStyle(DesignTokens.soil900.opacity(0.5))
+                        .foregroundStyle(DesignTokens.foreground.opacity(0.5))
                 }
                 TrendChart(
                     points: summary.sessionPoints.map { TrendPoint(date: $0.date, value: $0.carrySd) },
@@ -254,7 +248,7 @@ struct ClubDetailView: View {
                             .foregroundStyle(DesignTokens.primary)
                         Text("on target")
                             .font(DispersionType.mono(8))
-                            .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+                            .foregroundStyle(DesignTokens.foreground.opacity(0.4))
                         missBar(label: "Short", pct: analysis.pctShort, color: DesignTokens.pPoor)
                     }
                     Spacer()
@@ -269,7 +263,7 @@ struct ClubDetailView: View {
                         let latDir = analysis.aimOffsetLat < 0 ? "left" : "right"
                         Text("Aim \(Int(abs(analysis.aimOffsetLat)))y \(latDir)")
                             .font(DispersionType.mono(11))
-                            .foregroundStyle(DesignTokens.soil900.opacity(0.7))
+                            .foregroundStyle(DesignTokens.foreground.opacity(0.7))
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -282,10 +276,9 @@ struct ClubDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.white)
+                    .fill(DesignTokens.card)
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(DesignTokens.soil900.opacity(0.07), lineWidth: 1))
-                .shadow(color: .black.opacity(0.03), radius: 1, y: 1)
+                    .strokeBorder(DesignTokens.border, lineWidth: 1))
             )
         }
     }
@@ -294,10 +287,10 @@ struct ClubDetailView: View {
         VStack(spacing: 3) {
             Text("\(Int(pct * 100))%")
                 .font(DispersionType.mono(12, weight: .medium))
-                .foregroundStyle(pct > 0.3 ? color : DesignTokens.soil900.opacity(0.5))
+                .foregroundStyle(pct > 0.3 ? color : DesignTokens.foreground.opacity(0.5))
             Text(label)
                 .font(DispersionType.mono(8))
-                .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+                .foregroundStyle(DesignTokens.foreground.opacity(0.4))
         }
         .frame(minWidth: 44)
     }
@@ -317,17 +310,16 @@ struct ClubDetailView: View {
                         .monospacedDigit()
                     Text("per shot · \(sg.shotCount) shots")
                         .font(DispersionType.mono(10))
-                        .foregroundStyle(DesignTokens.soil900.opacity(0.5))
+                        .foregroundStyle(DesignTokens.foreground.opacity(0.5))
                 }
                 Spacer()
             }
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.white)
+                    .fill(DesignTokens.card)
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(DesignTokens.soil900.opacity(0.07), lineWidth: 1))
-                .shadow(color: .black.opacity(0.03), radius: 1, y: 1)
+                    .strokeBorder(DesignTokens.border, lineWidth: 1))
             )
         }
     }
@@ -356,7 +348,7 @@ struct ClubDetailView: View {
                         .frame(height: 6)
                         Text("\(Int(entry.fraction * 100))%")
                             .font(DispersionType.mono(10))
-                            .foregroundStyle(DesignTokens.soil900.opacity(0.6))
+                            .foregroundStyle(DesignTokens.foreground.opacity(0.6))
                             .frame(width: 36, alignment: .trailing)
                     }
                 }
@@ -364,10 +356,9 @@ struct ClubDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.white)
+                    .fill(DesignTokens.card)
                 .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(DesignTokens.soil900.opacity(0.07), lineWidth: 1))
-                .shadow(color: .black.opacity(0.03), radius: 1, y: 1)
+                    .strokeBorder(DesignTokens.border, lineWidth: 1))
             )
         }
     }
@@ -419,7 +410,7 @@ struct ClubDetailView: View {
                 } else {
                     Text("Tap the face to place a strike")
                         .font(DispersionType.ui(11))
-                        .foregroundStyle(DesignTokens.soil900.opacity(0.45))
+                        .foregroundStyle(DesignTokens.foreground.opacity(0.45))
                 }
                 Spacer()
             }
