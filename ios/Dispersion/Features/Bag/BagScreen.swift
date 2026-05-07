@@ -332,23 +332,10 @@ public struct BagScreen: View {
 
     private var gappingSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Button { withAnimation { gappingExpanded.toggle() } } label: {
-                HStack {
-                    Text("Carry gapping").eyebrow()
-                    Spacer()
-                    Image(systemName: gappingExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
-                }
-            }
-            .buttonStyle(.plain)
-
-            if gappingExpanded {
-                BagGappingChart(clubs: regularClubs, unit: unit)
-                    .background(ThemedCardFill(cornerRadius: 14))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-            }
+            Text("Carry gapping").eyebrow()
+            BagGappingChart(clubs: regularClubs, unit: unit)
+                .background(ThemedCardFill(cornerRadius: 14))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 

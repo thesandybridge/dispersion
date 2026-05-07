@@ -601,14 +601,26 @@ struct CoursePlayView: View {
             lastShotOutcome = classifyShot(from: start, landing: end, target: flag, clubId: clubId, swing: swing)
 
             // Log to main Shot system — only if shot type counts for dispersion
+            // Delta is relative to the CLUB'S expected carry, not the flag
             if let clubId, shotType.countsForDispersion {
-                let tags = autoOutcomeTags(from: start, landing: end, target: flag)
+                let club = clubs.first(where: { $0.id == clubId })
+                let clubCarry = (club?.carryYards ?? 0) * swing.carryMultiplier
+                let shotDist = haversineYards(from: start, to: end)
+                let bearing = bearingRad(from: start, to: flag)
+                let shotBearing = bearingRad(from: start, to: end)
+                var angleDiff = shotBearing - bearing
+                while angleDiff > .pi { angleDiff -= 2 * .pi }
+                while angleDiff < -.pi { angleDiff += 2 * .pi }
+                let along = shotDist * cos(angleDiff)
+                let across = shotDist * sin(angleDiff)
+                let ld = along - clubCarry
+                let tags = autoOutcomeTags(longDelta: ld, latDelta: across)
                 let mainShot = Shot(
                     id: UUID().uuidString.lowercased(),
                     sessionId: tracker.sessionId, clubId: clubId,
-                    targetDistanceYards: haversineYards(from: start, to: flag),
-                    longDelta: longDelta(from: start, landing: end, target: flag),
-                    latDelta: latDelta(from: start, landing: end, target: flag),
+                    targetDistanceYards: clubCarry,
+                    longDelta: ld,
+                    latDelta: across,
                     outcomes: tags
                 )
                 _ = try? ShotsRepo(context: modelContext).create(mainShot)
@@ -676,9 +688,7 @@ struct CoursePlayView: View {
         return parts.joined(separator: " · ")
     }
 
-    private func autoOutcomeTags(from start: Coord, landing: Coord, target: Coord) -> Set<ShotOutcomeTag> {
-        let ld = longDelta(from: start, landing: landing, target: target)
-        let lat = latDelta(from: start, landing: landing, target: target)
+    private func autoOutcomeTags(longDelta ld: Double, latDelta lat: Double) -> Set<ShotOutcomeTag> {
         var tags: Set<ShotOutcomeTag> = []
 
         if abs(ld) <= 3 && abs(lat) <= 3 {

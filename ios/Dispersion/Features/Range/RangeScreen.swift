@@ -7,7 +7,7 @@ import SwiftUI
 
 public struct RangeScreen: View {
     @State private var tab: RangeTab = .live
-    @State private var openSessionId: String?
+    @State private var historyPath = NavigationPath()
 
     enum RangeTab { case live, history }
 
@@ -15,37 +15,35 @@ public struct RangeScreen: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            if openSessionId == nil {
-                rangeHeader
-            }
+            rangeHeader
             Group {
                 switch tab {
                 case .live:
                     LiveRangeView()
                 case .history:
-                    if let sid = openSessionId {
-                        SessionDetailView(sessionId: sid) {
-                            openSessionId = nil
-                        }
-                    } else {
+                    NavigationStack(path: $historyPath) {
                         ShotLogView { id in
-                            openSessionId = id
+                            historyPath.append(id)
+                        }
+                        .toolbar(.hidden, for: .navigationBar)
+                        .navigationDestination(for: String.self) { sid in
+                            SessionDetailView(sessionId: sid) {
+                                historyPath.removeLast()
+                            }
+                            .toolbar(.hidden, for: .navigationBar)
+                            .enableInteractivePop()
                         }
                     }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(
-            DesignTokens.background
-                .ignoresSafeArea()
-        )
-        .preferredColorScheme(tab == .live ? .dark : nil)
+        .background(DesignTokens.background.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: openSessionId)
         .onAppear {
             tab = .live
-            openSessionId = nil
+            historyPath = NavigationPath()
         }
     }
 
@@ -65,8 +63,8 @@ public struct RangeScreen: View {
             }
             Spacer()
             HStack(spacing: 4) {
-                tabButton("Live", isActive: tab == .live) { tab = .live; openSessionId = nil; Haptics.light() }
-                tabButton("History", isActive: tab == .history) { tab = .history; openSessionId = nil; Haptics.light() }
+                tabButton("Live", isActive: tab == .live) { tab = .live; historyPath = NavigationPath(); Haptics.light() }
+                tabButton("History", isActive: tab == .history) { tab = .history; historyPath = NavigationPath(); Haptics.light() }
             }
         }
         .padding(.horizontal, 18)

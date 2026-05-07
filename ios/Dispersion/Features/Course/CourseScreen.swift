@@ -10,7 +10,7 @@ public struct CourseScreen: View {
     @Query(sort: \CourseModel.name) private var courseModels: [CourseModel]
 
     @State private var selectedCourseId: String?
-    @State private var viewingRoundId: String?
+    @State private var coursePath = NavigationPath()
     @State private var searchOpen = false
     @State private var dial = DialStore.shared
 
@@ -22,17 +22,23 @@ public struct CourseScreen: View {
         ZStack {
             DesignTokens.background.ignoresSafeArea()
 
-            if let roundId = viewingRoundId {
-                let session = (try? SessionsRepo(context: modelContext).get(id: roundId))
-                RoundSummaryView(
-                    sessionId: roundId,
-                    courseName: session?.label ?? "Round",
-                    onBack: { viewingRoundId = nil }
-                )
-            } else if let id = selectedCourseId, courses.contains(where: { $0.id == id }) {
+            if let id = selectedCourseId, courses.contains(where: { $0.id == id }) {
                 CoursePlayView(courseId: id, onBack: { selectedCourseId = nil; Haptics.light() })
             } else {
-                courseList
+                NavigationStack(path: $coursePath) {
+                    courseList
+                        .toolbar(.hidden, for: .navigationBar)
+                        .navigationDestination(for: String.self) { roundId in
+                            let session = (try? SessionsRepo(context: modelContext).get(id: roundId))
+                            RoundSummaryView(
+                                sessionId: roundId,
+                                courseName: session?.label ?? "Round",
+                                onBack: { coursePath.removeLast() }
+                            )
+                            .toolbar(.hidden, for: .navigationBar)
+                            .enableInteractivePop()
+                        }
+                }
             }
         }
         .preferredColorScheme(.dark)
@@ -43,7 +49,7 @@ public struct CourseScreen: View {
             }
         }
         .onAppear {
-            viewingRoundId = nil
+            coursePath = NavigationPath()
             dial.setActions([
                 DialAction(id: "search", label: "Find course", systemImage: "magnifyingglass", tone: .primary) {
                     searchOpen = true
@@ -134,7 +140,7 @@ public struct CourseScreen: View {
             if !roundSessions.isEmpty {
                 Section {
                     ForEach(roundSessions, id: \.id) { session in
-                        Button { viewingRoundId = session.id; Haptics.light() } label: {
+                        Button { coursePath.append(session.id); Haptics.light() } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "flag.fill")
                                     .font(.system(size: 13))
