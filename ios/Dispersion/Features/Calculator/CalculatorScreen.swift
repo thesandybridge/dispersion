@@ -19,6 +19,7 @@ public struct CalculatorScreen: View {
 
     @State private var zoneOpen: Bool = false
     @State private var logOpen: Bool = false
+    @State private var compareOpen: Bool = false
     @State private var logFlash: String?
     @State private var viewClubId: String?
 
@@ -28,7 +29,7 @@ public struct CalculatorScreen: View {
 
     private var playingDistance: Double {
         Conditions.effectiveDistance(
-            target: scenario.distance,
+            target: scenario.distance + scenario.pinPosition.distanceAdjustment,
             windMph: scenario.windMph,
             elevationFt: scenario.elevationFt
         )
@@ -202,6 +203,19 @@ public struct CalculatorScreen: View {
                 }
             }
         }
+        .dispersionSheet(isPresented: $compareOpen, detents: [.large]) {
+            if let club = recommendedClub, let result = recommended {
+                CompareSheet(
+                    baseClub: club,
+                    baseResult: result,
+                    scenario: ShotScenario(
+                        distanceToTargetYards: playingDistance,
+                        safeZoneWidthYards: scenario.width,
+                        safeZoneDepthYards: scenario.depth
+                    )
+                )
+            }
+        }
         .overlay(alignment: .top) {
             if let flash = logFlash {
                 Text("Logged · \(flash)")
@@ -247,6 +261,28 @@ public struct CalculatorScreen: View {
             }
 
             distanceDisplay
+
+            // Pin position toggle
+            HStack(spacing: 4) {
+                ForEach(PinPosition.allCases, id: \.self) { pin in
+                    Button {
+                        scenario.pinPosition = pin
+                        Haptics.light()
+                    } label: {
+                        Text(pin.label)
+                            .font(DispersionType.mono(10, weight: .medium))
+                            .foregroundStyle(scenario.pinPosition == pin
+                                             ? DesignTokens.background : DesignTokens.mutedForeground)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule().fill(scenario.pinPosition == pin
+                                               ? accent : Color.white.opacity(0.06))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
 
             HStack(spacing: 10) {
                 Text("Distance to target").eyebrow()
@@ -298,6 +334,20 @@ public struct CalculatorScreen: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func aimAdvice(for club: Club) -> String? {
+        let shots = (try? ShotsRepo(context: modelContext).listByClub(club.id, limit: 50)) ?? []
+        guard let analysis = MissPattern.analyze(shots) else { return nil }
+        guard analysis.dominantMiss != "centered" else { return nil }
+
+        var parts: [String] = []
+        if abs(analysis.aimOffsetLat) >= 2 {
+            let dir = analysis.aimOffsetLat < 0 ? "left" : "right"
+            parts.append("aim \(Int(abs(analysis.aimOffsetLat)))y \(dir)")
+        }
+        guard !parts.isEmpty else { return nil }
+        return "↳ " + parts.joined(separator: ", ")
     }
 
     private var targetDragGesture: some Gesture {
@@ -444,6 +494,14 @@ public struct CalculatorScreen: View {
                     }
                     .font(DispersionType.mono(10))
                     .foregroundStyle(DesignTokens.mutedForeground)
+
+                    // Aim recommendation from miss data
+                    if let aim = aimAdvice(for: club) {
+                        Text(aim)
+                            .font(DispersionType.mono(10, weight: .medium))
+                            .foregroundStyle(accent)
+                            .padding(.top, 2)
+                    }
                 }
                 Spacer()
                 ProbabilityDial(value: result.probabilityInZone, color: lbl.color, diameter: 64, trackThickness: 5)
@@ -586,6 +644,9 @@ public struct CalculatorScreen: View {
             },
             DialAction(id: "log", label: "Log shot", systemImage: "plus", tone: .primary, isDisabled: !canLog) {
                 logOpen = true
+            },
+            DialAction(id: "compare", label: "Compare", systemImage: "arrow.left.arrow.right", isDisabled: !canLog) {
+                compareOpen = true
             },
             DialAction(id: "reset", label: "Reset", systemImage: "arrow.counterclockwise") {
                 scenario.update(.init(

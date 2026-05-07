@@ -6,6 +6,24 @@
 
 import Foundation
 
+// MARK: Pin position
+
+public enum PinPosition: String, CaseIterable, Sendable {
+    case front, middle, back
+
+    public var label: String { rawValue.capitalized }
+
+    /// Shifts the effective target distance. Front = play shorter, back = play longer.
+    /// Returns yards to add to the raw distance.
+    public var distanceAdjustment: Double {
+        switch self {
+        case .front:  return -8
+        case .middle: return 0
+        case .back:   return 8
+        }
+    }
+}
+
 // MARK: Swing type
 
 public enum SwingType: String, Codable, CaseIterable, Sendable {
@@ -132,6 +150,40 @@ public struct Shot: Identifiable, Hashable, Sendable {
         self.latDelta = latDelta
         self.outcomes = outcomes
         self.timestamp = timestamp
+    }
+}
+
+// MARK: Hole score (for round mode)
+
+public struct HoleScore: Identifiable, Hashable, Codable, Sendable {
+    public var id: Int { hole }
+    public var hole: Int       // 1-18
+    public var par: Int        // 3, 4, or 5
+    public var score: Int      // actual strokes
+    public var fairwayHit: Bool?
+    public var girHit: Bool?   // green in regulation
+    public var putts: Int?
+
+    public init(hole: Int, par: Int = 4, score: Int = 0, fairwayHit: Bool? = nil, girHit: Bool? = nil, putts: Int? = nil) {
+        self.hole = hole
+        self.par = par
+        self.score = score
+        self.fairwayHit = fairwayHit
+        self.girHit = girHit
+        self.putts = putts
+    }
+
+    public var toPar: Int { score - par }
+
+    public var label: String {
+        switch toPar {
+        case ..<(-1): return "Eagle"
+        case -1: return "Birdie"
+        case 0: return "Par"
+        case 1: return "Bogey"
+        case 2: return "Double"
+        default: return "+\(toPar)"
+        }
     }
 }
 

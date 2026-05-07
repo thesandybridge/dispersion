@@ -125,7 +125,7 @@ public struct SettingsScreen: View {
     }
 
     private var unitsGroup: some View {
-        SettingsGroup(label: "Units", systemImage: "ruler", accent: DesignTokens.primary) {
+        SettingsGroup(label: "Preferences", systemImage: "ruler", accent: DesignTokens.primary) {
             SettingsRow(label: "Distance", helper: "Used everywhere yardage is shown") {
                 DToggleGroup(
                     options: [
@@ -135,6 +135,18 @@ public struct SettingsScreen: View {
                     selection: Binding(
                         get: { settings.unit },
                         set: { if let v = $0 { settings.setUnit(v) } }
+                    )
+                )
+            }
+            SettingsRow(label: "Handedness", helper: "Flips face strike heel/toe labels") {
+                DToggleGroup(
+                    options: [
+                        DToggleOption(value: false, label: "Right"),
+                        DToggleOption(value: true, label: "Left"),
+                    ],
+                    selection: Binding(
+                        get: { settings.leftHanded },
+                        set: { if let v = $0 { settings.setLeftHanded(v) } }
                     )
                 )
             }

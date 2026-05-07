@@ -10,6 +10,7 @@ public struct FacePoint: Identifiable, Hashable {
 }
 
 public struct ClubFaceViz: View {
+    @State private var settings = SettingsStore.shared
     public var strikes: [FacePoint]
     public var selectedId: String?
     public var onTap: ((FacePoint) -> Void)?
@@ -114,9 +115,11 @@ public struct ClubFaceViz: View {
                  at: CGPoint(x: centerX, y: padY - 10), anchor: .center)
         ctx.draw(Text("SOLE").font(labelFont).foregroundStyle(labelColor),
                  at: CGPoint(x: centerX, y: padY + innerH + 12), anchor: .center)
-        ctx.draw(Text("HEEL").font(labelFont).foregroundStyle(labelColor),
+        let leftLabel = settings.leftHanded ? "HEEL" : "TOE"
+        let rightLabel = settings.leftHanded ? "TOE" : "HEEL"
+        ctx.draw(Text(leftLabel).font(labelFont).foregroundStyle(labelColor),
                  at: CGPoint(x: padX - 6, y: centerY), anchor: .trailing)
-        ctx.draw(Text("TOE").font(labelFont).foregroundStyle(labelColor),
+        ctx.draw(Text(rightLabel).font(labelFont).foregroundStyle(labelColor),
                  at: CGPoint(x: padX + innerW + 6, y: centerY), anchor: .leading)
 
         // Strike dots

@@ -43,6 +43,8 @@ struct ClubDetailView: View {
                 dispersionSection
                 if haveStats { measuredComparison }
                 trendSection
+                missPatternSection
+                strokesGainedSection
                 outcomeBreakdown
                 faceSection
             }
@@ -298,6 +300,130 @@ struct ClubDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .padding(.top, 8)
+        }
+    }
+
+    // MARK: miss pattern
+
+    @ViewBuilder
+    private var missPatternSection: some View {
+        if let analysis = MissPattern.analyze(allShots) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Miss pattern").eyebrow()
+                    Spacer()
+                    Text(analysis.dominantMiss)
+                        .font(DispersionType.mono(10, weight: .medium))
+                        .foregroundStyle(analysis.dominantMiss == "centered"
+                                         ? DesignTokens.primary : DesignTokens.pPoor)
+                }
+                .padding(.top, 8)
+
+                // Directional grid
+                HStack(spacing: 0) {
+                    missBar(label: "Left", pct: analysis.pctLeft, color: DesignTokens.pPoor)
+                    Spacer()
+                    VStack(spacing: 4) {
+                        missBar(label: "Long", pct: analysis.pctLong, color: DesignTokens.pMarginal)
+                        Text("\(Int(analysis.pctInZone * 100))%")
+                            .font(DispersionType.mono(14, weight: .medium))
+                            .foregroundStyle(DesignTokens.primary)
+                        Text("on target")
+                            .font(DispersionType.mono(8))
+                            .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+                        missBar(label: "Short", pct: analysis.pctShort, color: DesignTokens.pPoor)
+                    }
+                    Spacer()
+                    missBar(label: "Right", pct: analysis.pctRight, color: DesignTokens.pPoor)
+                }
+                .padding(.vertical, 8)
+
+                // Aim recommendation
+                if analysis.dominantMiss != "centered" {
+                    HStack(spacing: 8) {
+                        Image(systemName: "scope")
+                            .font(.system(size: 12))
+                            .foregroundStyle(DesignTokens.primary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Aim recommendation").font(DispersionType.ui(12, weight: .medium))
+                            let latDir = analysis.aimOffsetLat < 0 ? "left" : "right"
+                            let longDir = analysis.aimOffsetLong > 0 ? "club up" : ""
+                            Text("Aim \(Int(abs(analysis.aimOffsetLat)))y \(latDir)\(longDir.isEmpty ? "" : ", \(longDir)")")
+                                .font(DispersionType.mono(11))
+                                .foregroundStyle(DesignTokens.soil900.opacity(0.6))
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(DesignTokens.primary.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(DesignTokens.primary.opacity(0.2), lineWidth: 1)
+                            )
+                    )
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(DesignTokens.soil900.opacity(0.04))
+            )
+        }
+    }
+
+    private func missBar(label: String, pct: Double, color: Color) -> some View {
+        VStack(spacing: 3) {
+            Text("\(Int(pct * 100))%")
+                .font(DispersionType.mono(12, weight: .medium))
+                .foregroundStyle(pct > 0.3 ? color : DesignTokens.soil900.opacity(0.5))
+            Text(label)
+                .font(DispersionType.mono(8))
+                .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+        }
+        .frame(minWidth: 44)
+    }
+
+    // MARK: strokes gained
+
+    @ViewBuilder
+    private var strokesGainedSection: some View {
+        let sg = StrokesGained.aggregate(allShots)
+        if sg.shotCount >= 2 {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Strokes gained").eyebrow()
+                    .padding(.top, 8)
+                HStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Per shot")
+                            .font(DispersionType.mono(9))
+                            .foregroundStyle(DesignTokens.soil900.opacity(0.5))
+                        Text(String(format: "%+.2f", sg.avgSG))
+                            .font(DispersionType.display(24, weight: .regular))
+                            .foregroundStyle(sg.avgSG >= 0 ? DesignTokens.primary : DesignTokens.pPoor)
+                            .monospacedDigit()
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Total (\(sg.shotCount) shots)")
+                            .font(DispersionType.mono(9))
+                            .foregroundStyle(DesignTokens.soil900.opacity(0.5))
+                        Text(String(format: "%+.1f", sg.totalSG))
+                            .font(DispersionType.display(24, weight: .regular))
+                            .foregroundStyle(sg.totalSG >= 0 ? DesignTokens.primary : DesignTokens.pPoor)
+                            .monospacedDigit()
+                    }
+                    Spacer()
+                }
+                Text("vs. PGA Tour approach baseline")
+                    .font(DispersionType.ui(10))
+                    .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(DesignTokens.soil900.opacity(0.04))
+            )
         }
     }
 

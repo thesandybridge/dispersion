@@ -12,6 +12,7 @@ public struct RangeRadarField: View {
     public var measured: DispersionStats
     public var shots: [ShotXY]
     public var onTap: ((ShotXY) -> Void)?
+    public var onDrag: ((ShotXY?) -> Void)?
     public var readOnly: Bool
 
     public init(
@@ -21,6 +22,7 @@ public struct RangeRadarField: View {
         measured: DispersionStats,
         shots: [ShotXY],
         onTap: ((ShotXY) -> Void)? = nil,
+        onDrag: ((ShotXY?) -> Void)? = nil,
         readOnly: Bool = false
     ) {
         self.targetYards = targetYards
@@ -29,34 +31,45 @@ public struct RangeRadarField: View {
         self.measured = measured
         self.shots = shots
         self.onTap = onTap
+        self.onDrag = onDrag
         self.readOnly = readOnly
     }
+
+    @State private var dragShot: ShotXY?
+    @State private var isDragging = false
 
     public var body: some View {
         GeometryReader { geo in
             let size = geo.size
             let geom = layout(in: size)
+            let allShots = shots + (dragShot.map { [$0] } ?? [])
             ZStack {
                 Canvas { ctx, _ in
-                    drawScene(ctx: ctx, size: size, geom: geom)
+                    drawScene(ctx: ctx, size: size, geom: geom, displayShots: allShots, highlightLast: dragShot != nil)
                 }
-                if !readOnly, let onTap {
+                if !readOnly {
                     Color.clear
                         .contentShape(Rectangle())
                         .gesture(
-                            TapGesture()
-                                .sequenced(before: DragGesture(minimumDistance: 0))
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    isDragging = true
+                                    let shot = geom.toShot(value.location)
+                                    if dragShot == nil { Haptics.light() }
+                                    dragShot = shot
+                                    onDrag?(shot)
+                                }
                                 .onEnded { value in
-                                    if case .second(_, let drag?) = value {
-                                        let p = drag.location
-                                        onTap(geom.toShot(p))
-                                    }
+                                    isDragging = false
+                                    let shot = geom.toShot(value.location)
+                                    dragShot = nil
+                                    onDrag?(nil)
+                                    Haptics.medium()
+                                    onTap?(shot)
                                 }
                         )
-                        .onTapGesture { p in
-                            onTap(geom.toShot(p))
-                        }
                 }
+
             }
         }
     }
@@ -96,7 +109,8 @@ public struct RangeRadarField: View {
 
     // MARK: draw
 
-    private func drawScene(ctx: GraphicsContext, size: CGSize, geom: Geom) {
+    private func drawScene(ctx: GraphicsContext, size: CGSize, geom: Geom, displayShots: [ShotXY]? = nil, highlightLast: Bool = false) {
+        let shotsToRender = displayShots ?? shots
         let center = geom.center
         let pad: CGFloat = 28
 
@@ -221,9 +235,9 @@ public struct RangeRadarField: View {
                  at: CGPoint(x: size.width - pad + 10, y: center.y), anchor: .center)
 
         // Logged shots
-        for (i, shot) in shots.enumerated() {
+        for (i, shot) in shotsToRender.enumerated() {
             let p = CGPoint(x: geom.sx(shot.lat), y: geom.sy(shot.long))
-            let isLatest = i == shots.count - 1
+            let isLatest = i == shotsToRender.count - 1
 
             // Halo on latest shot
             if isLatest && shots.count > 0 {
@@ -237,7 +251,7 @@ public struct RangeRadarField: View {
             ctx.stroke(dot, with: .color(DesignTokens.backgroundDeep), lineWidth: 1)
 
             // Shot number
-            if shots.count <= 20 {
+            if shotsToRender.count <= 20 {
                 ctx.draw(
                     Text("\(i + 1)")
                         .font(.system(size: 7, design: .monospaced))
@@ -248,7 +262,7 @@ public struct RangeRadarField: View {
         }
 
         // Empty hint
-        if shots.isEmpty {
+        if shotsToRender.isEmpty {
             ctx.draw(
                 Text("TAP WHERE IT LANDED")
                     .font(DispersionType.mono(9, weight: .regular))

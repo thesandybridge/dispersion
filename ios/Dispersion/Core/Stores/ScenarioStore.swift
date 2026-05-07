@@ -21,6 +21,7 @@ public final class ScenarioStore {
     public var elevationFt: Double = 0
     public var lie: LieType = .fairway
     public var minProbability: Double = 0
+    public var pinPosition: PinPosition = .middle
 
     private let defaults = UserDefaults.standard
     private enum Keys {
