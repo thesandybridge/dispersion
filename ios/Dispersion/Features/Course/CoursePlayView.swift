@@ -105,6 +105,9 @@ struct CoursePlayView: View {
     }
 
     private var clubs: [Club] { clubModels.map { $0.toValue() } }
+    private var putter: Club? {
+        clubs.first { ClubCategoryRegistry.categorize(name: $0.name, carryYards: $0.carryYards) == .putter }
+    }
     private var teeColors: [String] {
         Array(Set(gbScorecard.map(\.color))).sorted { a, b in
             let order = ["Blue": 0, "White": 1, "Red": 2]
@@ -375,6 +378,7 @@ struct CoursePlayView: View {
                     let total = shotCount + putts
                     tracker.setScore(hole: tracker.currentHole, score: total)
                     tracker.scores[tracker.currentHole]?.putts = putts
+                    logPuttsToClub(count: putts)
                     showScoreEdit = true
                 } label: {
                     HStack(spacing: 6) {
@@ -726,6 +730,24 @@ struct CoursePlayView: View {
         return shotDist * sin(angleDiff)
     }
 
+    private func logPuttsToClub(count: Int) {
+        guard count > 0 else { return }
+        let putterId = putter?.id
+        guard let putterId else { return }
+        for i in 1...count {
+            let shot = Shot(
+                id: UUID().uuidString.lowercased(),
+                sessionId: tracker.sessionId,
+                clubId: putterId,
+                targetDistanceYards: 0,
+                longDelta: 0,
+                latDelta: 0,
+                outcomes: i == count ? [.in] : []
+            )
+            _ = try? ShotsRepo(context: modelContext).create(shot)
+        }
+    }
+
     private func undoShot() {
         if let _ = tracker.undoLastShot() {
             try? CoursesRepo(context: modelContext).deleteShots(courseId: courseId, hole: tracker.currentHole)
@@ -933,11 +955,17 @@ struct CoursePlayView: View {
             .buttonStyle(.plain)
         }
 
-        // Putts stepper
+        // Putts stepper — also updates total score
+        let shotCount = tracker.shotsForHole(h).count
         HStack {
             Text("Putts").eyebrow()
             Spacer()
-            Button { tracker.scores[h]?.putts = max(0, putts - 1); Haptics.light() } label: {
+            Button {
+                let newPutts = max(0, putts - 1)
+                tracker.scores[h]?.putts = newPutts
+                tracker.setScore(hole: h, score: shotCount + newPutts)
+                Haptics.light()
+            } label: {
                 Image(systemName: "minus").font(.system(size: 12))
                     .frame(width: 32, height: 32).background(Circle().fill(DesignTokens.surface))
             }
@@ -946,7 +974,12 @@ struct CoursePlayView: View {
                 .font(DispersionType.display(22, weight: .regular))
                 .monospacedDigit()
                 .frame(width: 36, alignment: .center)
-            Button { tracker.scores[h]?.putts = putts + 1; Haptics.light() } label: {
+            Button {
+                let newPutts = putts + 1
+                tracker.scores[h]?.putts = newPutts
+                tracker.setScore(hole: h, score: shotCount + newPutts)
+                Haptics.light()
+            } label: {
                 Image(systemName: "plus").font(.system(size: 12))
                     .frame(width: 32, height: 32).background(Circle().fill(DesignTokens.surface))
             }
