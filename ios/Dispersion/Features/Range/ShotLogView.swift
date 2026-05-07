@@ -78,6 +78,7 @@ struct ShotLogView: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             }
 
             // Sessions
@@ -92,6 +93,7 @@ struct ShotLogView: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             } else {
                 Section {
                     ForEach(sessions, id: \.id) { session in

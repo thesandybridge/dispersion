@@ -95,6 +95,7 @@ public struct CourseScreen: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
             } else {
                 Section {
                     ForEach(courses) { course in
@@ -133,6 +134,7 @@ public struct CourseScreen: View {
             }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
