@@ -208,15 +208,46 @@ public struct RangeRadarField: View {
             with: .color(DesignTokens.flag)
         )
 
-        // Logged shots.
-        for shot in shots {
+        // Compass labels
+        let compassFont = Font.system(size: 8, design: .monospaced).weight(.medium)
+        let compassColor = Color.white.opacity(0.2)
+        ctx.draw(Text("LONG").font(compassFont).foregroundStyle(compassColor),
+                 at: CGPoint(x: center.x, y: pad - 10), anchor: .center)
+        ctx.draw(Text("SHORT").font(compassFont).foregroundStyle(compassColor),
+                 at: CGPoint(x: center.x, y: size.height - pad + 12), anchor: .center)
+        ctx.draw(Text("L").font(compassFont).foregroundStyle(compassColor),
+                 at: CGPoint(x: pad - 10, y: center.y), anchor: .center)
+        ctx.draw(Text("R").font(compassFont).foregroundStyle(compassColor),
+                 at: CGPoint(x: size.width - pad + 10, y: center.y), anchor: .center)
+
+        // Logged shots
+        for (i, shot) in shots.enumerated() {
             let p = CGPoint(x: geom.sx(shot.lat), y: geom.sy(shot.long))
-            let dot = Path(ellipseIn: CGRect(x: p.x - 3.5, y: p.y - 3.5, width: 7, height: 7))
-            ctx.fill(dot, with: .color(DesignTokens.cream))
+            let isLatest = i == shots.count - 1
+
+            // Halo on latest shot
+            if isLatest && shots.count > 0 {
+                let halo = Path(ellipseIn: CGRect(x: p.x - 10, y: p.y - 10, width: 20, height: 20))
+                ctx.fill(halo, with: .color(DesignTokens.primary.opacity(0.2)))
+            }
+
+            let r: CGFloat = isLatest ? 5 : 3.5
+            let dot = Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
+            ctx.fill(dot, with: .color(isLatest ? DesignTokens.primary : DesignTokens.cream))
             ctx.stroke(dot, with: .color(DesignTokens.backgroundDeep), lineWidth: 1)
+
+            // Shot number
+            if shots.count <= 20 {
+                ctx.draw(
+                    Text("\(i + 1)")
+                        .font(.system(size: 7, design: .monospaced))
+                        .foregroundStyle(Color.white.opacity(0.5)),
+                    at: CGPoint(x: p.x, y: p.y - r - 6)
+                )
+            }
         }
 
-        // Empty hint.
+        // Empty hint
         if shots.isEmpty {
             ctx.draw(
                 Text("TAP WHERE IT LANDED")

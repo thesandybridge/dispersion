@@ -22,6 +22,7 @@ public enum DButtonSize: Equatable {
 }
 
 public struct DButtonStyle: ButtonStyle {
+    @Environment(\.themeAccent) private var accent
     public var variant: DButtonVariant = .primary
     public var size: DButtonSize = .default
 
@@ -88,7 +89,7 @@ public struct DButtonStyle: ButtonStyle {
 
     private var foreground: Color {
         switch variant {
-        case .primary:     return DesignTokens.primaryForeground
+        case .primary:     return DesignTokens.primaryForeground  // dark on accent
         case .solid:       return DesignTokens.background
         case .accent:      return DesignTokens.accentForeground
         case .destructive: return DesignTokens.foreground
@@ -102,7 +103,7 @@ public struct DButtonStyle: ButtonStyle {
     private func backgroundView(pressed: Bool) -> some View {
         switch variant {
         case .primary:
-            DesignTokens.primary
+            accent
                 .opacity(pressed ? 0.85 : 1)
         case .solid:
             DesignTokens.foreground

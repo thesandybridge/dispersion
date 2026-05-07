@@ -8,32 +8,8 @@
 # Claude Code local config
 .claude/
 
-# Reference archives (kept out — design source-of-truth lives in _reference/design_handoff_dispersion/)
+# Reference archives
 _reference/*.zip
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Tauri / React app (./app)
-# ─────────────────────────────────────────────────────────────────────────────
-app/node_modules/
-app/dist/
-app/.vite/
-app/coverage/
-app/.DS_Store
-
-# Rust build artifacts (Tauri side)
-app/src-tauri/target/
-app/src-tauri/Cargo.lock.bak
-
-# Tauri generated outputs (regenerated on build)
-app/src-tauri/gen/schemas/
-
-# TanStack Router auto-generated route tree
-app/src/routeTree.gen.ts
-
-# Env files
-app/.env
-app/.env.local
-app/.env.*.local
 
 # ─────────────────────────────────────────────────────────────────────────────
 # iOS / SwiftUI app (./ios)
@@ -47,3 +23,12 @@ ios/Package.resolved
 ios/*.xcuserstate
 ios/**/xcuserdata/
 ios/**/*.xcuserdatad/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reference Tauri app (not actively built)
+# ─────────────────────────────────────────────────────────────────────────────
+_reference/tauri-app/node_modules/
+_reference/tauri-app/dist/
+_reference/tauri-app/.vite/
+_reference/tauri-app/src-tauri/target/
+_reference/tauri-app/src/routeTree.gen.ts

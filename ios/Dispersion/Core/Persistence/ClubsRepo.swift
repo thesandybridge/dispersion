@@ -44,7 +44,6 @@ public struct ClubsRepo {
         public var carryYards: Double?
         public var carrySd: Double?
         public var lateralSd: Double?
-
         public init(
             name: String? = nil,
             carryYards: Double? = nil,

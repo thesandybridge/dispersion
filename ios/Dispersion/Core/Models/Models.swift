@@ -6,6 +6,40 @@
 
 import Foundation
 
+// MARK: Swing type
+
+public enum SwingType: String, Codable, CaseIterable, Sendable {
+    case full
+    case threeQuarter = "3/4"
+    case half
+
+    public var label: String {
+        switch self {
+        case .full: return "Full"
+        case .threeQuarter: return "3/4"
+        case .half: return "Half"
+        }
+    }
+
+    /// Multiplier applied to carry distance relative to full swing.
+    public var carryMultiplier: Double {
+        switch self {
+        case .full: return 1.0
+        case .threeQuarter: return 0.85
+        case .half: return 0.65
+        }
+    }
+
+    /// Sigma tends to tighten on partial swings.
+    public var sigmaMultiplier: Double {
+        switch self {
+        case .full: return 1.0
+        case .threeQuarter: return 0.90
+        case .half: return 0.80
+        }
+    }
+}
+
 // MARK: Club
 
 public struct Club: Identifiable, Hashable, Sendable {
@@ -159,19 +193,24 @@ public struct PenaltyZone: Hashable, Sendable {
 /// Per-club ranking emitted by `Probability.rankClubs(...)`.
 public struct ClubResult: Identifiable, Hashable, Sendable {
     public var clubId: String
+    public var swingType: SwingType
     public var probabilityInZone: Double
     public var probabilityPenalty: Double
     public var expectedCarry: Double
 
-    public var id: String { clubId }
+    public var id: String {
+        swingType == .full ? clubId : "\(clubId)_\(swingType.rawValue)"
+    }
 
     public init(
         clubId: String,
+        swingType: SwingType = .full,
         probabilityInZone: Double,
         probabilityPenalty: Double,
         expectedCarry: Double
     ) {
         self.clubId = clubId
+        self.swingType = swingType
         self.probabilityInZone = probabilityInZone
         self.probabilityPenalty = probabilityPenalty
         self.expectedCarry = expectedCarry

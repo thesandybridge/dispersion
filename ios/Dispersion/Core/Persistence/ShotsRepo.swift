@@ -59,6 +59,26 @@ public struct ShotsRepo {
         return shot
     }
 
+    public func delete(id: String) throws {
+        let d = FetchDescriptor<ShotModel>(predicate: #Predicate { $0.id == id })
+        for model in try context.fetch(d) {
+            context.delete(model)
+        }
+        try context.save()
+    }
+
+    public func deleteBySession(_ sessionId: String) throws {
+        let d = FetchDescriptor<ShotModel>(predicate: #Predicate { $0.sessionId == sessionId })
+        for model in try context.fetch(d) {
+            context.delete(model)
+        }
+        try context.save()
+    }
+
+    public func countAll() throws -> Int {
+        try context.fetchCount(FetchDescriptor<ShotModel>())
+    }
+
     public func deleteAll() throws {
         try context.delete(model: ShotModel.self)
         try context.save()

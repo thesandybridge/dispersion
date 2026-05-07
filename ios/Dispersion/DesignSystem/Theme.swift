@@ -66,6 +66,57 @@ public enum DesignTokens {
     }
 }
 
+// MARK: Theme accent environment
+
+private struct ThemeAccentKey: EnvironmentKey {
+    static let defaultValue: Color = DesignTokens.primary
+}
+
+public extension EnvironmentValues {
+    var themeAccent: Color {
+        get { self[ThemeAccentKey.self] }
+        set { self[ThemeAccentKey.self] = newValue }
+    }
+}
+
+public extension View {
+    func themeAccent(_ color: Color) -> some View {
+        environment(\.themeAccent, color)
+            .tint(color)
+    }
+}
+
+// MARK: Themed card background
+
+public struct ThemedCardFill: View {
+    @Environment(\.themeAccent) private var accent
+    var cornerRadius: CGFloat
+    var opacity: Double
+
+    public init(cornerRadius: CGFloat = 16, opacity: Double = 1) {
+        self.cornerRadius = cornerRadius
+        self.opacity = opacity
+    }
+
+    public var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        accent.opacity(0.12 * opacity),
+                        DesignTokens.card.opacity(opacity)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(accent.opacity(0.08), lineWidth: 1)
+            )
+    }
+}
+
 // MARK: Hex helper
 
 func hex(_ s: String) -> Color {

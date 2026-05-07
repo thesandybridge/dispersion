@@ -25,6 +25,6 @@ public enum Presets {
     }
 
     public static var defaultPreset: ZonePreset {
-        get(defaultId) ?? all[0]
+        Self.get(defaultId) ?? all[0]
     }
 }

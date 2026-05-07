@@ -1,10 +1,94 @@
-// Port of app/src/routes/range.tsx LiveRange. Polar radar field + floating
-// session card + live stats overlay; actions in the persistent radial dial.
+// Port of app/src/routes/range.tsx. Tab container (Live / History) + LiveRange.
 
 import SwiftData
 import SwiftUI
 
+// MARK: - Tab container
+
 public struct RangeScreen: View {
+    @State private var tab: RangeTab = .live
+    @State private var openSessionId: String?
+
+    enum RangeTab { case live, history }
+
+    public init() {}
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            if openSessionId == nil {
+                rangeHeader
+            }
+            Group {
+                switch tab {
+                case .live:
+                    LiveRangeView()
+                case .history:
+                    if let sid = openSessionId {
+                        SessionDetailView(sessionId: sid) {
+                            openSessionId = nil
+                        }
+                    } else {
+                        ShotLogView { id in
+                            openSessionId = id
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(
+            (tab == .live ? DesignTokens.backgroundDeep : DesignTokens.surface)
+                .ignoresSafeArea()
+        )
+        .preferredColorScheme(tab == .live ? .dark : nil)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: openSessionId)
+    }
+
+    private var rangeHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if tab == .live {
+                        Circle().fill(DesignTokens.primary).frame(width: 6, height: 6)
+                    }
+                    Text(tab == .live ? "Range mode" : "Shot log").eyebrow()
+                }
+                Text(tab == .live ? "Practice" : "History")
+                    .font(DispersionType.display(28, weight: .regular))
+                    .tracking(-0.56)
+                    .foregroundStyle(tab == .live ? DesignTokens.foreground : DesignTokens.foreground)
+            }
+            Spacer()
+            HStack(spacing: 4) {
+                tabButton("Live", isActive: tab == .live) { tab = .live; openSessionId = nil; Haptics.light() }
+                tabButton("History", isActive: tab == .history) { tab = .history; openSessionId = nil; Haptics.light() }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+        .overlay(alignment: .bottom) { DSeparator() }
+    }
+
+    private func tabButton(_ label: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(DispersionType.ui(13, weight: .medium))
+                .foregroundStyle(isActive ? DesignTokens.background : DesignTokens.mutedForeground)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule().fill(isActive ? DesignTokens.primary : DesignTokens.muted.opacity(0.4))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Live range (was RangeScreen)
+
+struct LiveRangeView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ClubModel.carryYards, order: .reverse) private var clubModels: [ClubModel]
 
@@ -19,10 +103,9 @@ public struct RangeScreen: View {
 
     @State private var switchClubOpen: Bool = false
     @State private var targetSheetOpen: Bool = false
+    @State private var addShotOpen: Bool = false
     @State private var endConfirm: Bool = false
     @State private var saveConfirm: Bool = false
-
-    public init() {}
 
     private var clubs: [Club] { clubModels.map { $0.toValue() } }
     private var club: Club? {
@@ -35,7 +118,7 @@ public struct RangeScreen: View {
         return nil
     }
 
-    public var body: some View {
+    var body: some View {
         ZStack {
             DesignTokens.backgroundDeep.ignoresSafeArea()
 
@@ -49,6 +132,7 @@ public struct RangeScreen: View {
                     onTap: { p in handleTap(p) },
                     readOnly: false
                 )
+                .padding(.bottom, 50)
                 .ignoresSafeArea()
 
                 VStack {
@@ -87,23 +171,26 @@ public struct RangeScreen: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .dispersionSheet(isPresented: $switchClubOpen) { switchSheet }
         .dispersionSheet(isPresented: $targetSheetOpen) { targetSheet }
-        .alert("End range session?", isPresented: $endConfirm) {
-            Button("End", role: .destructive) {
-                session.clear()
-                taps = []
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .alert("Save measured σ to club?", isPresented: $saveConfirm) {
-            Button("Save") { saveCalibration() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
+        .dispersionSheet(isPresented: $addShotOpen) {
             if let c = club {
-                Text("Replaces \(c.name)'s σ values: σ↕ \(String(format: "%.1f", stats.carrySd)), σ↔ \(String(format: "%.1f", stats.lateralSd)).")
+                AddShotSheet(club: c, targetYards: effectiveTarget) { shot, outcomes in
+                    handleTap(shot)
+                    addShotOpen = false
+                }
             }
+        }
+        .confirmAction("End range session?", isPresented: $endConfirm,
+                       message: taps.isEmpty ? "No shots to save." : "\(taps.count) shots stay in the log.",
+                       confirmLabel: "End session", danger: true) {
+            session.clear()
+            taps = []
+        }
+        .confirmAction("Save measured σ to club?", isPresented: $saveConfirm,
+                       message: club.map { "Updates \($0.name)'s σ from \(taps.count) shots." },
+                       confirmLabel: "Save") {
+            saveCalibration()
         }
         .onAppear { registerDialActions() }
         .onChange(of: taps.count) { _, _ in registerDialActions() }
@@ -136,11 +223,8 @@ public struct RangeScreen: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(DesignTokens.card.opacity(0.85))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(DesignTokens.border, lineWidth: 1)
-                )
+                .fill(.ultraThinMaterial)
+                .environment(\.colorScheme, .dark)
         )
     }
 
@@ -169,11 +253,8 @@ public struct RangeScreen: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(DesignTokens.card.opacity(0.85))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(DesignTokens.border, lineWidth: 1)
-                )
+                .fill(.ultraThinMaterial)
+                .environment(\.colorScheme, .dark)
         )
     }
 
@@ -233,7 +314,7 @@ public struct RangeScreen: View {
         if let id = sessionId { return id }
         let id = UUID().uuidString.lowercased()
         let s = Session(id: id, kind: .range, label: "Range session")
-        try? SessionsRepo(context: modelContext).create(s)
+        _ = try? SessionsRepo(context: modelContext).create(s)
         session.setActive(ActiveSession(id: id, kind: .range, label: s.label))
         return id
     }
@@ -258,6 +339,9 @@ public struct RangeScreen: View {
             },
             DialAction(id: "target", label: "Target", systemImage: "scope") {
                 targetSheetOpen = true
+            },
+            DialAction(id: "manual", label: "Manual", systemImage: "pencil") {
+                addShotOpen = true
             },
             DialAction(id: "undo", label: "Undo", systemImage: "arrow.uturn.backward",
                        isDisabled: taps.isEmpty) {

@@ -12,15 +12,18 @@ public struct DSheetHeader: View {
         self.title = title
     }
 
+    @Environment(\.colorScheme) private var colorScheme
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let fg = colorScheme == .dark ? DesignTokens.foreground : DesignTokens.soil900
+        return VStack(alignment: .leading, spacing: 4) {
             if let eyebrow {
                 Text(eyebrow).eyebrow()
             }
             Text(title)
                 .font(DispersionType.display(24, weight: .regular))
                 .tracking(-0.5)
-                .foregroundStyle(DesignTokens.foreground)
+                .foregroundStyle(fg)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -42,7 +45,7 @@ public extension View {
             DSheetContainer(content: content)
                 .presentationDetents(detents)
                 .presentationDragIndicator(.visible)
-                .presentationBackground(DesignTokens.card)
+                .presentationBackground(.ultraThinMaterial)
         }
     }
 }

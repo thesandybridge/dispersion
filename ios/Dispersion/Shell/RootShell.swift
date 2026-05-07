@@ -23,6 +23,7 @@ public struct RootShell: View {
                     .transition(.opacity)
             }
         }
+        .themeAccent(settings.themeAccent.color)
         .animation(.easeInOut(duration: 0.25), value: settings.onboardingComplete)
         // EmptyBagGuard: kick the user back to .bag if they're on a protected
         // route with zero clubs.
@@ -54,12 +55,17 @@ public struct RootShell: View {
                 }
                 .tag(AppRoute.settings)
         }
-        .tint(DesignTokens.primary)
-        .overlay(alignment: .bottomTrailing) {
+        .tint(settings.themeAccent.color) // also set via .themeAccent but needed here for TabView
+        .overlay {
             RadialDial(
                 route: $route,
                 disabledRoutes: clubModels.isEmpty ? protectedRoutes : []
             )
+        }
+        .overlay(alignment: .topLeading) {
+            if settings.debugOverlay {
+                DebugOverlay()
+            }
         }
     }
 

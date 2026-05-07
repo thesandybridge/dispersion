@@ -18,12 +18,7 @@ public struct DCard<Content: View>: View {
         content()
             .padding(padding)
             .background(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.xl, style: .continuous)
-                    .fill(DesignTokens.card)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.xl, style: .continuous)
-                            .strokeBorder(DesignTokens.border, lineWidth: 1)
-                    )
+                ThemedCardFill(cornerRadius: DesignTokens.Radius.xl)
                     .shadow(color: .black.opacity(0.25), radius: 1, x: 0, y: 1)
             )
     }

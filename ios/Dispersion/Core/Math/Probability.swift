@@ -31,15 +31,23 @@ public enum Probability {
         return normalCdf((hi - mean) / sd) - normalCdf((lo - mean) / sd)
     }
 
+    /// DECADE-inspired bias: shift the zone center back by this fraction of
+    /// zone depth so that clubs carrying slightly past the pin score higher.
+    /// Most amateurs miss short, so "take more club" is the right default.
+    private static let decadeBias = 0.15
+
     /// Probability the club lands inside the safe zone (assumes independent
-    /// long/lateral Gaussians, which matches the JS implementation).
+    /// long/lateral Gaussians). Zone is shifted back per DECADE to favor
+    /// clubs that carry slightly past the target.
     public static func probabilityInZone(club: Club, scenario: ShotScenario) -> Double {
-        let longLo = -scenario.safeZoneDepthYards / 2
-        let longHi = scenario.safeZoneDepthYards / 2
+        // Shift the zone center toward the short side so clubs that fly
+        // past the pin by a bit get a higher probability score.
+        let bias = scenario.safeZoneDepthYards * decadeBias
+        let longLo = -scenario.safeZoneDepthYards / 2 - bias
+        let longHi = scenario.safeZoneDepthYards / 2 - bias
         let latLo = -scenario.safeZoneWidthYards / 2
         let latHi = scenario.safeZoneWidthYards / 2
 
-        // Mean long error = expectedCarry - target.
         let meanLong = club.carryYards - scenario.distanceToTargetYards
         let meanLat = 0.0
 
@@ -67,14 +75,26 @@ public enum Probability {
     }
 
     /// Rank a bag against a scenario by descending probability-in-zone.
+    /// Generates full + 3/4 + half swing variants for each club.
     public static func rankClubs(_ clubs: [Club], scenario: ShotScenario) -> [ClubResult] {
-        let results = clubs.map { c -> ClubResult in
-            ClubResult(
-                clubId: c.id,
-                probabilityInZone: probabilityInZone(club: c, scenario: scenario),
-                probabilityPenalty: probabilityPenalty(club: c, scenario: scenario),
-                expectedCarry: c.carryYards
-            )
+        var results: [ClubResult] = []
+        for c in clubs {
+            for swing in SwingType.allCases {
+                var virtual = c
+                virtual.carryYards = c.carryYards * swing.carryMultiplier
+                virtual.carrySd = c.carrySd * swing.sigmaMultiplier
+                virtual.lateralSd = c.lateralSd * swing.sigmaMultiplier
+                let pZone = probabilityInZone(club: virtual, scenario: scenario)
+                // Skip partial swings with negligible probability
+                if swing != .full && pZone < 0.02 { continue }
+                results.append(ClubResult(
+                    clubId: c.id,
+                    swingType: swing,
+                    probabilityInZone: pZone,
+                    probabilityPenalty: probabilityPenalty(club: virtual, scenario: scenario),
+                    expectedCarry: virtual.carryYards
+                ))
+            }
         }
         return results.sorted { $0.probabilityInZone > $1.probabilityInZone }
     }

@@ -29,12 +29,12 @@ public struct BagGappingChart: View {
 
     // MARK: layout constants
 
-    private let rowHeight: CGFloat = 22
-    private let rowGap: CGFloat = 4
-    private let padLeft: CGFloat = 60
+    private let rowHeight: CGFloat = 24
+    private let rowGap: CGFloat = 6
+    private let padLeft: CGFloat = 72
     private let padRight: CGFloat = 18
-    private let padTop: CGFloat = 22
-    private let padBottom: CGFloat = 26
+    private let padTop: CGFloat = 24
+    private let padBottom: CGFloat = 30
 
     // MARK: drawing
 
@@ -66,12 +66,12 @@ public struct BagGappingChart: View {
                 p.move(to: CGPoint(x: sx(t), y: padTop - 6))
                 p.addLine(to: CGPoint(x: sx(t), y: size.height - padBottom + 4))
             }
-            ctx.stroke(line, with: .color(Color.white.opacity(0.06)),
+            ctx.stroke(line, with: .color(DesignTokens.soil900.opacity(0.06)),
                        style: StrokeStyle(lineWidth: 0.5, dash: [2, 4]))
             ctx.draw(
                 Text("\(Int(t))\(unit.label)")
                     .font(DispersionType.mono(9, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.45)),
+                    .foregroundStyle(DesignTokens.soil900.opacity(0.45)),
                 at: CGPoint(x: sx(t), y: size.height - padBottom + 16)
             )
         }
@@ -89,7 +89,7 @@ public struct BagGappingChart: View {
             ctx.draw(
                 Text(truncateName(club.name))
                     .font(DispersionType.ui(11, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.7)),
+                    .foregroundStyle(DesignTokens.soil900.opacity(0.7)),
                 at: CGPoint(x: padLeft - 8, y: y + rowHeight / 2 + 1),
                 anchor: .trailing
             )
@@ -98,8 +98,8 @@ public struct BagGappingChart: View {
             let bar = RoundedRectangle(cornerRadius: 4).path(in: CGRect(
                 x: x1, y: y, width: max(2, x2 - x1), height: rowHeight
             ))
-            ctx.fill(bar, with: .color(DesignTokens.bentgrass.opacity(0.22)))
-            ctx.stroke(bar, with: .color(DesignTokens.fairwayShadow), lineWidth: 0.8)
+            ctx.fill(bar, with: .color(DesignTokens.bentgrass.opacity(0.3)))
+            ctx.stroke(bar, with: .color(DesignTokens.fairwayShadow.opacity(0.6)), lineWidth: 0.8)
 
             // Center mark + carry label.
             let cm = Path { p in
@@ -115,25 +115,37 @@ public struct BagGappingChart: View {
             )
         }
 
-        // Gaps.
+        // Gaps — stagger labels so close gaps don't overlap.
         let gaps = findGaps(sorted, convert: convert)
-        for g in gaps {
+        for (gi, g) in gaps.enumerated() {
+            let gx1 = sx(g.from)
+            let gx2 = sx(g.to)
+            let gapWidth = gx2 - gx1
+
+            // Only draw the highlight if the gap is visible
+            guard gapWidth > 4 else { continue }
+
             let r = CGRect(
-                x: sx(g.from),
+                x: gx1,
                 y: padTop - 6,
-                width: sx(g.to) - sx(g.from),
+                width: gapWidth,
                 height: CGFloat(sorted.count) * (rowHeight + rowGap) + 10
             )
             let path = Path(roundedRect: r, cornerRadius: 4)
             ctx.fill(path, with: .color(DesignTokens.flag.opacity(0.05)))
-            ctx.stroke(path, with: .color(DesignTokens.flag.opacity(0.45)),
+            ctx.stroke(path, with: .color(DesignTokens.flag.opacity(0.35)),
                        style: StrokeStyle(lineWidth: 0.7, dash: [3, 3]))
-            ctx.draw(
-                Text("gap \(Int(g.to - g.from))\(unit.label)")
-                    .font(DispersionType.mono(9, weight: .regular))
-                    .foregroundStyle(DesignTokens.flag),
-                at: CGPoint(x: (sx(g.from) + sx(g.to)) / 2, y: padTop - 9)
-            )
+
+            // Label — skip if gap too narrow to fit text, stagger odd/even
+            if gapWidth > 30 {
+                let staggerY: CGFloat = gi % 2 == 0 ? padTop - 10 : padTop - 20
+                ctx.draw(
+                    Text("\(Int(g.to - g.from))\(unit.label)")
+                        .font(DispersionType.mono(8, weight: .medium))
+                        .foregroundStyle(DesignTokens.flag),
+                    at: CGPoint(x: (gx1 + gx2) / 2, y: staggerY)
+                )
+            }
         }
     }
 

@@ -55,14 +55,19 @@ public struct DispersionViz: View {
     private func drawScene(ctx: GraphicsContext, size: CGSize) {
         let pad: CGFloat = 28
 
-        // World units span: roughly 3.5σ around mean + a bit of headroom.
-        let longSpan = max(carrySd * 3.5, 25)
-        let latSpan = max(lateralSd * 3.5, 18)
+        // World units span: fit both the σ ellipses and the zone.
+        let zoneHalfW = (zoneWidth ?? 0) / 2 + 5
+        let zoneHalfD = (zoneDepth ?? 0) / 2 + 5
+        let longSpan = max(carrySd * 3.5, zoneHalfD, 25)
+        let latSpan = max(lateralSd * 3.5, zoneHalfW, 18)
 
-        // Vertical axis: target at the top, our shot landing somewhere below
-        // (or above if club is too short / too long).
-        let scaleX = (size.width - pad * 2) / (latSpan * 2)
-        let scaleY = (size.height - pad * 2) / (longSpan * 2)
+        // Uniform scale so equal yard values render equal pixel sizes
+        // (a 25x25 zone looks square).
+        let fitScaleX = (size.width - pad * 2) / (latSpan * 2)
+        let fitScaleY = (size.height - pad * 2) / (longSpan * 2)
+        let uniformScale = min(fitScaleX, fitScaleY)
+        let scaleX = uniformScale
+        let scaleY = uniformScale
 
         let targetCenter = CGPoint(x: size.width / 2, y: size.height / 2)
         let meanLong = carry - distanceToTarget // y delta in yards (positive = past target)
@@ -78,6 +83,7 @@ public struct DispersionViz: View {
             DesignTokens.heat3, DesignTokens.heat4, DesignTokens.heat5,
         ]
 
+        let n = kSteps.count
         for (i, k) in kSteps.enumerated().reversed() {
             let path = ellipsePath(
                 center: meanCenter,
@@ -85,7 +91,10 @@ public struct DispersionViz: View {
                 ry: CGFloat(carrySd) * CGFloat(k) * scaleY,
                 facets: facets
             )
-            let color = palette[min(i, palette.count - 1)].opacity(0.6)
+            // Outer rings nearly invisible, inner rings brighter
+            let t = Double(i) / Double(max(n - 1, 1))
+            let alpha = 0.05 + t * 0.55
+            let color = palette[min(i, palette.count - 1)].opacity(alpha)
             ctx.fill(path, with: .color(color))
         }
 
@@ -97,9 +106,25 @@ public struct DispersionViz: View {
                 width: CGFloat(zw) * scaleX,
                 height: CGFloat(zd) * scaleY
             )
-            let zonePath = Path(roundedRect: rect, cornerRadius: 6)
-            ctx.stroke(zonePath, with: .color(DesignTokens.flag.opacity(0.55)), lineWidth: 1)
-            ctx.fill(zonePath, with: .color(DesignTokens.flag.opacity(0.05)))
+            let zonePath = Path(roundedRect: rect, cornerRadius: 4)
+            // Subtle dashed border
+            ctx.stroke(zonePath, with: .color(Color.white.opacity(0.35)),
+                       style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+            // Corner ticks for visibility
+            let tickLen: CGFloat = 10
+            let corners: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+                (rect.minX, rect.minY, 1, 1),
+                (rect.maxX, rect.minY, -1, 1),
+                (rect.minX, rect.maxY, 1, -1),
+                (rect.maxX, rect.maxY, -1, -1),
+            ]
+            for (cx, cy, dx, dy) in corners {
+                var tick = Path()
+                tick.move(to: CGPoint(x: cx, y: cy + tickLen * dy))
+                tick.addLine(to: CGPoint(x: cx, y: cy))
+                tick.addLine(to: CGPoint(x: cx + tickLen * dx, y: cy))
+                ctx.stroke(tick, with: .color(Color.white.opacity(0.55)), lineWidth: 1.5)
+            }
         }
 
         // 3. Mean → target vector.
@@ -135,12 +160,12 @@ public struct DispersionViz: View {
     }
 
     private func drawReticle(ctx: GraphicsContext, at point: CGPoint) {
-        let outer = Path(ellipseIn: CGRect(x: point.x - 9, y: point.y - 9, width: 18, height: 18))
-        ctx.stroke(outer, with: .color(DesignTokens.flag), lineWidth: 1.2)
-        let core = Path(ellipseIn: CGRect(x: point.x - 2, y: point.y - 2, width: 4, height: 4))
-        ctx.fill(core, with: .color(DesignTokens.flag))
+        let color = Color.white.opacity(0.6)
+        let outer = Path(ellipseIn: CGRect(x: point.x - 8, y: point.y - 8, width: 16, height: 16))
+        ctx.stroke(outer, with: .color(color), lineWidth: 1)
+        let core = Path(ellipseIn: CGRect(x: point.x - 1.5, y: point.y - 1.5, width: 3, height: 3))
+        ctx.fill(core, with: .color(color))
 
-        // Crosshair ticks.
         let ticks = Path { p in
             p.move(to: CGPoint(x: point.x - 14, y: point.y))
             p.addLine(to: CGPoint(x: point.x - 4, y: point.y))
@@ -151,6 +176,6 @@ public struct DispersionViz: View {
             p.move(to: CGPoint(x: point.x, y: point.y + 4))
             p.addLine(to: CGPoint(x: point.x, y: point.y + 14))
         }
-        ctx.stroke(ticks, with: .color(DesignTokens.flag), lineWidth: 1)
+        ctx.stroke(ticks, with: .color(color), lineWidth: 0.8)
     }
 }

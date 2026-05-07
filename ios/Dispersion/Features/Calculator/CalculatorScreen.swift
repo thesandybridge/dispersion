@@ -15,8 +15,11 @@ public struct CalculatorScreen: View {
     @State private var settings = SettingsStore.shared
     @State private var session  = SessionStore.shared
     @State private var dial     = DialStore.shared
+    @Environment(\.themeAccent) private var accent
 
     @State private var zoneOpen: Bool = false
+    @State private var logOpen: Bool = false
+    @State private var logFlash: String?
     @State private var viewClubId: String?
 
     public init() {}
@@ -74,7 +77,7 @@ public struct CalculatorScreen: View {
     }
 
     private var viewedResult: ClubResult? {
-        if let id = viewClubId, let r = rankings.first(where: { $0.clubId == id }) {
+        if let id = viewClubId, let r = rankings.first(where: { $0.id == id }) {
             return r
         }
         return recommended
@@ -85,62 +88,131 @@ public struct CalculatorScreen: View {
         return clubMap[r.clubId]
     }
 
+    private var recommendedClub: Club? {
+        guard let r = recommended else { return nil }
+        return clubMap[r.clubId]
+    }
+
     private var isViewingRecommended: Bool {
         viewedResult?.clubId == recommended?.clubId
     }
 
+
     public var body: some View {
         ZStack {
-            // Background
-            DesignTokens.backgroundDeep.ignoresSafeArea()
+            // Background — dark fairway
+            LinearGradient(
+                colors: [DesignTokens.ink, DesignTokens.pine, DesignTokens.ink],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
             // Full-bleed dispersion
-            if let club = viewedClub {
+            if let club = viewedClub, let vr = viewedResult {
                 DispersionViz(
-                    carry: club.carryYards,
-                    carrySd: club.carrySd,
-                    lateralSd: club.lateralSd,
+                    carry: vr.expectedCarry,
+                    carrySd: club.carrySd * vr.swingType.sigmaMultiplier,
+                    lateralSd: club.lateralSd * vr.swingType.sigmaMultiplier,
                     distanceToTarget: scenario.distance,
                     zoneWidth: scenario.width,
                     zoneDepth: scenario.depth,
                     contours: 7,
                     facets: 28,
-                    background: DesignTokens.backgroundDeep
+                    background: .clear
                 )
                 .ignoresSafeArea()
             }
 
-            // Top scrim
-            LinearGradient(
-                colors: [DesignTokens.backgroundDeep.opacity(0.92), .clear],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: 260)
-            .frame(maxWidth: .infinity, alignment: .top)
-            .ignoresSafeArea(edges: .top)
-            .allowsHitTesting(false)
 
-            // Bottom scrim
-            LinearGradient(
-                colors: [.clear, DesignTokens.backgroundDeep.opacity(0.95)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(maxHeight: .infinity, alignment: .bottom)
-            .frame(height: 360)
-            .frame(maxHeight: .infinity, alignment: .bottom)
-            .allowsHitTesting(false)
-
-            VStack(alignment: .leading, spacing: 0) {
-                topHeader
+            // Top scrim — pinned to top edge
+            VStack {
+                LinearGradient(
+                    colors: [DesignTokens.backgroundDeep.opacity(0.9), .clear],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(height: 180)
                 Spacer()
-                bottomStack
             }
-            .padding(.horizontal, 20)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            // Top header
+            VStack {
+                topHeader
+                    .padding(.horizontal, 20)
+                Spacer()
+            }
+
+            // Bottom: recommended card + drawer
+            VStack(spacing: 0) {
+                Spacer()
+
+                // Conditions badges (if any)
+                VStack(alignment: .leading, spacing: 8) {
+                    conditionsRow
+                    if !isViewingRecommended, let club = viewedClub, let result = viewedResult {
+                        viewingBanner(club: club, prob: result.probabilityInZone)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, 20)
+
+                // Recommended card
+                Group {
+                    if let result = recommended, let club = clubMap[result.clubId] {
+                        recommendedCard(club: club, result: result)
+                    } else {
+                        emptyRecommendation
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+                // Alternatives - horizontal scroll
+                if !alts.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(alts, id: \.id) { r in
+                                if let club = clubMap[r.clubId] {
+                                    altChip(result: r, club: club)
+                                }
+                            }
+                        }
+                        .padding(.leading, 16)
+                        .padding(.trailing, 80)
+                    }
+                    .padding(.top, 4)
+                }
+            }
+            .padding(.bottom, 8)
         }
         .preferredColorScheme(.dark)
         .dispersionSheet(isPresented: $zoneOpen) {
             ZoneSheet()
         }
+        .dispersionSheet(isPresented: $logOpen, detents: [.large]) {
+            if let club = recommendedClub {
+                QuickLogSheet(club: club, distance: scenario.distance) { outcomes, landing in
+                    handleLog(club: club, outcomes: outcomes, landing: landing)
+                }
+            }
+        }
+        .overlay(alignment: .top) {
+            if let flash = logFlash {
+                Text("Logged · \(flash)")
+                    .font(DispersionType.ui(12, weight: .semibold))
+                    .foregroundStyle(DesignTokens.primaryForeground)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(accent))
+                    .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                    .padding(.top, 80)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: logFlash)
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: viewClubId)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: recommended?.clubId)
         .onAppear { registerDialActions() }
         .onChange(of: recommended?.clubId) { _, _ in registerDialActions() }
         .onChange(of: scenario.windMph) { _, _ in registerDialActions() }
@@ -154,7 +226,7 @@ public struct CalculatorScreen: View {
                 if let active = session.active {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(active.kind == .range ? DesignTokens.primary : DesignTokens.pMarginal)
+                            .fill(active.kind == .range ? accent : DesignTokens.pMarginal)
                             .frame(width: 6, height: 6)
                         Text("Active · \(active.kind.rawValue)").eyebrow()
                     }
@@ -169,47 +241,76 @@ public struct CalculatorScreen: View {
                 Spacer()
             }
 
-            Button { zoneOpen = true } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    let display = Units.roundForUnit(
-                        Units.from(yards: scenario.distance, in: settings.unit),
-                        unit: settings.unit
-                    )
-                    Text("\(Int(display))")
-                        .font(DispersionType.display(96, weight: .regular))
-                        .tracking(-3.4)
-                        .foregroundStyle(DesignTokens.foreground)
-                        .monospacedDigit()
-                        .contentTransition(.numericText(value: display))
-                        .animation(.spring(response: 0.4, dampingFraction: 0.78), value: display)
-                    Text(settings.unit.label.uppercased())
-                        .font(DispersionType.display(28, weight: .regular))
-                        .foregroundStyle(DesignTokens.foreground.opacity(0.5))
-                }
-            }
-            .buttonStyle(.plain)
+            distanceDragger
 
-            Text("Distance to target").eyebrow()
+            HStack(spacing: 10) {
+                Text("Distance to target").eyebrow()
+                Spacer()
+                Button { zoneOpen = true } label: {
+                    let presetName = Presets.all.first(where: { $0.id == scenario.presetId })?.label ?? "Custom"
+                    let w = Int(Units.from(yards: scenario.width, in: settings.unit))
+                    let d = Int(Units.from(yards: scenario.depth, in: settings.unit))
+                    HStack(spacing: 4) {
+                        Text(presetName)
+                            .font(DispersionType.ui(11, weight: .medium))
+                        Text("\(w)w x \(d)d")
+                            .font(DispersionType.mono(9))
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.06))
+                            .overlay(Capsule().strokeBorder(DesignTokens.border, lineWidth: 1))
+                    )
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.top, 8)
     }
 
-    private var bottomStack: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            conditionsRow
-            if !isViewingRecommended, let club = viewedClub, let result = viewedResult {
-                viewingBanner(club: club, prob: result.probabilityInZone)
-            }
-            if let result = recommended, let club = clubMap[result.clubId] {
-                recommendedCard(club: club, result: result)
-            } else {
-                emptyRecommendation
-            }
-            if !alts.isEmpty {
-                altsRail
-            }
+    @State private var dragStartYards: Double = 0
+
+    private var distanceDragger: some View {
+        let display = Units.roundForUnit(
+            Units.from(yards: scenario.distance, in: settings.unit),
+            unit: settings.unit
+        )
+        // 6 points of drag per yard — slow and precise
+        let ptsPerYard: CGFloat = 6
+
+        return HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text("\(Int(display))")
+                .font(DispersionType.display(72, weight: .regular))
+                .tracking(-2.5)
+                .foregroundStyle(DesignTokens.foreground)
+                .monospacedDigit()
+                .contentTransition(.numericText(value: display))
+                .animation(.spring(response: 0.4, dampingFraction: 0.78), value: display)
+            Text(settings.unit.label.uppercased())
+                .font(DispersionType.display(20, weight: .regular))
+                .foregroundStyle(DesignTokens.foreground.opacity(0.5))
         }
-        .padding(.bottom, 16)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 6)
+                .onChanged { value in
+                    if dragStartYards == 0 { dragStartYards = scenario.distance }
+                    let deltaYards = Double(-value.translation.height / ptsPerYard)
+                    let newYards = (dragStartYards + deltaYards).rounded()
+                    let clamped = max(20, min(400, newYards))
+                    if clamped != scenario.distance {
+                        Haptics.light()
+                        scenario.update(.init(distance: clamped))
+                    }
+                }
+                .onEnded { _ in
+                    dragStartYards = 0
+                }
+        )
+        .onTapGesture { zoneOpen = true }
     }
 
     private var conditionsRow: some View {
@@ -264,8 +365,7 @@ public struct CalculatorScreen: View {
                     }
                     .padding(10)
                     .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(DesignTokens.card.opacity(0.6))
+                        ThemedCardFill(cornerRadius: 16, opacity: 0.8)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                                     .strokeBorder(DesignTokens.border, lineWidth: 1)
@@ -292,7 +392,7 @@ public struct CalculatorScreen: View {
                 .font(DispersionType.mono(10, weight: .medium))
                 .tracking(1.6)
                 .textCase(.uppercase)
-                .foregroundStyle(DesignTokens.primary)
+                .foregroundStyle(accent)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -310,42 +410,52 @@ public struct CalculatorScreen: View {
         let lbl = ProbLabelRegistry.of(result.probabilityInZone)
         let isActive = isViewingRecommended
         return Button { viewClubId = nil } label: {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Circle().fill(lbl.color).frame(width: 6, height: 6)
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 5) {
+                        Circle().fill(lbl.color).frame(width: 5, height: 5)
                         Text("Recommended · \(lbl.label.lowercased())")
                             .eyebrow(color: lbl.color)
                     }
-                    Text(club.name)
-                        .font(DispersionType.display(40, weight: .regular))
-                        .tracking(-0.8)
-                        .foregroundStyle(DesignTokens.foreground)
-                        .lineLimit(1)
-                    HStack(spacing: 12) {
-                        Text("EXP \(Int(club.carryYards))y")
+                    HStack(spacing: 6) {
+                        Text(club.name)
+                            .font(DispersionType.display(28, weight: .regular))
+                            .tracking(-0.5)
+                            .foregroundStyle(DesignTokens.foreground)
+                            .lineLimit(1)
+                        if result.swingType != .full {
+                            Text(result.swingType.label)
+                                .font(DispersionType.mono(10, weight: .medium))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(lbl.color.opacity(0.2)))
+                                .foregroundStyle(lbl.color)
+                        }
+                    }
+                    HStack(spacing: 10) {
+                        Text("EXP \(Int(result.expectedCarry))y")
                         Text("σ↕ \(String(format: "%.1f", club.carrySd))")
                         Text("σ↔ \(String(format: "%.1f", club.lateralSd))")
                     }
-                    .font(DispersionType.mono(11))
+                    .font(DispersionType.mono(10))
                     .foregroundStyle(DesignTokens.mutedForeground)
                 }
                 Spacer()
-                ProbabilityDial(value: result.probabilityInZone, color: lbl.color)
+                ProbabilityDial(value: result.probabilityInZone, color: lbl.color, diameter: 64, trackThickness: 5)
             }
-            .padding(16)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(DesignTokens.card.opacity(0.85))
+                ThemedCardFill(cornerRadius: 16, opacity: 0.9)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .strokeBorder(
-                                isActive ? DesignTokens.primary.opacity(0.55) : DesignTokens.border,
+                                isActive ? lbl.color.opacity(0.4) : DesignTokens.border,
                                 lineWidth: 1
                             )
                     )
-                    .shadow(color: isActive ? DesignTokens.primary.opacity(0.12) : .clear, radius: 8)
+                    .shadow(color: isActive ? lbl.color.opacity(0.12) : .clear, radius: 8)
             )
         }
         .buttonStyle(.plain)
@@ -360,83 +470,105 @@ public struct CalculatorScreen: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(DesignTokens.card.opacity(0.7))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(DesignTokens.border, lineWidth: 1)
-                )
-        )
+        .background(ThemedCardFill(cornerRadius: 18, opacity: 0.7))
     }
 
-    private var altsRail: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Alternatives").eyebrow()
-                Spacer()
-                Text("\(alts.count)")
-                    .font(DispersionType.mono(10))
-                    .foregroundStyle(DesignTokens.mutedForeground)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-
-            DSeparator()
-
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(Array(alts.enumerated()), id: \.element.id) { (i, r) in
-                        if let club = clubMap[r.clubId] {
-                            altRow(index: i, result: r, club: club)
-                            if i < alts.count - 1 {
-                                Divider().background(DesignTokens.border.opacity(0.4))
-                            }
-                        }
+    private func altChip(result: ClubResult, club: Club) -> some View {
+        let lbl = ProbLabelRegistry.of(result.probabilityInZone)
+        let active = viewClubId == result.id
+        return Button { viewClubId = active ? nil : result.id; Haptics.light() } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    Text(club.name)
+                        .font(DispersionType.ui(13, weight: .medium))
+                        .lineLimit(1)
+                    if result.swingType != .full {
+                        Text(result.swingType.label)
+                            .font(DispersionType.mono(9, weight: .medium))
+                            .foregroundStyle(lbl.color)
                     }
                 }
-            }
-            .frame(maxHeight: 180)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(DesignTokens.card.opacity(0.6))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(DesignTokens.border, lineWidth: 1)
-                )
-        )
-    }
-
-    private func altRow(index: Int, result: ClubResult, club: Club) -> some View {
-        let lbl = ProbLabelRegistry.of(result.probabilityInZone)
-        let active = viewClubId == result.clubId
-        return Button { viewClubId = active ? nil : result.clubId } label: {
-            HStack(spacing: 10) {
-                Text(String(format: "%02d", index + 2))
-                    .font(DispersionType.mono(10))
-                    .foregroundStyle(active ? lbl.color : DesignTokens.mutedForeground)
-                    .frame(width: 18, alignment: .leading)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(club.name).font(DispersionType.ui(14, weight: .medium))
-                    Text("\(Int(club.carryYards))y · σ\(Int(club.carrySd))×\(Int(club.lateralSd))")
+                HStack(spacing: 6) {
+                    Text("\(Int(result.expectedCarry))y")
                         .font(DispersionType.mono(10))
                         .foregroundStyle(DesignTokens.mutedForeground)
+                    Text("\(Int(result.probabilityInZone * 100))%")
+                        .font(DispersionType.mono(11, weight: .medium))
+                        .foregroundStyle(lbl.color)
                 }
-                Spacer()
-                ProgressBar(value: result.probabilityInZone, color: lbl.color)
-                    .frame(width: 50, height: 4)
-                Text("\(Int(result.probabilityInZone * 100))")
-                    .font(DispersionType.display(18))
-                    .foregroundStyle(DesignTokens.foreground)
-                    .monospacedDigit()
-                    .frame(minWidth: 28, alignment: .trailing)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(active ? DesignTokens.primary.opacity(0.08) : .clear)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(active ? accent.opacity(0.15) : Color.white.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(active ? accent.opacity(0.4) : DesignTokens.border, lineWidth: 1)
+                    )
+            )
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: logging
+
+    private func ensureRoundSession() -> String {
+        if let active = session.active, active.kind == .round {
+            return active.id
+        }
+        let id = UUID().uuidString.lowercased()
+        let s = Session(id: id, kind: .round, label: "Course session")
+        _ = try? SessionsRepo(context: modelContext).create(s)
+        session.setActive(ActiveSession(id: id, kind: .round, label: s.label))
+        return id
+    }
+
+    private func handleLog(
+        club: Club,
+        outcomes: Set<ShotOutcomeTag>,
+        landing: QuickLogSheet.LandingDelta?
+    ) {
+        Haptics.medium()
+        let sid = ensureRoundSession()
+        let shot = Shot(
+            id: UUID().uuidString.lowercased(),
+            sessionId: sid,
+            clubId: club.id,
+            targetDistanceYards: scenario.distance,
+            longDelta: landing?.long ?? 0,
+            latDelta: landing?.lat ?? 0,
+            outcomes: outcomes
+        )
+        do {
+            try ShotsRepo(context: modelContext).create(shot)
+            logOpen = false
+            let label = outcomes.isEmpty
+                ? "logged"
+                : outcomes.map(\.rawValue).sorted().joined(separator: " · ")
+            let landingNote: String
+            if let l = landing {
+                let lSign = l.long >= 0 ? "+" : ""
+                let s = l.lat >= 0 ? "+" : ""
+                landingNote = " · \(lSign)\(Int(l.long)), \(s)\(Int(l.lat))"
+            } else {
+                landingNote = ""
+            }
+            logFlash = "\(club.name) · \(label)\(landingNote)"
+            Haptics.success()
+            Task {
+                try? await Task.sleep(for: .seconds(2.2))
+                logFlash = nil
+            }
+        } catch {
+            logOpen = false
+            logFlash = "Error · \(error.localizedDescription)"
+            Haptics.error()
+            Task {
+                try? await Task.sleep(for: .seconds(6))
+                logFlash = nil
+            }
+        }
     }
 
     // MARK: dial actions
@@ -448,8 +580,7 @@ public struct CalculatorScreen: View {
                 zoneOpen = true
             },
             DialAction(id: "log", label: "Log shot", systemImage: "plus", tone: .primary, isDisabled: !canLog) {
-                // Hook up shot logging in a follow-up — needs a quick-log sheet.
-                Haptics.medium()
+                logOpen = true
             },
             DialAction(id: "reset", label: "Reset", systemImage: "arrow.counterclockwise") {
                 scenario.update(.init(
@@ -570,10 +701,10 @@ private struct ProgressBar: View {
     var color: Color
     var body: some View {
         GeometryReader { g in
-            ZStack(alignment: .leading) {
-                Capsule().fill(DesignTokens.muted.opacity(0.6))
-                Capsule().fill(color).frame(width: max(0, g.size.width * value))
-            }
+            Capsule().fill(DesignTokens.muted.opacity(0.6))
+                .overlay(alignment: .leading) {
+                    Capsule().fill(color).frame(width: max(0, g.size.width * value))
+                }
         }
     }
 }
@@ -608,7 +739,7 @@ private struct UnitNumberField: View {
                     text = formatNumber(display, unit: unit)
                 }
                 .onSubmit { commit() }
-                .onChange(of: text) { _, _ in /* commit on submit */ }
+                .onChange(of: text) { _, _ in commit() }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

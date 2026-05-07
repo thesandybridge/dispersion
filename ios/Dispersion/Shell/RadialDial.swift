@@ -9,6 +9,7 @@
 import SwiftUI
 
 public struct RadialDial: View {
+    @Environment(\.themeAccent) private var accent
     @Binding public var route: AppRoute
     @State private var dial = DialStore.shared
     public var disabledRoutes: Set<AppRoute> = []
@@ -53,7 +54,7 @@ public struct RadialDial: View {
                     Spacer()
                     hub
                         .padding(.trailing, 16)
-                        .padding(.bottom, 16)
+                        .padding(.bottom, 64)
                 }
             }
 
@@ -62,7 +63,7 @@ public struct RadialDial: View {
                 routeTrack
                     .transition(.opacity.combined(with: .scale(scale: 0.85)))
                     .padding(.trailing, 16)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 64)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             }
         }
@@ -90,9 +91,11 @@ public struct RadialDial: View {
                         action: action,
                         isHovered: hoveredActionId == action.id
                     ) {
+                        Haptics.medium()
                         action.perform()
                         withAnimation { open = false }
                     } onHover: { hovered in
+                        if hovered { Haptics.light() }
                         hoveredActionId = hovered ? action.id : (hoveredActionId == action.id ? nil : hoveredActionId)
                     }
                     .frame(width: itemSize, height: itemSize)
@@ -113,6 +116,7 @@ public struct RadialDial: View {
                     .tracking(1.8)
                     .textCase(.uppercase)
                     .foregroundStyle(DesignTokens.background)
+                    .fixedSize()
                     .padding(.horizontal, 12)
                     .padding(.vertical, 4)
                     .background(Capsule().fill(DesignTokens.foreground))
@@ -123,21 +127,20 @@ public struct RadialDial: View {
             // FAB
             fab
         }
-        .frame(width: fabSize, height: fabSize)
     }
 
     private var fab: some View {
         ZStack {
             // Halo while idle.
             Circle()
-                .strokeBorder(DesignTokens.primary.opacity(0.3), lineWidth: 1)
+                .strokeBorder(accent.opacity(0.3), lineWidth: 1)
                 .padding(-4)
                 .opacity(open || dragging ? 0 : 0.7)
 
             // Body
             Circle()
-                .fill(open || dragging ? DesignTokens.foreground : DesignTokens.primary)
-                .overlay(Circle().strokeBorder(DesignTokens.primary.opacity(0.3), lineWidth: 1))
+                .fill(open || dragging ? DesignTokens.foreground : accent)
+                .overlay(Circle().strokeBorder(accent.opacity(0.3), lineWidth: 1))
                 .shadow(color: .black.opacity(0.45), radius: 12, x: 0, y: 8)
 
             // Glyph
@@ -174,7 +177,11 @@ public struct RadialDial: View {
                 }
                 let raw = clampOffset(value.translation)
                 dragOffset = raw
-                hoverIndex = closestRouteIndex(forX: raw.width)
+                let newIndex = closestRouteIndex(forX: raw.width)
+                if newIndex != hoverIndex {
+                    if newIndex >= 0 { Haptics.light() }
+                    hoverIndex = newIndex
+                }
             }
             .onEnded { _ in
                 let chosen = hoverIndex
@@ -234,19 +241,19 @@ public struct RadialDial: View {
                         .fill(
                             isDisabled
                                 ? DesignTokens.card.opacity(0.4)
-                                : (isHover ? DesignTokens.primary
+                                : (isHover ? accent
                                    : isCurrent ? DesignTokens.card : DesignTokens.card.opacity(0.7))
                         )
                         .overlay(
                             Circle().strokeBorder(
                                 isHover
-                                    ? DesignTokens.primary
+                                    ? accent
                                     : DesignTokens.border,
                                 lineWidth: 1
                             )
                         )
                         .shadow(
-                            color: isHover ? DesignTokens.primary.opacity(0.18) : .clear,
+                            color: isHover ? accent.opacity(0.18) : .clear,
                             radius: 4
                         )
 
@@ -259,20 +266,23 @@ public struct RadialDial: View {
                                    : isCurrent ? DesignTokens.foreground : DesignTokens.mutedForeground)
                         )
 
+                }
+                .frame(width: routeIconSize, height: routeIconSize)
+                .overlay(alignment: .top) {
                     if isHover {
                         Text(r.label)
                             .font(DispersionType.mono(10, weight: .medium))
                             .tracking(1.6)
                             .textCase(.uppercase)
+                            .fixedSize()
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
                             .background(Capsule().fill(DesignTokens.foreground))
                             .foregroundStyle(DesignTokens.background)
-                            .offset(y: -32)
+                            .offset(y: -24)
                             .transition(.opacity)
                     }
                 }
-                .frame(width: routeIconSize, height: routeIconSize)
                 .scaleEffect(isHover ? 1.12 : 1)
                 // Position track icons up + to the left of the FAB
                 .offset(
@@ -281,13 +291,13 @@ public struct RadialDial: View {
                 )
             }
         }
-        .frame(width: fabSize, height: fabSize, alignment: .center)
     }
 }
 
 // MARK: dial item
 
 private struct DialItemView: View {
+    @Environment(\.themeAccent) private var accent
     let action: DialAction
     let isHovered: Bool
     let onTap: () -> Void
@@ -316,7 +326,7 @@ private struct DialItemView: View {
 
     private var background: Color {
         switch action.tone {
-        case .primary:  return DesignTokens.primary
+        case .primary:  return accent
         case .danger:   return DesignTokens.destructive
         case .default:  return DesignTokens.card
         }
@@ -330,7 +340,7 @@ private struct DialItemView: View {
     }
     private var borderColor: Color {
         switch action.tone {
-        case .primary:  return DesignTokens.primary.opacity(0.4)
+        case .primary:  return accent.opacity(0.4)
         case .danger:   return DesignTokens.destructive.opacity(0.4)
         case .default:  return DesignTokens.border
         }

@@ -2,6 +2,7 @@
 
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 public struct SettingsScreen: View {
     @Environment(\.modelContext) private var modelContext
@@ -12,6 +13,8 @@ public struct SettingsScreen: View {
 
     @State private var seedConfirm: Bool = false
     @State private var clearConfirm: Bool = false
+    @State private var importerOpen: Bool = false
+    @State private var exportData: ExportFile?
     @State private var status: (kind: StatusKind, text: String)?
 
     private enum StatusKind { case ok, err }
@@ -27,6 +30,7 @@ public struct SettingsScreen: View {
                     hero
                     VStack(alignment: .leading, spacing: 16) {
                         unitsGroup
+                        themeGroup
                         dataGroup
                         developerGroup
                         if let status {
@@ -78,6 +82,18 @@ public struct SettingsScreen: View {
             Text("This removes every club. Cannot be undone.")
         }
         .onAppear { dial.setActions([]) }
+        .fileImporter(isPresented: $importerOpen, allowedContentTypes: [.json]) { result in
+            importBackup(result)
+        }
+        .fileExporter(isPresented: Binding(
+            get: { exportData != nil },
+            set: { if !$0 { exportData = nil } }
+        ), document: exportData, contentType: .json, defaultFilename: "dispersion-backup.json") { result in
+            switch result {
+            case .success: status = (.ok, "Backup exported.")
+            case .failure(let e): status = (.err, e.localizedDescription)
+            }
+        }
     }
 
     // MARK: sections
@@ -125,8 +141,47 @@ public struct SettingsScreen: View {
         }
     }
 
+    private var themeGroup: some View {
+        SettingsGroup(label: "Theme", systemImage: "paintpalette", accent: settings.themeAccent.color) {
+            SettingsRow(label: "Accent color", helper: "Applied across the app") {
+                HStack(spacing: 8) {
+                    ForEach(ProfileAccent.allCases, id: \.self) { a in
+                        Button { settings.setThemeAccent(a) } label: {
+                            Circle()
+                                .fill(a.color)
+                                .frame(width: 26, height: 26)
+                                .overlay {
+                                    if settings.themeAccent == a {
+                                        Circle().strokeBorder(.white, lineWidth: 2)
+                                            .frame(width: 22, height: 22)
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
     private var dataGroup: some View {
         SettingsGroup(label: "Data", systemImage: "externaldrive", accent: hex("#7aa3cc")) {
+            SettingsActionRow(
+                icon: "square.and.arrow.up",
+                label: "Export backup",
+                value: "\(clubModels.count) clubs",
+                helper: "Save clubs, sessions, and shots as JSON"
+            ) {
+                exportBackup()
+            }
+            SettingsActionRow(
+                icon: "square.and.arrow.down",
+                label: "Import backup",
+                value: "JSON",
+                helper: "Replaces current data with a backup file"
+            ) {
+                importerOpen = true
+            }
             SettingsActionRow(
                 icon: "trash",
                 label: "Clear all data",
@@ -185,10 +240,67 @@ public struct SettingsScreen: View {
         do {
             try repo.deleteAll()
             try ShotsRepo(context: modelContext).deleteAll()
+            try SessionsRepo(context: modelContext).deleteAll()
             status = (.ok, "All data cleared.")
         } catch {
             status = (.err, String(describing: error))
         }
+    }
+
+    private func exportBackup() {
+        let clubs = (try? ClubsRepo(context: modelContext).list()) ?? []
+        let sessions = (try? SessionsRepo(context: modelContext).list()) ?? []
+        let shots = (try? ShotsRepo(context: modelContext).listAll()) ?? []
+        let data = Backup.build(clubs: clubs, sessions: sessions, shots: shots)
+        exportData = ExportFile(data: data)
+    }
+
+    private func importBackup(_ result: Result<URL, Error>) {
+        switch result {
+        case .failure(let e):
+            status = (.err, e.localizedDescription)
+        case .success(let url):
+            guard url.startAccessingSecurityScopedResource() else {
+                status = (.err, "Cannot access file.")
+                return
+            }
+            defer { url.stopAccessingSecurityScopedResource() }
+            do {
+                let data = try Data(contentsOf: url)
+                let parsed = try Backup.parse(data)
+                // Replace all data
+                try ClubsRepo(context: modelContext).deleteAll()
+                try SessionsRepo(context: modelContext).deleteAll()
+                try ShotsRepo(context: modelContext).deleteAll()
+                let clubsRepo = ClubsRepo(context: modelContext)
+                for c in parsed.clubs { try clubsRepo.create(c) }
+                let sessionsRepo = SessionsRepo(context: modelContext)
+                for s in parsed.sessions { try sessionsRepo.create(s) }
+                let shotsRepo = ShotsRepo(context: modelContext)
+                for s in parsed.shots { try shotsRepo.create(s) }
+                status = (.ok, "Imported \(parsed.clubs.count) clubs, \(parsed.sessions.count) sessions, \(parsed.shots.count) shots.")
+            } catch {
+                status = (.err, error.localizedDescription)
+            }
+        }
+    }
+}
+
+// MARK: - File document for export
+
+struct ExportFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+
+    var data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }
 
@@ -217,14 +329,7 @@ private struct SettingsGroup<Content: View>: View {
             VStack(spacing: 0) {
                 content()
             }
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(DesignTokens.card)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(DesignTokens.border, lineWidth: 1)
-                    )
-            )
+            .background(ThemedCardFill(cornerRadius: 16))
         }
         .padding(.top, 8)
     }

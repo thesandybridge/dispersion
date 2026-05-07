@@ -6,6 +6,7 @@ import SwiftUI
 
 public struct BagScreen: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @Query(sort: \ClubModel.carryYards, order: .reverse) private var clubModels: [ClubModel]
     @Query private var allShotModels: [ShotModel]
 
@@ -13,7 +14,11 @@ public struct BagScreen: View {
     @State private var dial     = DialStore.shared
 
     @State private var editingClub: Club?
+    @State private var detailClub: Club?
     @State private var creatingNewClub: Bool = false
+    @State private var subTab: BagSubTab = .bag
+
+    enum BagSubTab { case bag, tag }
 
     public init() {}
 
@@ -21,10 +26,73 @@ public struct BagScreen: View {
     private var shots: [Shot] { allShotModels.map { $0.toValue() } }
     private var unit: DistanceUnit { settings.unit }
 
+    private var isWide: Bool { sizeClass == .regular }
+
     public var body: some View {
         ZStack {
             DesignTokens.fairway50.ignoresSafeArea()
 
+            if isWide {
+                // iPad: side-by-side
+                HStack(spacing: 0) {
+                    bagListColumn
+                        .frame(maxWidth: 420)
+                    if let detail = detailClub {
+                        ClubDetailView(
+                            club: detail,
+                            onBack: { withAnimation { detailClub = nil } },
+                            onEdit: { editingClub = detail }
+                        )
+                        .frame(maxWidth: .infinity)
+                        .transition(.opacity)
+                    } else {
+                        VStack {
+                            Spacer()
+                            Text("Select a club")
+                                .font(DispersionType.ui(15))
+                                .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            } else if let detail = detailClub {
+                // iPhone: full-screen detail
+                ClubDetailView(
+                    club: detail,
+                    onBack: { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { detailClub = nil } },
+                    onEdit: { editingClub = detail }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                bagListColumn
+            }
+        }
+        .preferredColorScheme(.light)
+        .sheet(item: $editingClub) { c in
+            ClubEditSheet(initial: c, onClose: {
+                editingClub = nil
+                if let d = detailClub, d.id == c.id {
+                    detailClub = clubs.first(where: { $0.id == d.id })
+                }
+            })
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(.ultraThinMaterial)
+        }
+        .sheet(isPresented: $creatingNewClub) {
+            ClubEditSheet(initial: nil, onClose: { creatingNewClub = false })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
+        }
+        .onAppear { registerDialActions() }
+    }
+
+    @ViewBuilder
+    private var bagListColumn: some View {
+        switch subTab {
+        case .bag:
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     headerBar
@@ -32,56 +100,108 @@ public struct BagScreen: View {
                         emptyState
                     } else {
                         BagHero(clubs: clubs, unit: unit)
-                        BagInsightStack(clubs: clubs, shots: shots, onOpen: { c in editingClub = c })
+                        BagInsightStack(clubs: clubs, shots: shots, onOpen: { c in withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { detailClub = c } })
+                        if clubs.count >= 2 { gappingSection }
                         clubList
                     }
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
-                .padding(.bottom, 100) // leave room for radial dial
+                .padding(.bottom, 100)
+            }
+        case .tag:
+            VStack(spacing: 0) {
+                headerBar
+                    .padding(.horizontal, 18)
+                    .padding(.top, 16)
+                BagTagView()
             }
         }
-        .preferredColorScheme(.light)
-        .sheet(item: $editingClub) { c in
-            ClubEditSheet(initial: c, onClose: { editingClub = nil })
-                .presentationDetents([.large])
-                .presentationBackground(DesignTokens.cream)
-        }
-        .sheet(isPresented: $creatingNewClub) {
-            ClubEditSheet(initial: nil, onClose: { creatingNewClub = false })
-                .presentationDetents([.large])
-                .presentationBackground(DesignTokens.cream)
-        }
-        .onAppear { registerDialActions() }
     }
 
     private var headerBar: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Your clubs")
-                    .font(DispersionType.mono(10, weight: .medium))
-                    .tracking(2.0)
-                    .textCase(.uppercase)
-                    .foregroundStyle(DesignTokens.soil900.opacity(0.55))
-                Text("My Bag")
-                    .font(DispersionType.display(36, weight: .regular))
-                    .tracking(-0.7)
-                    .foregroundStyle(DesignTokens.soil900)
-            }
-            Spacer()
-            Button {
-                creatingNewClub = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .semibold))
-                    Text("Add club").font(DispersionType.ui(13, weight: .medium))
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Your clubs")
+                        .font(DispersionType.mono(10, weight: .medium))
+                        .tracking(2.0)
+                        .textCase(.uppercase)
+                        .foregroundStyle(DesignTokens.soil900.opacity(0.55))
+                    Text("My Bag")
+                        .font(DispersionType.display(36, weight: .regular))
+                        .tracking(-0.7)
+                        .foregroundStyle(DesignTokens.soil900)
                 }
+                Spacer()
+                Button {
+                    creatingNewClub = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus").font(.system(size: 12, weight: .semibold))
+                        Text("Add club").font(DispersionType.ui(13, weight: .medium))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(DesignTokens.soil900))
+                    .foregroundStyle(DesignTokens.fairway50)
+                }
+                .buttonStyle(.plain)
+                .opacity(subTab == .bag ? 1 : 0)
+                .allowsHitTesting(subTab == .bag)
+            }
+
+            // Sub-tab switcher
+            HStack(spacing: 4) {
+                subTabButton("Bag", tab: .bag)
+                subTabButton("Tag", tab: .tag)
+            }
+        }
+    }
+
+    private func subTabButton(_ label: String, tab: BagSubTab) -> some View {
+        Button { subTab = tab; Haptics.light() } label: {
+            Text(label)
+                .font(DispersionType.ui(13, weight: .medium))
+                .foregroundStyle(subTab == tab ? DesignTokens.fairway50 : DesignTokens.soil900.opacity(0.6))
                 .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Capsule().fill(DesignTokens.soil900))
-                .foregroundStyle(DesignTokens.fairway50)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule().fill(subTab == tab ? DesignTokens.soil900 : DesignTokens.soil900.opacity(0.06))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @State private var gappingExpanded = false
+
+    private var gappingSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { withAnimation { gappingExpanded.toggle() } } label: {
+                HStack {
+                    Text("Carry gapping").eyebrow(color: DesignTokens.soil900.opacity(0.55))
+                    Spacer()
+                    Image(systemName: gappingExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(DesignTokens.soil900.opacity(0.4))
+                }
             }
             .buttonStyle(.plain)
+
+            if gappingExpanded {
+                BagGappingChart(clubs: clubs, unit: unit)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(.white)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(DesignTokens.soil900.opacity(0.07), lineWidth: 1)
+                            )
+                            .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
         }
     }
 
@@ -102,7 +222,7 @@ public struct BagScreen: View {
                     ClubCardRow(
                         club: c,
                         unit: unit,
-                        onOpen: { editingClub = c },
+                        onOpen: { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { detailClub = c } },
                         onEdit: { editingClub = c }
                     )
                 }

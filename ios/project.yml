@@ -30,6 +30,8 @@ settings:
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
     INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    INFOPLIST_KEY_UILaunchStoryboardName: ""
+    ASSETCATALOG_COMPILER_LAUNCHSCREEN_BACKGROUND_COLOR: LaunchBackground
     INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
     INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
     INFOPLIST_KEY_UIUserInterfaceStyle: "Dark"
@@ -46,6 +48,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.dispersion.Dispersion
         INFOPLIST_KEY_CFBundleDisplayName: Dispersion
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   DispersionTests:
     type: bundle.unit-test
     platform: iOS

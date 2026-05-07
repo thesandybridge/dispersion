@@ -13,11 +13,13 @@ public final class SettingsStore {
         static let unit = "settings.unit"
         static let onboardingComplete = "settings.onboardingComplete"
         static let debugOverlay = "settings.debugOverlay"
+        static let themeAccent = "settings.themeAccent"
     }
 
     public var unit: DistanceUnit = .yards
     public var onboardingComplete: Bool = false
     public var debugOverlay: Bool = false
+    public var themeAccent: ProfileAccent = .bentgrass
 
     public init() {
         load()
@@ -30,6 +32,10 @@ public final class SettingsStore {
         }
         onboardingComplete = defaults.bool(forKey: Keys.onboardingComplete)
         debugOverlay = defaults.bool(forKey: Keys.debugOverlay)
+        if let raw = defaults.string(forKey: Keys.themeAccent),
+           let parsed = ProfileAccent(rawValue: raw) {
+            themeAccent = parsed
+        }
     }
 
     public func setUnit(_ u: DistanceUnit) {
@@ -45,6 +51,11 @@ public final class SettingsStore {
     public func setDebugOverlay(_ value: Bool) {
         debugOverlay = value
         defaults.set(value, forKey: Keys.debugOverlay)
+    }
+
+    public func setThemeAccent(_ a: ProfileAccent) {
+        themeAccent = a
+        defaults.set(a.rawValue, forKey: Keys.themeAccent)
     }
 
     public func resetOnboarding() {
