@@ -37,7 +37,7 @@ public struct RangeScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(
-            (tab == .live ? DesignTokens.backgroundDeep : DesignTokens.background)
+            DesignTokens.background
                 .ignoresSafeArea()
         )
         .preferredColorScheme(tab == .live ? .dark : nil)
@@ -128,7 +128,7 @@ struct LiveRangeView: View {
 
     var body: some View {
         ZStack {
-            DesignTokens.backgroundDeep.ignoresSafeArea()
+            DesignTokens.background.ignoresSafeArea()
 
             if let c = club {
                 RangeRadarField(
@@ -173,7 +173,7 @@ struct LiveRangeView: View {
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(DesignTokens.backgroundDeep.opacity(0.9))
+                        .fill(DesignTokens.background.opacity(0.9))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .strokeBorder(DesignTokens.primary.opacity(0.3), lineWidth: 1)

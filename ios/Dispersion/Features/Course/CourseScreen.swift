@@ -73,6 +73,7 @@ public struct CourseScreen: View {
             }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
 
             if courses.isEmpty {
                 Section {
@@ -124,6 +125,7 @@ public struct CourseScreen: View {
                 }
                 .listRowBackground(ThemedCardFill(cornerRadius: 10))
                 .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
             }
 
             Section {

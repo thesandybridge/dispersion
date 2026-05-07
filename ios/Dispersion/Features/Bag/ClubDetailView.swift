@@ -23,14 +23,17 @@ struct ClubDetailView: View {
         ClubCategoryRegistry.categorize(name: club.name, carryYards: club.carryYards) == .putter
     }
 
+    // All valid shots (for total count, outcomes, etc)
     private var allShots: [Shot] {
         let raw = (try? ShotsRepo(context: modelContext).listByClub(club.id, limit: 500)) ?? []
         return raw.filter { abs($0.longDelta) < 100 && abs($0.latDelta) < 100 }
     }
 
+    // Recent 20 shots with landing data — DECADE recommends this window for dispersion
     private var taps: [ShotXY] {
         allShots
             .filter { !($0.longDelta == 0 && $0.latDelta == 0) }
+            .prefix(20)
             .map { ShotXY(lat: $0.latDelta, long: $0.longDelta) }
     }
 

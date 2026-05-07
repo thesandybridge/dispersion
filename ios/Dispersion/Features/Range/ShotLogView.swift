@@ -58,6 +58,7 @@ struct ShotLogView: View {
             }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
 
             // Per-club cards
             let summaries = clubs.compactMap { club -> (Club, ClubShotSummary)? in
@@ -113,6 +114,7 @@ struct ShotLogView: View {
                         .textCase(nil)
                 }
                 .listRowBackground(ThemedCardFill(cornerRadius: 10))
+                .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
             }
         }
         .listStyle(.plain)
