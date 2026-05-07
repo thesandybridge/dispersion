@@ -54,14 +54,22 @@ public struct CourseScreen: View {
     private var courseList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Your courses").eyebrow()
-                    Text("Course Map")
-                        .font(DispersionType.display(36, weight: .regular))
+                // Header
+                HStack(alignment: .center) {
+                    Text("Course")
+                        .font(DispersionType.display(32, weight: .regular))
                         .tracking(-0.7)
                         .foregroundStyle(DesignTokens.foreground)
+                    Spacer()
+                    Button { searchOpen = true } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .semibold))
+                            .padding(10)
+                            .background(Circle().fill(accent))
+                            .foregroundStyle(DesignTokens.primaryForeground)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .padding(.top, 16)
 
                 if courses.isEmpty {
                     VStack(spacing: 12) {
@@ -69,7 +77,7 @@ public struct CourseScreen: View {
                         Text("No courses yet")
                             .font(DispersionType.display(24, weight: .regular))
                             .foregroundStyle(DesignTokens.foreground)
-                        Text("Search for a course to import hole data from OpenStreetMap.")
+                        Text("Search for a course to import hole data from GolfBert.")
                             .font(DispersionType.ui(14))
                             .foregroundStyle(DesignTokens.mutedForeground)
                             .multilineTextAlignment(.center)
@@ -84,11 +92,6 @@ public struct CourseScreen: View {
                     ForEach(courses) { course in
                         Button { selectedCourseId = course.id; Haptics.light() } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "map.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(accent)
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(accent.opacity(0.15)))
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(course.name)
                                         .font(DispersionType.ui(16, weight: .medium))
@@ -99,8 +102,8 @@ public struct CourseScreen: View {
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(DesignTokens.mutedForeground.opacity(0.6))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
                             }
                             .padding(14)
                             .background(ThemedCardFill(cornerRadius: 14))
@@ -116,11 +119,11 @@ public struct CourseScreen: View {
                         }
                     }
                 }
-            }
-            // Round history
-            roundHistory
 
-            .padding(.horizontal, 18)
+                roundHistory
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
             .padding(.bottom, 100)
         }
     }

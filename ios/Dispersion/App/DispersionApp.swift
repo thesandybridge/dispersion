@@ -14,9 +14,21 @@ struct DispersionApp: App {
         }
     }()
 
+    @State private var showSplash = true
+
     var body: some Scene {
         WindowGroup {
-            RootShell()
+            ZStack {
+                RootShell()
+                    .opacity(showSplash ? 0 : 1)
+
+                if showSplash {
+                    SplashScreen {
+                        showSplash = false
+                    }
+                    .transition(.opacity)
+                }
+            }
         }
         .modelContainer(modelContainer)
     }
