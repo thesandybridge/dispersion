@@ -9,7 +9,7 @@ public struct RangeScreen: View {
     @State private var tab: RangeTab = .live
     @State private var openSessionId: String?
 
-    enum RangeTab { case live, history, round }
+    enum RangeTab { case live, history }
 
     public init() {}
 
@@ -32,8 +32,6 @@ public struct RangeScreen: View {
                             openSessionId = id
                         }
                     }
-                case .round:
-                    ScorecardView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -54,9 +52,9 @@ public struct RangeScreen: View {
                     if tab == .live {
                         Circle().fill(DesignTokens.primary).frame(width: 6, height: 6)
                     }
-                    Text(tab == .live ? "Range mode" : tab == .round ? "On course" : "Shot log").eyebrow()
+                    Text(tab == .live ? "Range mode" : "Shot log").eyebrow()
                 }
-                Text(tab == .live ? "Practice" : tab == .round ? "Scorecard" : "History")
+                Text(tab == .live ? "Practice" : "History")
                     .font(DispersionType.display(28, weight: .regular))
                     .tracking(-0.56)
                     .foregroundStyle(tab == .live ? DesignTokens.foreground : DesignTokens.foreground)
@@ -65,7 +63,6 @@ public struct RangeScreen: View {
             HStack(spacing: 4) {
                 tabButton("Live", isActive: tab == .live) { tab = .live; openSessionId = nil; Haptics.light() }
                 tabButton("History", isActive: tab == .history) { tab = .history; openSessionId = nil; Haptics.light() }
-                tabButton("Round", isActive: tab == .round) { tab = .round; Haptics.light() }
             }
         }
         .padding(.horizontal, 18)

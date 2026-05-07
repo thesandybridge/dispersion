@@ -282,7 +282,10 @@ struct ClubDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(DesignTokens.soil900.opacity(0.04))
+                    .fill(.white)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(DesignTokens.soil900.opacity(0.07), lineWidth: 1))
+                .shadow(color: .black.opacity(0.03), radius: 1, y: 1)
             )
         }
     }
@@ -321,7 +324,10 @@ struct ClubDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(DesignTokens.soil900.opacity(0.04))
+                    .fill(.white)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(DesignTokens.soil900.opacity(0.07), lineWidth: 1))
+                .shadow(color: .black.opacity(0.03), radius: 1, y: 1)
             )
         }
     }
@@ -358,7 +364,10 @@ struct ClubDetailView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(DesignTokens.soil900.opacity(0.04))
+                    .fill(.white)
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(DesignTokens.soil900.opacity(0.07), lineWidth: 1))
+                .shadow(color: .black.opacity(0.03), radius: 1, y: 1)
             )
         }
     }

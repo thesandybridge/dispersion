@@ -24,6 +24,7 @@ public enum SampleBag {
         .init(name: "GW",      carryYards: 112, carrySd: 3.4, lateralSd: 5),
         .init(name: "SW",      carryYards: 92,  carrySd: 3.0, lateralSd: 4.5),
         .init(name: "LW",      carryYards: 70,  carrySd: 2.6, lateralSd: 4),
+        .init(name: "Putter",  carryYards: 0,   carrySd: 0.5, lateralSd: 0.5),
     ]
 
     public static func clubs(idGen: () -> String = { UUID().uuidString.lowercased() }) -> [Club] {

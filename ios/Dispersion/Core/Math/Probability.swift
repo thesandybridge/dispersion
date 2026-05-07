@@ -94,6 +94,9 @@ public enum Probability {
     public static func rankClubs(_ clubs: [Club], scenario: ShotScenario) -> [ClubResult] {
         var results: [ClubResult] = []
         for c in clubs {
+            // Skip putter from approach rankings
+            let cat = ClubCategoryRegistry.categorize(name: c.name, carryYards: c.carryYards)
+            if cat == .putter { continue }
             for swing in swingsForClub(c) {
                 var virtual = c
                 virtual.carryYards = c.carryYards * swing.carryMultiplier
