@@ -64,8 +64,7 @@ struct MapBuilderView: View {
             }
         }
         .background(DesignTokens.backgroundDeep.ignoresSafeArea())
-        .preferredColorScheme(.dark)
-        .onAppear {
+                .onAppear {
             loadAllHoleInfos()
             loadHolePolygons()
             flyToHole()
@@ -455,8 +454,7 @@ struct MapBuilderView: View {
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(.ultraThinMaterial)
-                    .environment(\.colorScheme, .dark)
-            )
+                                )
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
         }

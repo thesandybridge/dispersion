@@ -26,8 +26,7 @@ struct DebugOverlay: View {
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
-        )
+                        )
         .padding(.leading, 8)
         .padding(.top, 52)
         .allowsHitTesting(false)

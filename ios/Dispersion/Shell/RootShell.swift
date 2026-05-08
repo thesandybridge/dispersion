@@ -24,6 +24,7 @@ public struct RootShell: View {
             }
         }
         .themeAccent(settings.themeAccent.color)
+        .preferredColorScheme(settings.appearance.colorScheme)
         .animation(.easeInOut(duration: 0.25), value: settings.onboardingComplete)
         // EmptyBagGuard: kick the user back to .bag if they're on a protected
         // route with zero clubs.

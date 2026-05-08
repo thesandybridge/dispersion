@@ -233,8 +233,7 @@ public struct HoleMapView: View {
                         .background(
                             Capsule()
                                 .fill(.ultraThinMaterial)
-                                .environment(\.colorScheme, .dark)
-                        )
+                                                        )
                     }
                     .buttonStyle(.plain)
                 }

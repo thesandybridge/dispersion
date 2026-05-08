@@ -46,8 +46,7 @@ public struct CourseScreen: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
-        .dispersionSheet(isPresented: $searchOpen, detents: [.large]) {
+                .dispersionSheet(isPresented: $searchOpen, detents: [.large]) {
             CourseSearchSheet(
                 onImport: { course in
                     selectedCourseId = course.id

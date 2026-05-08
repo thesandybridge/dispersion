@@ -45,8 +45,7 @@ public struct BagScreen: View {
                     .toolbar(.hidden, for: .navigationBar)
                 }
         }
-        .preferredColorScheme(.dark)
-        .sheet(item: $editingClub) { c in
+                .sheet(item: $editingClub) { c in
             ClubEditSheet(initial: c, onClose: { editingClub = nil })
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)

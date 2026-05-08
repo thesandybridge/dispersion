@@ -175,8 +175,7 @@ struct CoursePlayView: View {
         }
         .fullScreenCover(isPresented: $showRoundSummary) {
             roundCompletionScreen
-                .preferredColorScheme(.dark)
-        }
+                        }
     }
 
     // MARK: - Top bar
@@ -391,8 +390,7 @@ struct CoursePlayView: View {
                         .background(
                             Capsule()
                                 .fill(.ultraThinMaterial)
-                                .environment(\.colorScheme, .dark)
-                        )
+                                                        )
                     }
                     Spacer()
                 }

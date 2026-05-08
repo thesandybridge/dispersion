@@ -76,8 +76,7 @@ struct RoundHistoryView: View {
                 .padding(.horizontal, 20)
             }
         }
-        .preferredColorScheme(.dark)
-        .onAppear { loadRounds() }
+                .onAppear { loadRounds() }
     }
 
     // MARK: - Trends

@@ -1,11 +1,40 @@
-// Mirror of the Tailwind @theme tokens in app/src/index.css. Stays in pure
-// Swift so the design system is reachable from previews and tests without an
-// asset catalog.
+// Design tokens with automatic dark/light mode resolution.
+// Uses UIColor trait collection so DesignTokens.background resolves
+// correctly without any call-site changes.
 
 import SwiftUI
+import UIKit
+
+// MARK: - Adaptive color helper
+
+private func adaptive(dark: String, light: String) -> Color {
+    Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark ? uiHex(dark) : uiHex(light)
+    })
+}
+
+private func adaptive(dark: UIColor, light: UIColor) -> Color {
+    Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark ? dark : light
+    })
+}
+
+private func uiHex(_ s: String) -> UIColor {
+    var h = s
+    if h.hasPrefix("#") { h.removeFirst() }
+    var rgb: UInt64 = 0
+    Scanner(string: h).scanHexInt64(&rgb)
+    return UIColor(
+        red: CGFloat((rgb >> 16) & 0xFF) / 255,
+        green: CGFloat((rgb >> 8) & 0xFF) / 255,
+        blue: CGFloat(rgb & 0xFF) / 255, alpha: 1
+    )
+}
+
+// MARK: - Design tokens
 
 public enum DesignTokens {
-    // Brand palette
+    // Brand palette (fixed — same in both modes)
     public static let fairway50      = hex("#f4efe3")
     public static let bentgrass      = hex("#62b375")
     public static let fairwayShadow  = hex("#2c8a5e")
@@ -18,7 +47,7 @@ public enum DesignTokens {
     public static let ink            = hex("#0e1a13")
     public static let cream          = hex("#f6f1e1")
 
-    // Probability heatmap
+    // Probability heatmap (fixed)
     public static let heat0 = hex("#0b3d2e")
     public static let heat1 = hex("#16624a")
     public static let heat2 = hex("#2c8a5e")
@@ -26,36 +55,54 @@ public enum DesignTokens {
     public static let heat4 = hex("#a9d18e")
     public static let heat5 = hex("#f0e7b8")
 
-    // Probability label palette
+    // Probability label palette (fixed)
     public static let pStrong   = hex("#62b375")
     public static let pFavored  = hex("#a9d18e")
     public static let pMarginal = hex("#e6c068")
     public static let pPoor     = hex("#c87060")
     public static let danger    = hex("#a23939")
 
-    // Semantic (dark default)
-    public static let background          = hex("#0e1a13")
-    public static let backgroundDeep      = hex("#070d0a")
-    public static let foreground          = hex("#f6f1e1")
-    public static let card                = hex("#16201a")
-    public static let cardForeground      = hex("#f6f1e1")
-    public static let popover             = hex("#1a2419")
-    public static let primary             = hex("#a9d18e")
-    public static let primaryForeground   = hex("#0a1410")
-    public static let secondary           = hex("#1f2a23")
-    public static let secondaryForeground = hex("#f6f1e1")
-    public static let muted               = hex("#1a2419")
-    public static let accent              = hex("#62b375")
-    public static let accentForeground    = hex("#0a1410")
-    public static let destructive         = hex("#e85d4d")
+    // Semantic — adaptive dark/light
+    public static let background          = adaptive(dark: "#0e1a13", light: "#f8f6f0")
+    public static let backgroundDeep      = adaptive(dark: "#070d0a", light: "#f0ece4")
+    public static let foreground          = adaptive(dark: "#f6f1e1", light: "#1a2419")
+    public static let card                = adaptive(dark: "#16201a", light: "#ffffff")
+    public static let cardForeground      = adaptive(dark: "#f6f1e1", light: "#1a2419")
+    public static let popover             = adaptive(dark: "#1a2419", light: "#f4f2ec")
+    public static let primary             = adaptive(dark: "#a9d18e", light: "#4a8a3c")
+    public static let primaryForeground   = adaptive(dark: "#0a1410", light: "#ffffff")
+    public static let secondary           = adaptive(dark: "#1f2a23", light: "#e8e4dc")
+    public static let secondaryForeground = adaptive(dark: "#f6f1e1", light: "#1a2419")
+    public static let muted               = adaptive(dark: "#1a2419", light: "#e8e4dc")
+    public static let accent              = adaptive(dark: "#62b375", light: "#3a7a4c")
+    public static let accentForeground    = adaptive(dark: "#0a1410", light: "#ffffff")
+    public static let destructive         = adaptive(dark: "#e85d4d", light: "#d44030")
 
-    // Translucent system used for hairlines, surface tiers
-    public static let border               = Color.white.opacity(0.10)
-    public static let borderStrong         = Color.white.opacity(0.18)
-    public static let surface              = Color.white.opacity(0.04)
-    public static let surfaceStrong        = Color.white.opacity(0.07)
-    public static let mutedForeground      = Color.white.opacity(0.55)
-    public static let subtleForeground     = Color.white.opacity(0.40)
+    // Translucent — flip white/black based on mode
+    public static let border = adaptive(
+        dark: UIColor.white.withAlphaComponent(0.10),
+        light: UIColor.black.withAlphaComponent(0.10)
+    )
+    public static let borderStrong = adaptive(
+        dark: UIColor.white.withAlphaComponent(0.18),
+        light: UIColor.black.withAlphaComponent(0.18)
+    )
+    public static let surface = adaptive(
+        dark: UIColor.white.withAlphaComponent(0.04),
+        light: UIColor.black.withAlphaComponent(0.03)
+    )
+    public static let surfaceStrong = adaptive(
+        dark: UIColor.white.withAlphaComponent(0.07),
+        light: UIColor.black.withAlphaComponent(0.06)
+    )
+    public static let mutedForeground = adaptive(
+        dark: UIColor.white.withAlphaComponent(0.55),
+        light: UIColor.black.withAlphaComponent(0.55)
+    )
+    public static let subtleForeground = adaptive(
+        dark: UIColor.white.withAlphaComponent(0.40),
+        light: UIColor.black.withAlphaComponent(0.40)
+    )
 
     public enum Radius {
         public static let sm: CGFloat = 6
@@ -119,8 +166,6 @@ public struct ThemedCardFill: View {
 
 // MARK: Interactive pop gesture fix
 
-/// Re-enables the native iOS interactive pop gesture when the navigation
-/// bar is hidden. Apply to any view inside a NavigationStack.
 public struct InteractivePopGesture: UIViewControllerRepresentable {
     public func makeUIViewController(context: Context) -> UIViewController {
         InteractivePopController()

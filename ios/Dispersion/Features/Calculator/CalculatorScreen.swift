@@ -202,8 +202,7 @@ public struct CalculatorScreen: View {
             }
             .padding(.bottom, 8)
         }
-        .preferredColorScheme(.dark)
-        .dispersionSheet(isPresented: $zoneOpen) {
+                .dispersionSheet(isPresented: $zoneOpen) {
             ZoneSheet()
         }
         .dispersionSheet(isPresented: $logOpen, detents: [.large]) {

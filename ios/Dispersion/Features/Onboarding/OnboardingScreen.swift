@@ -48,8 +48,7 @@ public struct OnboardingScreen: View {
                     .padding(.bottom, 20)
             }
         }
-        .preferredColorScheme(.dark)
-    }
+            }
 
     // MARK: - Progress
 

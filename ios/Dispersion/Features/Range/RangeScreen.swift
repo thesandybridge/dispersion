@@ -39,8 +39,7 @@ public struct RangeScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(DesignTokens.background.ignoresSafeArea())
-        .preferredColorScheme(.dark)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
         .onAppear {
             tab = .live
             historyPath = NavigationPath()
@@ -283,8 +282,7 @@ struct LiveRangeView: View {
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
-        )
+                        )
     }
 
     private func liveStatsCard(_ club: Club) -> some View {
@@ -309,8 +307,7 @@ struct LiveRangeView: View {
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
-        )
+                        )
     }
 
     private func deltaCell(label: String, value: Double, delta: Double) -> some View {
@@ -514,8 +511,7 @@ struct LiveRangeView: View {
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
-        )
+                        )
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
     }

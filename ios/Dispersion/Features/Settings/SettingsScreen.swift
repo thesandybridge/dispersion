@@ -81,8 +81,7 @@ public struct SettingsScreen: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
-        .alert("Replace bag with sample?", isPresented: $seedConfirm) {
+                .alert("Replace bag with sample?", isPresented: $seedConfirm) {
             Button("Replace") { seedSampleBag() }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -140,6 +139,15 @@ public struct SettingsScreen: View {
 
     private var unitsGroup: some View {
         SettingsGroup(label: "Preferences", systemImage: "ruler", accent: DesignTokens.primary) {
+            SettingsRow(label: "Appearance", helper: "Follow system or force dark/light") {
+                DToggleGroup(
+                    options: AppAppearance.allCases.map { DToggleOption(value: $0, label: $0.label) },
+                    selection: Binding(
+                        get: { settings.appearance },
+                        set: { if let v = $0 { settings.setAppearance(v) } }
+                    )
+                )
+            }
             SettingsRow(label: "Distance", helper: "Used everywhere yardage is shown") {
                 DToggleGroup(
                     options: [
