@@ -67,6 +67,7 @@ struct BagTagView: View {
                     scene: scene,
                     options: [.allowsCameraControl, .autoenablesDefaultLighting]
                 )
+                .background(Color.clear)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -113,13 +114,7 @@ struct BagTagView: View {
             }
             .padding(.bottom, 12)
         }
-        .background(
-            LinearGradient(
-                colors: [DesignTokens.ink, DesignTokens.pine.opacity(0.2), DesignTokens.backgroundDeep],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-        )
+        .background(DesignTokens.background.ignoresSafeArea())
         .onAppear { buildScene() }
         .onChange(of: profile.name) { _, _ in buildScene() }
         .onChange(of: profile.accent) { _, _ in buildScene() }
@@ -137,7 +132,7 @@ struct BagTagView: View {
     @MainActor
     private func buildScene() {
         let scn = SCNScene()
-        scn.background.contents = UIColor(red: 0.07, green: 0.09, blue: 0.08, alpha: 1)
+        scn.background.contents = UIColor(DesignTokens.background)
 
         let tagW: CGFloat = 3.0
         let tagH: CGFloat = 4.8
@@ -173,44 +168,52 @@ struct BagTagView: View {
         backMat.metalness.contents = 0.8
         backMat.roughness.contents = 0.35
         backMat.diffuse.contents = renderBackTexture()
-        backMat.diffuse.contentsTransform = SCNMatrix4MakeScale(-1, 1, 1)
-        backMat.diffuse.wrapS = .clamp
-        backMat.diffuse.wrapT = .clamp
 
-        // Try both orderings — SCNShape: [side, front, back]
-        shape.materials = [edgeMat, frontMat, backMat]
+        // SCNShape materials: [front cap, back cap, extruded side]
+        shape.materials = [frontMat, backMat, edgeMat]
 
         let tagNode = SCNNode(geometry: shape)
         scn.rootNode.addChildNode(tagNode)
 
         // Camera
         let cam = SCNCamera()
-        cam.fieldOfView = 35
+        cam.fieldOfView = 32
         let camNode = SCNNode()
         camNode.camera = cam
         camNode.position = SCNVector3(0, 0, 10)
         scn.rootNode.addChildNode(camNode)
 
-        // Lights
+        // Bright, well-balanced lighting
         let key = SCNLight()
         key.type = .directional
-        key.intensity = 900
+        key.intensity = 1400
+        key.color = UIColor(white: 1.0, alpha: 1)
         let keyNode = SCNNode()
         keyNode.light = key
-        keyNode.eulerAngles = SCNVector3(-0.4, 0.6, 0)
+        keyNode.eulerAngles = SCNVector3(-0.3, 0.5, 0)
         scn.rootNode.addChildNode(keyNode)
 
         let fill = SCNLight()
         fill.type = .directional
-        fill.intensity = 350
+        fill.intensity = 800
+        fill.color = UIColor(white: 0.95, alpha: 1)
         let fillNode = SCNNode()
         fillNode.light = fill
-        fillNode.eulerAngles = SCNVector3(0.3, -0.5, 0)
+        fillNode.eulerAngles = SCNVector3(0.2, -0.6, 0)
         scn.rootNode.addChildNode(fillNode)
+
+        let back = SCNLight()
+        back.type = .directional
+        back.intensity = 500
+        let backNode = SCNNode()
+        backNode.light = back
+        backNode.eulerAngles = SCNVector3(0.4, Float.pi, 0)
+        scn.rootNode.addChildNode(backNode)
 
         let ambient = SCNLight()
         ambient.type = .ambient
-        ambient.intensity = 250
+        ambient.intensity = 500
+        ambient.color = UIColor(white: 0.8, alpha: 1)
         let ambNode = SCNNode()
         ambNode.light = ambient
         scn.rootNode.addChildNode(ambNode)
@@ -250,13 +253,9 @@ struct BagTagView: View {
         let initials = computeInitials(profile.name)
 
         return ZStack {
-            // Topo golf hole etching — bottom right
-            golfHoleTopo
-                .frame(width: 160, height: 200)
-                .opacity(0.06)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .padding(.trailing, 10)
-                .padding(.bottom, 20)
+            // Topo contour lines — flows across lower-right
+            topoLines
+                .opacity(0.07)
 
             VStack(alignment: .leading, spacing: 0) {
                 // Header
@@ -282,7 +281,7 @@ struct BagTagView: View {
 
                 // Name
                 Text(profile.name.isEmpty ? "YOUR NAME" : profile.name.uppercased())
-                    .font(.system(size: 24, weight: .thin))
+                    .font(profile.font.font(size: 24, weight: .thin))
                     .tracking(4)
                     .foregroundStyle(Color.white.opacity(material.textOpacity))
                     .lineLimit(2)
@@ -327,11 +326,7 @@ struct BagTagView: View {
 
     private var backFaceContent: some View {
         ZStack {
-            golfHoleTopo
-                .frame(width: 200, height: 260)
-                .opacity(0.05)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .offset(y: -20)
+            topoLines.opacity(0.06)
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 60)
@@ -381,48 +376,63 @@ struct BagTagView: View {
         }
     }
 
-    // MARK: - Golf hole topo etching
+    // MARK: - Abstract topo lines
 
-    private var golfHoleTopo: some View {
+    /// Etched topo — flag in the bottom-right corner with smooth contour
+    /// lines radiating outward. Lines run right to the tag edge and are
+    /// masked with a radial gradient so they fade naturally from the flag.
+    private var topoLines: some View {
         Canvas { ctx, size in
             let w = size.width, h = size.height
 
-            // Fairway shape — narrow at top (tee), widens, then narrows to green
-            for offset in stride(from: 0.0, through: 20.0, by: 3.0) {
-                let o = offset
+            // Flag position — bottom-right area
+            let flagX = w * 0.78
+            let flagY = h * 0.88
+
+            // Flag pin
+            let poleH = h * 0.08
+            var pole = Path()
+            pole.move(to: CGPoint(x: flagX, y: flagY))
+            pole.addLine(to: CGPoint(x: flagX, y: flagY - poleH))
+            ctx.stroke(pole, with: .color(.white), lineWidth: 0.6)
+
+            // Flag pennant
+            let ft = CGPoint(x: flagX, y: flagY - poleH)
+            var flag = Path()
+            flag.move(to: ft)
+            flag.addLine(to: CGPoint(x: ft.x + w * 0.035, y: ft.y + h * 0.015))
+            flag.addLine(to: CGPoint(x: ft.x, y: ft.y + h * 0.028))
+            flag.closeSubpath()
+            ctx.fill(flag, with: .color(.white))
+
+            // Green ovals around the flag
+            for ring in 0..<3 {
+                let r = w * 0.07 + Double(ring) * w * 0.018
+                let circle = Path(ellipseIn: CGRect(
+                    x: flagX - r, y: flagY - r * 0.8,
+                    width: r * 2, height: r * 1.6
+                ))
+                ctx.stroke(circle, with: .color(.white.opacity(0.9 - Double(ring) * 0.25)), lineWidth: 0.4)
+            }
+
+            // Smooth contour arcs — single path per line, clipped by the canvas
+            for i in 0..<12 {
+                let t = Double(i)
+                let spread = (t + 3) * w * 0.035
                 var path = Path()
-                // Tee area (top)
-                path.move(to: CGPoint(x: w * 0.4 - o * 0.3, y: 0))
-                // Left side curves out
-                path.addCurve(
-                    to: CGPoint(x: w * 0.15 - o * 0.5, y: h * 0.45),
-                    control1: CGPoint(x: w * 0.35 - o * 0.4, y: h * 0.15),
-                    control2: CGPoint(x: w * 0.1 - o * 0.5, y: h * 0.3)
-                )
-                // Narrows toward green
-                path.addCurve(
-                    to: CGPoint(x: w * 0.35 - o * 0.2, y: h * 0.82),
-                    control1: CGPoint(x: w * 0.18 - o * 0.4, y: h * 0.6),
-                    control2: CGPoint(x: w * 0.25 - o * 0.3, y: h * 0.72)
-                )
-                // Green circle area
-                path.addCurve(
-                    to: CGPoint(x: w * 0.65 + o * 0.2, y: h * 0.82),
-                    control1: CGPoint(x: w * 0.38 - o * 0.1, y: h * 0.95 + o * 0.3),
-                    control2: CGPoint(x: w * 0.62 + o * 0.1, y: h * 0.95 + o * 0.3)
-                )
-                // Right side back up
-                path.addCurve(
-                    to: CGPoint(x: w * 0.85 + o * 0.5, y: h * 0.45),
-                    control1: CGPoint(x: w * 0.75 + o * 0.3, y: h * 0.72),
-                    control2: CGPoint(x: w * 0.82 + o * 0.4, y: h * 0.6)
-                )
-                path.addCurve(
-                    to: CGPoint(x: w * 0.6 + o * 0.3, y: 0),
-                    control1: CGPoint(x: w * 0.9 + o * 0.5, y: h * 0.3),
-                    control2: CGPoint(x: w * 0.65 + o * 0.4, y: h * 0.15)
-                )
-                path.closeSubpath()
+                let steps = 120
+                for s in 0...steps {
+                    let frac = Double(s) / Double(steps)
+                    let angle = Double.pi * (0.15 + frac * 1.7)
+                    let baseR = spread + sin(frac * .pi) * spread * 0.12
+                    let wobble = sin(frac * .pi * 4.5 + t * 1.3) * w * 0.005
+
+                    let x = flagX + cos(angle) * (baseR + wobble)
+                    let y = flagY + sin(angle) * (baseR + wobble) * 0.75
+
+                    if s == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                    else { path.addLine(to: CGPoint(x: x, y: y)) }
+                }
 
                 ctx.stroke(path, with: .color(.white), lineWidth: 0.5)
             }

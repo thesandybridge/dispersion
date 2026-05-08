@@ -146,6 +146,7 @@ public struct BagScreen: View {
                 headerBar.padding(.horizontal, 16).padding(.top, 12)
                 BagTagView()
             }
+            .background(DesignTokens.background)
         }
     }
 
