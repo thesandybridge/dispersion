@@ -16,6 +16,8 @@ public struct SettingsScreen: View {
     @State private var importerOpen: Bool = false
     @State private var exportData: ExportFile?
     @State private var status: (kind: StatusKind, text: String)?
+    @State private var devTapCount: Int = 0
+    @State private var showDev: Bool = false
 
     private enum StatusKind { case ok, err }
 
@@ -31,8 +33,9 @@ public struct SettingsScreen: View {
                     VStack(alignment: .leading, spacing: 16) {
                         unitsGroup
                         themeGroup
+                        storageGroup
                         dataGroup
-                        developerGroup
+                        if showDev { developerGroup }
                         if let status {
                             Text(status.text)
                                 .font(DispersionType.ui(12))
@@ -56,11 +59,21 @@ public struct SettingsScreen: View {
                                 .foregroundStyle(status.kind == .ok ? DesignTokens.primary : DesignTokens.destructive)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        Text("Dispersion v0.1.0 · iOS native build")
-                            .font(DispersionType.mono(11))
-                            .foregroundStyle(DesignTokens.mutedForeground)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.top, 24)
+                        Button {
+                            devTapCount += 1
+                            if devTapCount >= 7 && !showDev {
+                                showDev = true
+                                Haptics.success()
+                                status = (.ok, "Developer mode enabled.")
+                            }
+                        } label: {
+                            Text("Dispersion v0.1.0 · iOS native build")
+                                .font(DispersionType.mono(11))
+                                .foregroundStyle(DesignTokens.mutedForeground)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.top, 24)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
@@ -114,7 +127,8 @@ public struct SettingsScreen: View {
                     .font(DispersionType.display(40, weight: .regular))
                     .tracking(-1)
                     .foregroundStyle(DesignTokens.foreground)
-                Text("Local-only · v0.1 · \(clubModels.count) clubs")
+                let shotCount = (try? ShotsRepo(context: modelContext).countAll()) ?? 0
+                Text("Local-only · \(clubModels.count) clubs · \(shotCount) shots")
                     .font(DispersionType.mono(11))
                     .foregroundStyle(DesignTokens.mutedForeground)
             }
@@ -176,13 +190,60 @@ public struct SettingsScreen: View {
         }
     }
 
+    private var storageGroup: some View {
+        let shotCount = (try? ShotsRepo(context: modelContext).countAll()) ?? 0
+        let sessionCount = ((try? SessionsRepo(context: modelContext).list()) ?? []).count
+        let courseCount = ((try? CoursesRepo(context: modelContext).list()) ?? []).count
+        let roundCount = ((try? CoursesRepo(context: modelContext).rounds()) ?? []).count
+        let dbSize = databaseSize()
+
+        return SettingsGroup(label: "Storage", systemImage: "internaldrive", accent: DesignTokens.primary) {
+            SettingsRow(label: "Database size", helper: nil) {
+                Text(dbSize).font(DispersionType.mono(12)).foregroundStyle(DesignTokens.foreground)
+            }
+            SettingsRow(label: "Clubs", helper: nil) {
+                Text("\(clubModels.count)").font(DispersionType.mono(12)).foregroundStyle(DesignTokens.foreground)
+            }
+            SettingsRow(label: "Shots logged", helper: nil) {
+                Text("\(shotCount)").font(DispersionType.mono(12)).foregroundStyle(DesignTokens.foreground)
+            }
+            SettingsRow(label: "Sessions", helper: nil) {
+                Text("\(sessionCount)").font(DispersionType.mono(12)).foregroundStyle(DesignTokens.foreground)
+            }
+            SettingsRow(label: "Courses", helper: nil) {
+                Text("\(courseCount)").font(DispersionType.mono(12)).foregroundStyle(DesignTokens.foreground)
+            }
+            SettingsRow(label: "Rounds played", helper: nil) {
+                Text("\(roundCount)").font(DispersionType.mono(12)).foregroundStyle(DesignTokens.foreground)
+            }
+        }
+    }
+
+    private func databaseSize() -> String {
+        guard let url = modelContext.container.configurations.first?.url else { return "—" }
+        let fm = FileManager.default
+        var total: Int64 = 0
+        // SwiftData uses SQLite with WAL — check main + WAL + SHM files
+        for suffix in ["", "-wal", "-shm"] {
+            let path = url.path + suffix
+            if let attrs = try? fm.attributesOfItem(atPath: path),
+               let size = attrs[.size] as? Int64 {
+                total += size
+            }
+        }
+        if total == 0 { return "—" }
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: total)
+    }
+
     private var dataGroup: some View {
         SettingsGroup(label: "Data", systemImage: "externaldrive", accent: hex("#7aa3cc")) {
             SettingsActionRow(
                 icon: "square.and.arrow.up",
                 label: "Export backup",
-                value: "\(clubModels.count) clubs",
-                helper: "Save clubs, sessions, and shots as JSON"
+                value: "Full",
+                helper: "Clubs, shots, courses, rounds — everything as JSON"
             ) {
                 exportBackup()
             }
@@ -190,7 +251,7 @@ public struct SettingsScreen: View {
                 icon: "square.and.arrow.down",
                 label: "Import backup",
                 value: "JSON",
-                helper: "Replaces current data with a backup file"
+                helper: "Replaces all data with a backup file"
             ) {
                 importerOpen = true
             }
