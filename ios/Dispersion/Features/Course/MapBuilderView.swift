@@ -39,6 +39,7 @@ struct MapBuilderView: View {
     @State private var traceSurface: SurfaceType = .fairway
     @State private var selectedPolygonId: String?
     @State private var selectedVertexIndex: Int?
+    @State private var editUndoStack: [[Coord]] = []  // previous states of the polygon being edited
 
     // Tee/pin editing
     @State private var selectedTeeColor: String = "white"
@@ -215,23 +216,27 @@ struct MapBuilderView: View {
             // Vertex handles for selected polygon
             if let selId = selectedPolygonId,
                let selPoly = holePolygons.first(where: { $0.id == selId }) {
-                ForEach(Array(selPoly.coordinates.enumerated()), id: \.offset) { i, coord in
+                // Show every Nth vertex to avoid Metal crash with many annotations
+                let coords = selPoly.coordinates
+                let step = max(1, coords.count / 40)
+                ForEach(Array(stride(from: 0, to: coords.count, by: step)), id: \.self) { i in
+                    let coord = coords[i]
                     Annotation("", coordinate: CLLocationCoordinate2D(latitude: coord.lat, longitude: coord.lng)) {
-                        let isActiveVertex = selectedVertexIndex == i
-                        ZStack {
-                            Circle()
-                                .fill(isActiveVertex ? Color.white : fillColor(selPoly.surface))
-                                .frame(width: isActiveVertex ? 16 : 10, height: isActiveVertex ? 16 : 10)
-                            if isActiveVertex {
-                                Circle()
-                                    .strokeBorder(fillColor(selPoly.surface), lineWidth: 2)
-                                    .frame(width: 16, height: 16)
+                        let isActive = selectedVertexIndex == i
+                        Circle()
+                            .fill(isActive ? Color.white : fillColor(selPoly.surface))
+                            .frame(width: isActive ? 18 : 10, height: isActive ? 18 : 10)
+                            .overlay {
+                                if isActive {
+                                    Circle().strokeBorder(fillColor(selPoly.surface), lineWidth: 2.5)
+                                        .frame(width: 18, height: 18)
+                                }
                             }
-                        }
-                        .onTapGesture {
-                            selectedVertexIndex = (selectedVertexIndex == i) ? nil : i
-                            Haptics.light()
-                        }
+                            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+                            .onTapGesture {
+                                selectedVertexIndex = (selectedVertexIndex == i) ? nil : i
+                                Haptics.medium()
+                            }
                     }
                 }
             }
@@ -309,6 +314,14 @@ struct MapBuilderView: View {
             if step == .draw, !currentPoints.isEmpty {
                 previewCoord = coord
             }
+        }
+        .onLongPressGesture(minimumDuration: 0.4, pressing: { pressing in
+            if pressing && step == .draw {
+                Haptics.light()  // feedback that press is recognized
+            }
+        }) {
+            guard step == .draw else { return }
+            selectPolygonAtCrosshair()
         }
         } // MapReader
     }
@@ -572,8 +585,134 @@ struct MapBuilderView: View {
     // MARK: Draw toolbar
 
     private var drawToolbar: some View {
+        Group {
+            if selectedPolygonId != nil {
+                editPolygonToolbar
+            } else {
+                drawNewToolbar
+            }
+        }
+    }
+
+    private var editPolygonToolbar: some View {
         VStack(spacing: 8) {
-            // Surface type selector — full width
+            // Edit mode header
+            let polyName = holePolygons.first(where: { $0.id == selectedPolygonId })?.surface.rawValue.capitalized ?? "Polygon"
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "pencil").font(.system(size: 11))
+                    Text("Editing \(polyName)")
+                        .font(DispersionType.mono(10, weight: .medium))
+                }
+                Spacer()
+                let vtxCount = holePolygons.first(where: { $0.id == selectedPolygonId })?.coordinates.count ?? 0
+                Text("\(vtxCount) pts")
+                    .font(DispersionType.mono(9))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+            }
+
+            if selectedVertexIndex != nil {
+                // Vertex selected — place or delete
+                HStack(spacing: 8) {
+                    Button {
+                        guard let coord = crosshairCoord else { return }
+                        pushEditUndo()
+                        moveVertex(to: coord)
+                        selectedVertexIndex = nil
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "scope").font(.system(size: 12))
+                            Text("Place here")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.dispersion(.primary))
+
+                    Button {
+                        pushEditUndo()
+                        deleteVertex()
+                    } label: {
+                        Image(systemName: "minus.circle").font(.system(size: 14))
+                    }
+                    .buttonStyle(.dispersion(.ghost, size: .icon))
+                }
+                Text("Pan crosshair to new position")
+                    .font(DispersionType.mono(8))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+            } else {
+                // No vertex selected — insert or tap one
+                HStack(spacing: 8) {
+                    Button {
+                        pushEditUndo()
+                        insertVertex()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle").font(.system(size: 12))
+                            Text("Insert point")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.dispersion(.solid))
+
+                    if !editUndoStack.isEmpty {
+                        Button { editUndo() } label: {
+                            Image(systemName: "arrow.uturn.backward").font(.system(size: 13))
+                        }
+                        .buttonStyle(.dispersion(.ghost, size: .icon))
+                    }
+                }
+                Text("Tap a vertex to move it")
+                    .font(DispersionType.mono(8))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+            }
+
+            // Save / Cancel
+            HStack(spacing: 8) {
+                Button {
+                    selectedPolygonId = nil
+                    selectedVertexIndex = nil
+                    editUndoStack = []
+                    Haptics.light()
+                } label: {
+                    Text("Done").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.dispersion(.solid))
+
+                Button {
+                    deletePolygon(id: selectedPolygonId!)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "trash").font(.system(size: 11))
+                        Text("Delete")
+                    }
+                }
+                .buttonStyle(.dispersion(.destructive, size: .sm))
+            }
+        }
+    }
+
+    private func pushEditUndo() {
+        guard let selId = selectedPolygonId,
+              let poly = holePolygons.first(where: { $0.id == selId }) else { return }
+        editUndoStack.append(poly.coordinates)
+    }
+
+    private func editUndo() {
+        guard let selId = selectedPolygonId,
+              let polyIdx = holePolygons.firstIndex(where: { $0.id == selId }),
+              let prev = editUndoStack.popLast() else { return }
+        holePolygons[polyIdx].coordinates = prev
+        let updated = holePolygons[polyIdx]
+        let repo = CoursesRepo(context: modelContext)
+        try? repo.deletePolygon(id: selId)
+        try? repo.insertPolygons([updated])
+        selectedVertexIndex = nil
+        Haptics.light()
+    }
+
+    private var drawNewToolbar: some View {
+        VStack(spacing: 8) {
+            // Surface type selector
             HStack(spacing: 5) {
                 ForEach([SurfaceType.fairway, .green, .bunker, .water, .rough, .tee], id: \.self) { surface in
                     Button {
@@ -598,7 +737,6 @@ struct MapBuilderView: View {
                 }
             }
 
-
             if quickEdit {
                 // Auto-fill mode
                 Button {
@@ -616,6 +754,10 @@ struct MapBuilderView: View {
                 }
                 .buttonStyle(.dispersion(.primary))
                 .disabled(filling)
+
+                Text("Long-press map to select & edit a polygon")
+                    .font(DispersionType.mono(8))
+                    .foregroundStyle(DesignTokens.mutedForeground)
 
                 HStack(spacing: 8) {
                     Text("Sensitivity").font(DispersionType.mono(9)).foregroundStyle(DesignTokens.mutedForeground)
@@ -698,65 +840,36 @@ struct MapBuilderView: View {
                     }
                 }
 
-                // Vertex editing — when a polygon is selected and a vertex is tapped
-                if selectedPolygonId != nil, let vi = selectedVertexIndex {
-                    HStack(spacing: 8) {
+                // Polygon management (only when not editing)
+                if !holePolygons.isEmpty {
+                    HStack(spacing: 6) {
                         Button {
-                            guard let coord = crosshairCoord else { return }
-                            moveVertex(to: coord)
+                            if let last = holePolygons.last { deletePolygon(id: last.id) }
                         } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-                                    .font(.system(size: 12))
-                                Text("Move pt \(vi + 1)")
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.dispersion(.primary))
-
-                        Button { deleteVertex() } label: {
-                            Image(systemName: "minus.circle").font(.system(size: 14))
+                            Image(systemName: "arrow.uturn.backward").font(.system(size: 12))
                         }
                         .buttonStyle(.dispersion(.ghost, size: .icon))
 
-                        Button { selectedVertexIndex = nil } label: {
-                            Image(systemName: "xmark").font(.system(size: 12))
-                        }
-                        .buttonStyle(.dispersion(.ghost, size: .icon))
-                    }
-                }
+                        Spacer()
 
-                HStack(spacing: 6) {
-                    Button {
-                        if let last = holePolygons.last {
-                            deletePolygon(id: last.id)
-                        }
-                    } label: {
-                        Image(systemName: "arrow.uturn.backward").font(.system(size: 12))
-                    }
-                    .buttonStyle(.dispersion(.ghost, size: .icon))
+                        Text("\(holePolygons.count) surfaces")
+                            .font(DispersionType.mono(9))
+                            .foregroundStyle(DesignTokens.mutedForeground)
 
-                    if let selId = selectedPolygonId {
-                        Button { deletePolygon(id: selId) } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "trash").font(.system(size: 11))
-                                Text("Delete")
+                        if holePolygons.count > 1 {
+                            Button { clearHolePolygons() } label: {
+                                Text("Clear all")
+                                    .font(DispersionType.mono(9, weight: .medium))
+                                    .foregroundStyle(DesignTokens.destructive)
                             }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.dispersion(.destructive, size: .sm))
-                    }
-
-                    Spacer()
-
-                    if holePolygons.count > 1 {
-                        Button { clearHolePolygons() } label: {
-                            Text("Clear all")
-                                .font(DispersionType.mono(9, weight: .medium))
-                                .foregroundStyle(DesignTokens.destructive)
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
+
+                Text("Long-press map to edit a polygon")
+                    .font(DispersionType.mono(8))
+                    .foregroundStyle(DesignTokens.mutedForeground)
             }
         }
     }
@@ -842,6 +955,26 @@ struct MapBuilderView: View {
         holeInfos[currentHole] = info
         try? CoursesRepo(context: modelContext).upsertHoleInfo(info)
         Haptics.success()
+    }
+
+    /// Check if the crosshair is inside any existing polygon — if so, select it for editing.
+    private func selectPolygonAtCrosshair() {
+        guard let coord = crosshairCoord else { return }
+        // Check polygons in reverse z-order (top-most first)
+        let reversed = holePolygons
+            .filter { $0.coordinates.count >= 3 }
+            .sorted { $0.surface.zOrder > $1.surface.zOrder }
+        for poly in reversed {
+            if pointInPolygon(coord, polygon: poly.coordinates) {
+                selectedPolygonId = poly.id
+                selectedVertexIndex = nil
+                editUndoStack = []
+                Haptics.heavy()
+                return
+            }
+        }
+        // Nothing under crosshair
+        Haptics.light()
     }
 
     private func handleQuickFill() {
@@ -930,6 +1063,43 @@ struct MapBuilderView: View {
             result = smoothed
         }
         return result
+    }
+
+    /// Insert a new vertex at the crosshair position between the two nearest
+    /// consecutive vertices on the selected polygon's edge.
+    private func insertVertex() {
+        guard let coord = crosshairCoord,
+              let selId = selectedPolygonId,
+              let polyIdx = holePolygons.firstIndex(where: { $0.id == selId }) else { return }
+        let coords = holePolygons[polyIdx].coordinates
+        guard coords.count >= 3 else { return }
+
+        // Find the edge segment closest to the crosshair
+        var bestIdx = 0
+        var bestDist = Double.infinity
+        for i in 0..<coords.count {
+            let a = coords[i]
+            let b = coords[(i + 1) % coords.count]
+            let d = distToSegment(coord, a: a, b: b)
+            if d < bestDist { bestDist = d; bestIdx = i }
+        }
+
+        // Insert after bestIdx
+        holePolygons[polyIdx].coordinates.insert(coord, at: bestIdx + 1)
+        let updated = holePolygons[polyIdx]
+        let repo = CoursesRepo(context: modelContext)
+        try? repo.deletePolygon(id: selId)
+        try? repo.insertPolygons([updated])
+        selectedVertexIndex = bestIdx + 1
+        Haptics.medium()
+    }
+
+    private func distToSegment(_ p: Coord, a: Coord, b: Coord) -> Double {
+        let dx = b.lng - a.lng, dy = b.lat - a.lat
+        let lenSq = dx * dx + dy * dy
+        guard lenSq > 0 else { return sqrt(pow(p.lng - a.lng, 2) + pow(p.lat - a.lat, 2)) }
+        let t = max(0, min(1, ((p.lng - a.lng) * dx + (p.lat - a.lat) * dy) / lenSq))
+        return sqrt(pow(p.lng - (a.lng + t * dx), 2) + pow(p.lat - (a.lat + t * dy), 2))
     }
 
     private func moveVertex(to coord: Coord) {

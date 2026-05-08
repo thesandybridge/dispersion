@@ -362,6 +362,12 @@ enum Haptics {
         g.impactOccurred()
         #endif
     }
+    static func heavy() {
+        #if canImport(UIKit)
+        let g = UIImpactFeedbackGenerator(style: .heavy)
+        g.impactOccurred()
+        #endif
+    }
     static func success() {
         #if canImport(UIKit)
         let g = UINotificationFeedbackGenerator()

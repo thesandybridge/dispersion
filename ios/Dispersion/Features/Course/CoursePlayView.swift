@@ -606,11 +606,17 @@ struct CoursePlayView: View {
                 .buttonStyle(.dispersion(.outline, size: .icon))
 
                 Button {
-                    tracker.scores[tracker.currentHole]?.penaltyStrokes += 1
-                    tracker.scores[tracker.currentHole]?.score += 1
+                    let h = tracker.currentHole
+                    if tracker.scores[h] == nil {
+                        tracker.scores[h] = HoleScore(hole: h, par: holePar)
+                    }
+                    tracker.scores[h]?.penaltyStrokes += 1
+                    tracker.scores[h]?.score += 1
                     Haptics.error()
                 } label: {
-                    Image(systemName: "exclamationmark.triangle").font(.system(size: 14))
+                    Text("+1")
+                        .font(DispersionType.mono(11, weight: .bold))
+                        .foregroundStyle(DesignTokens.pPoor)
                 }
                 .buttonStyle(.dispersion(.ghost, size: .icon))
 
