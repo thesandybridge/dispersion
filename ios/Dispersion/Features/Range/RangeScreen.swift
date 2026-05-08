@@ -457,11 +457,15 @@ struct LiveRangeView: View {
         // Absolute measured carry = target + mean long delta
         let measuredCarry = effectiveTarget + stats.longBias
         let repo = ClubsRepo(context: modelContext)
-        try? repo.update(id: club.id, patch: .init(
-            carryYards: measuredCarry,
-            carrySd: stats.carrySd,
-            lateralSd: stats.lateralSd
-        ))
+        do {
+            try repo.update(id: club.id, patch: .init(
+                carryYards: measuredCarry,
+                carrySd: stats.carrySd,
+                lateralSd: stats.lateralSd
+            ))
+        } catch {
+            self.error = "Failed to save calibration: \(error.localizedDescription)"
+        }
     }
 
     // MARK: dial

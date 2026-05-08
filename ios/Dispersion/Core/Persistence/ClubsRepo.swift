@@ -25,6 +25,7 @@ public struct ClubsRepo {
 
     @discardableResult
     public func create(_ club: Club) throws -> Club {
+        try Self.validate(club)
         let model = ClubModel(
             id: club.id,
             name: club.name,
@@ -58,6 +59,7 @@ public struct ClubsRepo {
     }
 
     public func update(id: String, patch: Patch) throws {
+        try Self.validatePatch(patch)
         var d = FetchDescriptor<ClubModel>(predicate: #Predicate { $0.id == id })
         d.fetchLimit = 1
         guard let model = try context.fetch(d).first else { return }
@@ -70,6 +72,10 @@ public struct ClubsRepo {
     }
 
     public func delete(id: String) throws {
+        // Cascade: remove associated shots and face strikes first
+        try ShotsRepo(context: context).deleteByClub(id)
+        try FaceStrikesRepo(context: context).deleteByClub(id)
+
         var d = FetchDescriptor<ClubModel>(predicate: #Predicate { $0.id == id })
         d.fetchLimit = 1
         if let model = try context.fetch(d).first {
@@ -81,5 +87,38 @@ public struct ClubsRepo {
     public func deleteAll() throws {
         try context.delete(model: ClubModel.self)
         try context.save()
+    }
+
+    // MARK: - Validation
+
+    static func validate(_ club: Club) throws {
+        let name = club.name.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { throw ValidationError.emptyName }
+        guard club.carryYards.isFinite, club.carryYards >= 0 else {
+            throw ValidationError.invalidCarry(club.carryYards)
+        }
+        guard club.carrySd.isFinite, club.carrySd >= 0 else {
+            throw ValidationError.invalidSigma("carrySd", club.carrySd)
+        }
+        guard club.lateralSd.isFinite, club.lateralSd >= 0 else {
+            throw ValidationError.invalidSigma("lateralSd", club.lateralSd)
+        }
+    }
+
+    static func validatePatch(_ patch: Patch) throws {
+        if let name = patch.name {
+            guard !name.trimmingCharacters(in: .whitespaces).isEmpty else {
+                throw ValidationError.emptyName
+            }
+        }
+        if let v = patch.carryYards {
+            guard v.isFinite, v >= 0 else { throw ValidationError.invalidCarry(v) }
+        }
+        if let v = patch.carrySd {
+            guard v.isFinite, v >= 0 else { throw ValidationError.invalidSigma("carrySd", v) }
+        }
+        if let v = patch.lateralSd {
+            guard v.isFinite, v >= 0 else { throw ValidationError.invalidSigma("lateralSd", v) }
+        }
     }
 }

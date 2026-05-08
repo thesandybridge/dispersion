@@ -204,8 +204,12 @@ public struct ClubEditSheet: View {
 
     private func delete() {
         guard let id = initial?.id else { return }
-        try? ClubsRepo(context: modelContext).delete(id: id)
-        Haptics.medium()
+        do {
+            try ClubsRepo(context: modelContext).delete(id: id)
+            Haptics.medium()
+        } catch {
+            Haptics.error()
+        }
         onClose()
     }
 }

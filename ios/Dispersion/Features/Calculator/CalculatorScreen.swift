@@ -38,13 +38,23 @@ public struct CalculatorScreen: View {
     private var lieMul: Double { scenario.lie.sigmaMultiplier }
 
     private var adjustedClubs: [Club] {
-        guard lieMul != 1 else { return clubs }
+        let dist = playingDistance
         return clubs.map {
             var c = $0
-            c.carrySd *= lieMul
-            c.lateralSd *= lieMul
+            if lieMul != 1 {
+                c.carrySd *= lieMul
+                c.lateralSd *= lieMul
+            }
+            if let pref = ClubPreferences.preference(for: c.id, at: dist) {
+                c.carrySd *= pref.sigmaMultiplier
+                c.lateralSd *= pref.sigmaMultiplier
+            }
             return c
         }
+    }
+
+    private var activePreference: ClubPreference? {
+        ClubPreferences.activePreference(at: playingDistance)
     }
 
     private var rankings: [ClubResult] {
@@ -433,7 +443,8 @@ public struct CalculatorScreen: View {
     }
 
     private func viewingBanner(club: Club, prob: Double) -> some View {
-        HStack {
+        let isPreferred = ClubPreferences.preference(for: club.id, at: playingDistance) != nil
+        return HStack {
             HStack(spacing: 6) {
                 Text("Viewing").eyebrow(color: DesignTokens.destructive)
                 Text(club.name)
@@ -443,20 +454,40 @@ public struct CalculatorScreen: View {
                     .foregroundStyle(DesignTokens.mutedForeground)
             }
             Spacer()
-            Button("Show recommended") { viewClubId = nil }
-                .font(DispersionType.mono(10, weight: .medium))
-                .tracking(1.6)
-                .textCase(.uppercase)
-                .foregroundStyle(accent)
+            if isPreferred {
+                Button {
+                    ClubPreferences.remove(clubId: club.id, near: playingDistance)
+                    Haptics.medium()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pin.slash").font(.system(size: 10))
+                        Text("Clear")
+                    }
+                    .font(DispersionType.mono(10, weight: .medium))
+                    .foregroundStyle(DesignTokens.destructive)
+                }
+            } else {
+                Button {
+                    ClubPreferences.set(ClubPreference(clubId: club.id, distanceYards: playingDistance))
+                    Haptics.success()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pin.fill").font(.system(size: 10))
+                        Text("Prefer here")
+                    }
+                    .font(DispersionType.mono(10, weight: .medium))
+                    .foregroundStyle(accent)
+                }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(DesignTokens.destructive.opacity(0.1))
+                .fill(isPreferred ? accent.opacity(0.1) : DesignTokens.destructive.opacity(0.1))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(DesignTokens.destructive.opacity(0.4), lineWidth: 1)
+                        .strokeBorder(isPreferred ? accent.opacity(0.4) : DesignTokens.destructive.opacity(0.4), lineWidth: 1)
                 )
         )
     }
@@ -464,13 +495,24 @@ public struct CalculatorScreen: View {
     private func recommendedCard(club: Club, result: ClubResult) -> some View {
         let lbl = ProbLabelRegistry.of(result.probabilityInZone)
         let isActive = isViewingRecommended
+        let isPreferred = ClubPreferences.preference(for: club.id, at: playingDistance) != nil
         return Button { viewClubId = nil } label: {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 5) {
                         Circle().fill(lbl.color).frame(width: 5, height: 5)
-                        Text("Recommended · \(lbl.label.lowercased())")
-                            .eyebrow(color: lbl.color)
+                        if isPreferred {
+                            HStack(spacing: 4) {
+                                Text("Recommended")
+                                    .eyebrow(color: lbl.color)
+                                Image(systemName: "pin.fill")
+                                    .font(.system(size: 8))
+                                    .foregroundStyle(accent)
+                            }
+                        } else {
+                            Text("Recommended · \(lbl.label.lowercased())")
+                                .eyebrow(color: lbl.color)
+                        }
                     }
                     HStack(spacing: 6) {
                         Text(club.name)

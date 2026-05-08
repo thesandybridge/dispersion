@@ -20,11 +20,14 @@ struct CoursePlayView: View {
     @State private var pendingShotEnd: Coord?
     @State private var showScoreEdit = false
     @State private var showEndRound = false
+    @State private var showScorecard = false
+    @State private var showRoundSummary = false
     @State private var deleteConfirm = false
     @State private var teeColor = "White"
     @State private var selectedClubId: String?
     @State private var selectedSwing: SwingType = .full
     @State private var crosshairCoord: Coord?
+    @State private var teeOverrides: [Int: Coord] = [:]
 
     // Cached data — loaded once on appear and on hole change, not per frame
     @State private var cachedCourse: Course?
@@ -42,7 +45,10 @@ struct CoursePlayView: View {
         cachedGBHoles.first(where: { $0.number == tracker.currentHole })
     }
     private var flagCoord: Coord? { currentGBHole?.flagPosition }
-    private var teeCoord: Coord? { currentGBHole?.teePosition(color: teeColor) }
+    private var teeCoord: Coord? {
+        teeOverrides[tracker.currentHole] ?? currentGBHole?.teePosition(color: teeColor)
+    }
+    private var teeIsOverridden: Bool { teeOverrides[tracker.currentHole] != nil }
     struct ClubOption: Identifiable {
         let id: String
         let club: Club
@@ -153,6 +159,9 @@ struct CoursePlayView: View {
         .dispersionSheet(isPresented: $showScoreEdit, detents: [.medium]) {
             scoreEditContent
         }
+        .dispersionSheet(isPresented: $showScorecard, detents: [.large]) {
+            scorecardContent(isComplete: false)
+        }
         .confirmationDialog("End round?", isPresented: $showEndRound, titleVisibility: .visible) {
             Button("Finish & save") { finishRound() }
             Button("Cancel round", role: .destructive) { cancelRound() }
@@ -161,6 +170,13 @@ struct CoursePlayView: View {
             Text(tracker.holesPlayed > 0
                  ? "\(tracker.holesPlayed) holes played · \(tracker.totalScore) strokes"
                  : "No holes scored yet")
+        }
+        .fullScreenCover(isPresented: $showRoundSummary) {
+            ZStack {
+                DesignTokens.backgroundDeep.ignoresSafeArea()
+                scorecardContent(isComplete: true)
+            }
+            .preferredColorScheme(.dark)
         }
     }
 
@@ -180,9 +196,12 @@ struct CoursePlayView: View {
                 .buttonStyle(.plain)
                 Spacer()
                 if tracker.holesPlayed > 0 {
-                    Button { showScoreEdit = true } label: {
+                    Button { showScorecard = true } label: {
                         let tp = tracker.toPar
                         HStack(spacing: 6) {
+                            Image(systemName: "list.number")
+                                .font(.system(size: 11))
+                                .foregroundStyle(DesignTokens.mutedForeground)
                             Text("\(tracker.totalScore)")
                                 .font(DispersionType.display(18, weight: .regular))
                                 .monospacedDigit()
@@ -298,6 +317,46 @@ struct CoursePlayView: View {
                     .padding(.top, 12)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: lastShotOutcome)
+            }
+
+            // Set tee position — bottom left of map
+            VStack {
+                Spacer()
+                HStack {
+                    Menu {
+                        Button {
+                            if let coord = crosshairCoord {
+                                setTeeOverride(coord)
+                            }
+                        } label: {
+                            Label("Set tee to crosshair", systemImage: "mappin.and.ellipse")
+                        }
+                        if teeIsOverridden {
+                            Button(role: .destructive) {
+                                clearTeeOverride()
+                            } label: {
+                                Label("Reset to default", systemImage: "arrow.counterclockwise")
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: teeIsOverridden ? "mappin.circle.fill" : "mappin")
+                                .font(.system(size: 11))
+                            Text("Tee").font(DispersionType.mono(10, weight: .medium))
+                        }
+                        .foregroundStyle(teeIsOverridden ? accent : .white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .environment(\.colorScheme, .dark)
+                        )
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
             }
         }
     }
@@ -533,6 +592,10 @@ struct CoursePlayView: View {
         if let data = UserDefaults.standard.data(forKey: "scorecard.\(courseId)") {
             cachedScorecard = (try? JSONDecoder().decode([GolfBertClient.GBHoleTeebox].self, from: data)) ?? []
         }
+        // Load tee overrides
+        if let data = UserDefaults.standard.data(forKey: "teeOverrides.\(courseId)") {
+            teeOverrides = (try? JSONDecoder().decode([Int: Coord].self, from: data)) ?? [:]
+        }
         // Build club options once
         var opts: [ClubOption] = []
         for club in clubs {
@@ -553,6 +616,24 @@ struct CoursePlayView: View {
     private func loadHoleData() {
         cachedHolePolygons = (try? CoursesRepo(context: modelContext).polygons(courseId: courseId, hole: tracker.currentHole)) ?? []
         recommendClubForHole()
+    }
+
+    private func setTeeOverride(_ coord: Coord) {
+        teeOverrides[tracker.currentHole] = coord
+        saveTeeOverrides()
+        Haptics.success()
+    }
+
+    private func clearTeeOverride() {
+        teeOverrides.removeValue(forKey: tracker.currentHole)
+        saveTeeOverrides()
+        Haptics.medium()
+    }
+
+    private func saveTeeOverrides() {
+        if let data = try? JSONEncoder().encode(teeOverrides) {
+            UserDefaults.standard.set(data, forKey: "teeOverrides.\(courseId)")
+        }
     }
 
     private func recommendClubForHole() {
@@ -775,7 +856,33 @@ struct CoursePlayView: View {
         tracker.clearSave()
         SessionStore.shared.clear()
         Haptics.success()
-        onBack()
+        showRoundSummary = true
+    }
+
+    private func scorecardContent(isComplete: Bool) -> some View {
+        let parsMap = Dictionary(
+            uniqueKeysWithValues: cachedScorecard
+                .filter { $0.color == teeColor }
+                .map { ($0.holenumber, $0.par) }
+        )
+        return RoundScorecardView(
+            scores: tracker.scores,
+            holeCount: tracker.holeCount,
+            courseName: cachedCourse?.name ?? "Round",
+            pars: parsMap,
+            isComplete: isComplete,
+            totalPutts: tracker.totalPutts,
+            fairwaysHit: tracker.fairwaysHit,
+            fairwaysTotal: tracker.fairwaysTotal,
+            greensHit: tracker.greensHit,
+            greensTotal: tracker.holesPlayed,
+            upAndDowns: tracker.upAndDowns,
+            upAndDownAttempts: tracker.upAndDownAttempts,
+            onDone: isComplete ? {
+                showRoundSummary = false
+                onBack()
+            } : nil
+        )
     }
 
     private func cancelRound() {

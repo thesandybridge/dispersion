@@ -44,6 +44,15 @@ public struct ShotsRepo {
 
     @discardableResult
     public func create(_ shot: Shot) throws -> Shot {
+        guard shot.targetDistanceYards.isFinite, shot.targetDistanceYards > 0 else {
+            throw ValidationError.invalidDistance(shot.targetDistanceYards)
+        }
+        guard shot.longDelta.isFinite else {
+            throw ValidationError.invalidDelta("longDelta", shot.longDelta)
+        }
+        guard shot.latDelta.isFinite else {
+            throw ValidationError.invalidDelta("latDelta", shot.latDelta)
+        }
         let model = ShotModel(
             id: shot.id,
             sessionId: shot.sessionId,
@@ -69,6 +78,14 @@ public struct ShotsRepo {
 
     public func deleteBySession(_ sessionId: String) throws {
         let d = FetchDescriptor<ShotModel>(predicate: #Predicate { $0.sessionId == sessionId })
+        for model in try context.fetch(d) {
+            context.delete(model)
+        }
+        try context.save()
+    }
+
+    public func deleteByClub(_ clubId: String) throws {
+        let d = FetchDescriptor<ShotModel>(predicate: #Predicate { $0.clubId == clubId })
         for model in try context.fetch(d) {
             context.delete(model)
         }

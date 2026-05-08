@@ -41,6 +41,14 @@ public struct FaceStrikesRepo {
         }
     }
 
+    public func deleteByClub(_ clubId: String) throws {
+        let d = FetchDescriptor<FaceStrikeModel>(predicate: #Predicate { $0.clubId == clubId })
+        for model in try context.fetch(d) {
+            context.delete(model)
+        }
+        try context.save()
+    }
+
     public func deleteAll() throws {
         try context.delete(model: FaceStrikeModel.self)
         try context.save()

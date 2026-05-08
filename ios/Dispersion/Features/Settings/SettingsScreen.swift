@@ -284,13 +284,19 @@ public struct SettingsScreen: View {
                 try ClubsRepo(context: modelContext).deleteAll()
                 try SessionsRepo(context: modelContext).deleteAll()
                 try ShotsRepo(context: modelContext).deleteAll()
+                // Also clear face strikes on full import
+                try FaceStrikesRepo(context: modelContext).deleteAll()
                 let clubsRepo = ClubsRepo(context: modelContext)
                 for c in parsed.clubs { try clubsRepo.create(c) }
                 let sessionsRepo = SessionsRepo(context: modelContext)
                 for s in parsed.sessions { try sessionsRepo.create(s) }
                 let shotsRepo = ShotsRepo(context: modelContext)
                 for s in parsed.shots { try shotsRepo.create(s) }
-                status = (.ok, "Imported \(parsed.clubs.count) clubs, \(parsed.sessions.count) sessions, \(parsed.shots.count) shots.")
+                var msg = "Imported \(parsed.clubs.count) clubs, \(parsed.sessions.count) sessions, \(parsed.shots.count) shots."
+                if !parsed.warnings.isEmpty {
+                    msg += " (\(parsed.warnings.count) items skipped)"
+                }
+                status = (.ok, msg)
             } catch {
                 status = (.err, error.localizedDescription)
             }

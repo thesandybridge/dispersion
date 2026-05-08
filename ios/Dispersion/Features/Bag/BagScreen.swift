@@ -99,11 +99,15 @@ public struct BagScreen: View {
                                 .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
                         }
                         .onDelete { indexSet in
-                            for i in indexSet {
-                                let club = regularClubs[i]
-                                try? ClubsRepo(context: modelContext).delete(id: club.id)
+                            do {
+                                for i in indexSet {
+                                    let club = regularClubs[i]
+                                    try ClubsRepo(context: modelContext).delete(id: club.id)
+                                }
+                                Haptics.medium()
+                            } catch {
+                                Haptics.error()
                             }
-                            Haptics.medium()
                         }
                     }
                     .listRowBackground(Color.clear)

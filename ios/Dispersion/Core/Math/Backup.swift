@@ -7,9 +7,10 @@ public enum Backup {
     // MARK: - Export
 
     public static func build(clubs: [Club], sessions: [Session], shots: [Shot]) -> Data {
+        let iso = ISO8601DateFormatter()
         let payload = BackupPayload(
             version: 2,
-            exportedAt: ISO8601DateFormatter().string(from: .now),
+            exportedAt: iso.string(from: .now),
             clubs: clubs.map { c in
                 .init(
                     id: c.id,
@@ -17,7 +18,8 @@ public enum Backup {
                     carryYards: c.carryYards,
                     carrySd: c.carrySd,
                     lateralSd: c.lateralSd,
-                    createdAt: ISO8601DateFormatter().string(from: c.createdAt)
+                    createdAt: iso.string(from: c.createdAt),
+                    updatedAt: iso.string(from: c.updatedAt)
                 )
             },
             sessions: sessions.map { s in
@@ -25,7 +27,7 @@ public enum Backup {
                     id: s.id,
                     kind: s.kind.rawValue,
                     label: s.label,
-                    startedAt: ISO8601DateFormatter().string(from: s.createdAt)
+                    startedAt: iso.string(from: s.createdAt)
                 )
             },
             shots: shots.map { s in
@@ -37,7 +39,7 @@ public enum Backup {
                     longDelta: s.longDelta,
                     latDelta: s.latDelta,
                     outcome: s.outcomes.isEmpty ? nil : Outcomes.encode(s.outcomes),
-                    timestamp: ISO8601DateFormatter().string(from: s.timestamp)
+                    timestamp: iso.string(from: s.timestamp)
                 )
             }
         )
@@ -52,6 +54,7 @@ public enum Backup {
         public var clubs: [Club]
         public var sessions: [Session]
         public var shots: [Shot]
+        public var warnings: [String]
     }
 
     public static func parse(_ data: Data) throws -> ParsedBackup {
@@ -60,17 +63,39 @@ public enum Backup {
             throw BackupError.unsupportedVersion(payload.version)
         }
         let iso = ISO8601DateFormatter()
-        let clubs = payload.clubs.map { c in
-            Club(
+        var warnings: [String] = []
+
+        // Clubs — validate each entry
+        var clubs: [Club] = []
+        for c in payload.clubs {
+            let name = c.name.trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else {
+                warnings.append("Skipped club with empty name (id: \(c.id))")
+                continue
+            }
+            guard c.carryYards.isFinite, c.carryYards >= 0,
+                  c.carrySd.isFinite, c.carrySd >= 0,
+                  c.lateralSd.isFinite, c.lateralSd >= 0 else {
+                warnings.append("Skipped club '\(name)' with invalid numeric values")
+                continue
+            }
+            let createdAt = iso.date(from: c.createdAt)
+            if createdAt == nil {
+                warnings.append("Club '\(name)' has malformed date, using import time")
+            }
+            let updatedAt = c.updatedAt.flatMap { iso.date(from: $0) }
+            clubs.append(Club(
                 id: c.id,
-                name: c.name,
+                name: name,
                 carryYards: c.carryYards,
                 carrySd: c.carrySd,
                 lateralSd: c.lateralSd,
-                createdAt: iso.date(from: c.createdAt) ?? .now,
-                updatedAt: .now
-            )
+                createdAt: createdAt ?? .now,
+                updatedAt: updatedAt ?? createdAt ?? .now
+            ))
         }
+
+        // Sessions
         let sessions = (payload.sessions ?? []).map { s in
             Session(
                 id: s.id,
@@ -79,8 +104,26 @@ public enum Backup {
                 createdAt: iso.date(from: s.startedAt) ?? .now
             )
         }
-        let shots = (payload.shots ?? []).map { s in
-            Shot(
+
+        // Shots — validate and filter orphaned references
+        let clubIds = Set(clubs.map(\.id))
+        let sessionIds = Set(sessions.map(\.id))
+        var shots: [Shot] = []
+        for s in (payload.shots ?? []) {
+            guard s.targetDistanceYards.isFinite, s.targetDistanceYards > 0,
+                  s.longDelta.isFinite, s.latDelta.isFinite else {
+                warnings.append("Skipped shot with invalid numeric values (id: \(s.id))")
+                continue
+            }
+            if !clubIds.contains(s.clubId) {
+                warnings.append("Skipped shot referencing unknown club (id: \(s.id))")
+                continue
+            }
+            if !sessionIds.contains(s.sessionId) {
+                warnings.append("Skipped shot referencing unknown session (id: \(s.id))")
+                continue
+            }
+            shots.append(Shot(
                 id: s.id,
                 sessionId: s.sessionId,
                 clubId: s.clubId,
@@ -89,9 +132,10 @@ public enum Backup {
                 latDelta: s.latDelta,
                 outcomes: s.outcome.map { Outcomes.decode($0) } ?? [],
                 timestamp: iso.date(from: s.timestamp) ?? .now
-            )
+            ))
         }
-        return ParsedBackup(clubs: clubs, sessions: sessions, shots: shots)
+
+        return ParsedBackup(clubs: clubs, sessions: sessions, shots: shots, warnings: warnings)
     }
 
     public enum BackupError: LocalizedError {
@@ -121,6 +165,7 @@ private struct BackupPayload: Codable {
         var carrySd: Double
         var lateralSd: Double
         var createdAt: String
+        var updatedAt: String?
     }
 
     struct SessionEntry: Codable {
