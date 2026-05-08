@@ -2,8 +2,7 @@
 
 iOS-native golf shot dispersion and club recommendation app.
 
-- **`ios/`** — the SwiftUI app (iOS 17+, iPhone + iPad). This is the production build.
-- **`_reference/tauri-app/`** — the original React + Tauri reference build. Math and design spec.
+- **`ios/`** — the SwiftUI app (iOS 17+, iPhone + iPad).
 
 ## Get the iOS project running
 
@@ -66,7 +65,3 @@ ios/Dispersion/
 - **Sheets use `.dispersionSheet` modifier** — frosted glass, drag indicator, `DSheetContainer` layout.
 - **DECADE bias in probability** — zone evaluation shifts toward short side to favor "take more club."
 
-## Cross-references
-
-- The pure math layer in `ios/Dispersion/Core/Math/` was ported from `_reference/tauri-app/src/lib/`.
-- `ios/Dispersion/Core/Math/` files cite their TS counterparts in their headers.
