@@ -121,8 +121,9 @@ struct ClubDetailView: View {
                     Spacer()
                 }
             } else {
-                // Show measured values when available, stored values as fallback
-                let displayCarry = haveStats ? club.carryYards + stats.longBias : club.carryYards
+                // Show stored values (calibration updates these)
+                // Sigma uses measured when available for more accuracy
+                let displayCarry = club.carryYards
                 let displayCarrySd = haveStats ? stats.carrySd : club.carrySd
                 let displayLatSd = haveStats ? stats.lateralSd : club.lateralSd
 
