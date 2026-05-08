@@ -154,6 +154,7 @@ struct LiveRangeView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
+                .allowsHitTesting(false)
             } else {
                 noClubsState
             }
@@ -254,40 +255,25 @@ struct LiveRangeView: View {
     // MARK: floating cards
 
     private func floatingSessionCard(_ club: Club) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(sessionId != nil ? DesignTokens.primary : DesignTokens.mutedForeground.opacity(0.4))
-                    .frame(width: 6, height: 6)
-                Text(sessionId != nil
-                     ? "Live · \(taps.count)/\(sessionGoal)"
-                     : "Idle"
-                ).eyebrow()
-            }
+        HStack(spacing: 8) {
+            Circle()
+                .fill(sessionId != nil ? DesignTokens.primary : DesignTokens.mutedForeground.opacity(0.4))
+                .frame(width: 6, height: 6)
             Text(club.name)
-                .font(DispersionType.display(26, weight: .regular))
-                .tracking(-0.65)
-                .foregroundStyle(DesignTokens.foreground)
-                .monospacedDigit()
-            Text("Target \(Int(effectiveTarget))y")
+                .font(DispersionType.ui(13, weight: .medium))
+            Text("\(Int(effectiveTarget))y")
                 .font(DispersionType.mono(11))
                 .foregroundStyle(DesignTokens.mutedForeground)
-
-            // Goal progress bar
             if taps.count > 0 {
-                GeometryReader { g in
-                    Capsule().fill(DesignTokens.muted.opacity(0.4))
-                    Capsule().fill(DesignTokens.primary)
-                        .frame(width: g.size.width * min(1, Double(taps.count) / Double(sessionGoal)))
-                }
-                .frame(height: 3)
-                .clipShape(Capsule())
+                Text("· \(taps.count)")
+                    .font(DispersionType.mono(11))
+                    .foregroundStyle(DesignTokens.primary)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            Capsule()
                 .fill(.ultraThinMaterial)
                 .environment(\.colorScheme, .dark)
         )
@@ -295,29 +281,20 @@ struct LiveRangeView: View {
 
     private func liveStatsCard(_ club: Club) -> some View {
         let measuredCarry = Int(club.carryYards + stats.longBias)
-        return VStack(alignment: .trailing, spacing: 4) {
-            HStack(spacing: 4) {
-                Circle().fill(DesignTokens.primary).frame(width: 4, height: 4)
-                Text("Measured · \(taps.count)").eyebrow()
-            }
-            Text("\(measuredCarry)")
-                .font(DispersionType.display(22, weight: .regular))
-                .tracking(-0.44)
-                .foregroundStyle(DesignTokens.foreground)
-                .monospacedDigit() +
-            Text("y")
-                .font(DispersionType.ui(11))
+        return HStack(spacing: 8) {
+            Text("\(measuredCarry)y")
+                .font(DispersionType.mono(13, weight: .medium))
+            Text("σ↕\(String(format: "%.1f", stats.carrySd))")
+                .font(DispersionType.mono(10))
                 .foregroundStyle(DesignTokens.mutedForeground)
-            HStack(spacing: 12) {
-                deltaCell(label: "σ↕", value: stats.carrySd, delta: stats.carrySd - club.carrySd)
-                deltaCell(label: "σ↔", value: stats.lateralSd, delta: stats.lateralSd - club.lateralSd)
-            }
-            .font(DispersionType.mono(11))
+            Text("σ↔\(String(format: "%.1f", stats.lateralSd))")
+                .font(DispersionType.mono(10))
+                .foregroundStyle(DesignTokens.mutedForeground)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            Capsule()
                 .fill(.ultraThinMaterial)
                 .environment(\.colorScheme, .dark)
         )

@@ -95,8 +95,11 @@ public struct RangeRadarField: View {
 
     private func layout(in size: CGSize) -> Geom {
         let pad: CGFloat = 28
-        let longSpan = max(referenceCarrySd * 3.5, 25)
-        let latSpan = max(referenceLateralSd * 3.5, 18)
+        // Scale to fit existing shots + enough room for outliers
+        let maxShotLong = shots.map { abs($0.long) }.max() ?? 0
+        let maxShotLat = shots.map { abs($0.lat) }.max() ?? 0
+        let longSpan = max(referenceCarrySd * 3.5, maxShotLong * 1.3, 30)
+        let latSpan = max(referenceLateralSd * 3.5, maxShotLat * 1.3, 20)
         return Geom(
             center: CGPoint(x: size.width / 2, y: size.height / 2),
             scaleX: (size.width - pad * 2) / CGFloat(latSpan * 2),
