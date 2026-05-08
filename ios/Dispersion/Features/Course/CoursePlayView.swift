@@ -174,11 +174,8 @@ struct CoursePlayView: View {
                  : "No holes scored yet")
         }
         .fullScreenCover(isPresented: $showRoundSummary) {
-            ZStack {
-                DesignTokens.backgroundDeep.ignoresSafeArea()
-                scorecardContent(isComplete: true)
-            }
-            .preferredColorScheme(.dark)
+            roundCompletionScreen
+                .preferredColorScheme(.dark)
         }
     }
 
@@ -693,8 +690,26 @@ struct CoursePlayView: View {
     }
 
     private func recommendClubForHole() {
+        selectedSwing = .full
+
+        // On green → putter
+        if onGreen, let p = putter {
+            selectedClubId = p.id
+            return
+        }
+
         guard let ball = ballPosition, let flag = flagCoord else { return }
         let dist = haversineYards(from: ball, to: flag)
+
+        // Tee shot on par 4/5 → longest club (driver)
+        let shotCount = tracker.shotsForHole(tracker.currentHole).count
+        if shotCount == 0 && holePar >= 4, let longest = clubs.first {
+            selectedClubId = longest.id
+            selectedSwing = .full
+            return
+        }
+
+        // Best club for distance
         if dist > 5, let best = cachedClubOptions.min(by: { abs($0.carry - dist) < abs($1.carry - dist) }) {
             selectedClubId = best.club.id
             selectedSwing = best.swing
@@ -728,7 +743,6 @@ struct CoursePlayView: View {
 
     @State private var lastShotOutcome: String?
 
-    @State private var selectedShotType: ShotType = .full
 
     private func completeShot(clubId: String?, swing: SwingType = .full, shotType: ShotType = .full) {
         guard let start = pendingShotStart, let end = pendingShotEnd else { return }
@@ -903,13 +917,19 @@ struct CoursePlayView: View {
         tracker.finishHole()
         tracker.nextHole()
         tracker.save()
-        // Haptic feedback based on score
+
+        // Last hole → auto-finish
+        if tracker.state == .roundComplete {
+            finishRound()
+            return
+        }
+
         if score > 0 && score <= par - 1 {
-            Haptics.success() // birdie or better
+            Haptics.success()
         } else if score > par {
-            Haptics.error() // bogey or worse
+            Haptics.error()
         } else {
-            Haptics.medium() // par
+            Haptics.medium()
         }
     }
 
@@ -1051,6 +1071,75 @@ struct CoursePlayView: View {
         }
     }
 
+    // MARK: - Round completion screen
+
+    private var roundCompletionScreen: some View {
+        ZStack {
+            // Background gradient
+            LinearGradient(
+                colors: [DesignTokens.ink, DesignTokens.pine.opacity(0.6), DesignTokens.backgroundDeep],
+                startPoint: .top, endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            RadialGradient(
+                colors: [accent.opacity(0.15), .clear],
+                center: .top, startRadius: 0, endRadius: 400
+            )
+            .ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: 24) {
+                    Spacer().frame(height: 40)
+
+                    // Hero
+                    scorecardContent(isComplete: true)
+
+                    // Share + Done
+                    HStack(spacing: 12) {
+                        Button { shareRoundSummary() } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "square.and.arrow.up").font(.system(size: 14))
+                                Text("Share")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.dispersion(.solid))
+
+                        Button {
+                            showRoundSummary = false
+                            onBack()
+                        } label: {
+                            Text("Done").frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.dispersion(.primary))
+                    }
+                    .padding(.horizontal, 24)
+
+                    Spacer().frame(height: 40)
+                }
+            }
+        }
+    }
+
+    private func shareRoundSummary() {
+        let tp = tracker.toPar
+        let toParStr = tp == 0 ? "Even" : (tp > 0 ? "+\(tp)" : "\(tp)")
+        let courseName = cachedCourse?.name ?? "Round"
+        let text = """
+        \(courseName)
+        \(tracker.totalScore) (\(toParStr)) · \(tracker.holesPlayed) holes
+        Putts: \(tracker.totalPutts) · GIR: \(tracker.greensHit)/\(tracker.holesPlayed)
+
+        Tracked with Dispersion
+        """
+        let av = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let root = scene.windows.first?.rootViewController?.presentedViewController
+                   ?? scene.windows.first?.rootViewController {
+            root.present(av, animated: true)
+        }
+    }
+
     private func finishRound() {
         tracker.state = .roundComplete
 
@@ -1144,92 +1233,86 @@ struct CoursePlayView: View {
     private var clubPickerContent: some View {
         let shotDist = (pendingShotStart != nil && pendingShotEnd != nil)
             ? Int(haversineYards(from: pendingShotStart!, to: pendingShotEnd!)) : 0
+        let preselected = selectedOption
 
         DSheetHeader(
             eyebrow: "Shot \(tracker.shotsForHole(tracker.currentHole).count + 1) · \(shotDist)y",
             title: "What did you hit?"
         )
 
-        // Shot type selector
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(ShotType.allCases, id: \.self) { type in
-                    Button {
-                        selectedShotType = type
-                        Haptics.light()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: type.systemImage).font(.system(size: 10))
-                            Text(type.label).font(DispersionType.mono(10, weight: .medium))
+        // Recommended club (one-tap confirm)
+        if let rec = preselected, let club = clubs.first(where: { $0.id == rec.club.id }) {
+            Button {
+                completeShot(clubId: rec.club.id, swing: rec.swing)
+                showClubPicker = false
+            } label: {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Recommended").eyebrow(color: DesignTokens.primary)
+                        HStack(spacing: 6) {
+                            Text(club.name).font(DispersionType.display(22, weight: .regular))
+                            if rec.swing != .full {
+                                Text(rec.swing.label)
+                                    .font(DispersionType.mono(10, weight: .medium))
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(Capsule().fill(DesignTokens.primary.opacity(0.2)))
+                                    .foregroundStyle(DesignTokens.primary)
+                            }
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule().fill(selectedShotType == type
-                                           ? (type.countsForDispersion ? DesignTokens.primary : DesignTokens.pMarginal)
-                                           : DesignTokens.surface)
-                        )
-                        .foregroundStyle(selectedShotType == type
-                                         ? DesignTokens.primaryForeground : DesignTokens.foreground)
                     }
-                    .buttonStyle(.plain)
+                    Spacer()
+                    Text("\(Int(rec.carry))y")
+                        .font(DispersionType.mono(14))
+                        .foregroundStyle(DesignTokens.mutedForeground)
                 }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(DesignTokens.primary.opacity(0.08))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(DesignTokens.primary.opacity(0.3), lineWidth: 1))
+                )
+                .foregroundStyle(DesignTokens.foreground)
             }
+            .buttonStyle(.plain)
         }
 
-        if !selectedShotType.countsForDispersion {
-            Text("This shot type won't affect club dispersion stats")
-                .font(DispersionType.mono(10))
-                .foregroundStyle(DesignTokens.pMarginal)
-        }
-
-        let preselected = selectedOption
-
-        VStack(spacing: 4) {
-            ForEach(clubOptions, id: \.id) { opt in
-                let isRecommended = opt.id == preselected?.id
-                Button {
-                    completeShot(clubId: opt.club.id, swing: opt.swing, shotType: selectedShotType)
-                    showClubPicker = false
-                } label: {
-                    HStack(spacing: 8) {
-                        Text(opt.club.name)
-                            .font(DispersionType.ui(14, weight: .medium))
-                        if opt.swing != .full {
-                            Text(opt.swing.label)
-                                .font(DispersionType.mono(10, weight: .medium))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(DesignTokens.primary.opacity(0.15)))
-                                .foregroundStyle(DesignTokens.primary)
+        // Full club list — only full swings, compact
+        ScrollView {
+            VStack(spacing: 3) {
+                ForEach(clubs, id: \.id) { club in
+                    let isRec = club.id == preselected?.club.id
+                    if !isRec {
+                        Button {
+                            completeShot(clubId: club.id, swing: .full)
+                            showClubPicker = false
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(club.name)
+                                    .font(DispersionType.ui(13, weight: .medium))
+                                Spacer()
+                                Text("\(Int(club.carryYards))y")
+                                    .font(DispersionType.mono(10))
+                                    .foregroundStyle(DesignTokens.mutedForeground)
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(DesignTokens.surface)
+                            )
                         }
-                        Spacer()
-                        Text("\(Int(opt.carry))y")
-                            .font(DispersionType.mono(11))
-                            .foregroundStyle(DesignTokens.mutedForeground)
-                        if isRecommended {
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(DesignTokens.primary)
-                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(DesignTokens.foreground)
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(isRecommended ? DesignTokens.primary.opacity(0.08) : DesignTokens.surface)
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(isRecommended ? DesignTokens.primary.opacity(0.3) : DesignTokens.border, lineWidth: 1))
-                    )
                 }
-                .buttonStyle(.plain)
             }
         }
 
         Button {
-            completeShot(clubId: nil, swing: .full, shotType: selectedShotType)
+            completeShot(clubId: nil, swing: .full)
             showClubPicker = false
         } label: {
-            Text("Skip club selection").frame(maxWidth: .infinity)
+            Text("Skip").frame(maxWidth: .infinity)
         }
         .buttonStyle(.dispersion(.ghost))
     }
