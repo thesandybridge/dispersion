@@ -1,7 +1,6 @@
-// Port of app/src/components/range/RangeRadarField.tsx. Polar radar tap
-// surface for range mode. Concentric reference σ rings + radial spokes around
-// the target, live measured ellipse (drawn from session shots), tap-to-add
-// gesture.
+// Range practice field. Concentric distance arcs radiate from the target at
+// regular yard intervals. Uniform scale (1 yard = same pixels in both axes)
+// so tapped coordinates map accurately to real distances.
 
 import SwiftUI
 
@@ -45,7 +44,7 @@ public struct RangeRadarField: View {
             let allShots = shots + (dragShot.map { [$0] } ?? [])
             ZStack {
                 Canvas { ctx, _ in
-                    drawScene(ctx: ctx, size: size, geom: geom, displayShots: allShots, highlightLast: dragShot != nil)
+                    drawScene(ctx: ctx, size: size, geom: geom, displayShots: allShots)
                 }
                 if !readOnly {
                     Color.clear
@@ -69,7 +68,6 @@ public struct RangeRadarField: View {
                                 }
                         )
                 }
-
             }
         }
     }
@@ -78,46 +76,48 @@ public struct RangeRadarField: View {
 
     private struct Geom {
         var center: CGPoint
-        var scaleX: CGFloat
-        var scaleY: CGFloat
-        var longSpan: Double
-        var latSpan: Double
+        var scale: CGFloat
+        var span: Double
         var size: CGSize
 
-        func sx(_ lat: Double) -> CGFloat { center.x + CGFloat(lat) * scaleX }
-        func sy(_ long: Double) -> CGFloat { center.y - CGFloat(long) * scaleY }
+        func sx(_ lat: Double) -> CGFloat { center.x + CGFloat(lat) * scale }
+        func sy(_ long: Double) -> CGFloat { center.y - CGFloat(long) * scale }
         func toShot(_ p: CGPoint) -> ShotXY {
-            let lat = (p.x - center.x) / scaleX
-            let long = (center.y - p.y) / scaleY
+            let lat = (p.x - center.x) / scale
+            let long = (center.y - p.y) / scale
             return ShotXY(lat: Double(lat), long: Double(long))
         }
     }
 
     private func layout(in size: CGSize) -> Geom {
         let pad: CGFloat = 28
-        // Scale to fit existing shots + enough room for outliers
         let maxShotLong = shots.map { abs($0.long) }.max() ?? 0
         let maxShotLat = shots.map { abs($0.lat) }.max() ?? 0
-        let longSpan = max(referenceCarrySd * 3.5, maxShotLong * 1.3, 30)
-        let latSpan = max(referenceLateralSd * 3.5, maxShotLat * 1.3, 20)
+        let span = max(
+            referenceCarrySd * 3.5,
+            referenceLateralSd * 3.5,
+            maxShotLong * 1.3,
+            maxShotLat * 1.3,
+            25
+        )
+        // Uniform scale — constrained by the narrower dimension
+        let fitScaleX = (size.width - pad * 2) / CGFloat(span * 2)
+        let fitScaleY = (size.height - pad * 2) / CGFloat(span * 2)
+        let scale = min(fitScaleX, fitScaleY)
         return Geom(
             center: CGPoint(x: size.width / 2, y: size.height / 2),
-            scaleX: (size.width - pad * 2) / CGFloat(latSpan * 2),
-            scaleY: (size.height - pad * 2) / CGFloat(longSpan * 2),
-            longSpan: longSpan,
-            latSpan: latSpan,
+            scale: scale,
+            span: span,
             size: size
         )
     }
 
     // MARK: draw
 
-    private func drawScene(ctx: GraphicsContext, size: CGSize, geom: Geom, displayShots: [ShotXY]? = nil, highlightLast: Bool = false) {
-        let shotsToRender = displayShots ?? shots
+    private func drawScene(ctx: GraphicsContext, size: CGSize, geom: Geom, displayShots: [ShotXY]) {
         let center = geom.center
-        let pad: CGFloat = 28
 
-        // Background gradient.
+        // Background gradient
         let bgRect = CGRect(origin: .zero, size: size)
         ctx.fill(Path(bgRect), with: .radialGradient(
             Gradient(colors: [DesignTokens.background, DesignTokens.backgroundDeep]),
@@ -126,84 +126,80 @@ public struct RangeRadarField: View {
             endRadius: max(size.width, size.height) * 0.6
         ))
 
-        // Reference σ ellipses (1, 2, 3σ).
-        for k in 1...3 {
-            let kf = Double(k)
-            let path = Path(ellipseIn: CGRect(
-                x: center.x - CGFloat(referenceLateralSd * kf) * geom.scaleX,
-                y: center.y - CGFloat(referenceCarrySd * kf) * geom.scaleY,
-                width: CGFloat(referenceLateralSd * kf * 2) * geom.scaleX,
-                height: CGFloat(referenceCarrySd * kf * 2) * geom.scaleY
+        // Distance arcs — concentric circles at regular yard intervals
+        let step = arcStep(for: geom.span)
+        let maxArc = geom.span * 1.5
+        var dist = step
+        while dist <= maxArc {
+            let r = CGFloat(dist) * geom.scale
+            let arcPath = Path(ellipseIn: CGRect(
+                x: center.x - r, y: center.y - r,
+                width: r * 2, height: r * 2
             ))
+            let isMainArc = dist.truncatingRemainder(dividingBy: step * 2) == 0 || step >= 10
             ctx.stroke(
-                path,
-                with: .color(Color.white.opacity(0.08)),
-                style: StrokeStyle(lineWidth: 0.6, dash: k == 3 ? [1, 4] : [2, 3])
+                arcPath,
+                with: .color(Color.white.opacity(isMainArc ? 0.10 : 0.05)),
+                style: StrokeStyle(lineWidth: 0.6, dash: [2, 3])
             )
 
-            // Label
-            let labelX = center.x + CGFloat(referenceLateralSd * kf) * geom.scaleX + 4
-            ctx.draw(
-                Text("\(k)σ")
-                    .font(DispersionType.mono(8, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.32)),
-                at: CGPoint(x: labelX, y: center.y - 4)
-            )
-        }
-
-        // Radial spokes every 30°.
-        let r = max(size.width, size.height)
-        for deg in stride(from: 0.0, to: 180.0, by: 30) {
-            let rad = deg * .pi / 180
-            let spoke = Path { p in
-                p.move(to: CGPoint(x: center.x + CGFloat(cos(rad)) * r, y: center.y + CGFloat(sin(rad)) * r))
-                p.addLine(to: CGPoint(x: center.x - CGFloat(cos(rad)) * r, y: center.y - CGFloat(sin(rad)) * r))
+            // Label on the right, just above the target line
+            let showLabel = step < 10 ? dist.truncatingRemainder(dividingBy: 10) == 0 || dist == step : true
+            if showLabel {
+                ctx.draw(
+                    Text("\(Int(dist))y")
+                        .font(DispersionType.mono(8, weight: .regular))
+                        .foregroundStyle(Color.white.opacity(0.25)),
+                    at: CGPoint(x: center.x + r + 2, y: center.y - 6),
+                    anchor: .leading
+                )
             }
-            ctx.stroke(spoke, with: .color(Color.white.opacity(0.05)), lineWidth: 0.5)
+            dist += step
         }
 
-        // Centerline (dashed vertical).
+        // Centerline (dashed vertical)
         let centerline = Path { p in
-            p.move(to: CGPoint(x: center.x, y: pad - 6))
-            p.addLine(to: CGPoint(x: center.x, y: size.height - pad + 6))
+            p.move(to: CGPoint(x: center.x, y: 0))
+            p.addLine(to: CGPoint(x: center.x, y: size.height))
         }
         ctx.stroke(
             centerline,
-            with: .color(Color.white.opacity(0.18)),
+            with: .color(Color.white.opacity(0.15)),
             style: StrokeStyle(lineWidth: 0.6, dash: [4, 5])
         )
 
-        // Target line (horizontal accent).
+        // Target line (horizontal accent)
         let targetLine = Path { p in
-            p.move(to: CGPoint(x: pad - 6, y: center.y))
-            p.addLine(to: CGPoint(x: size.width - pad + 6, y: center.y))
+            p.move(to: CGPoint(x: 0, y: center.y))
+            p.addLine(to: CGPoint(x: size.width, y: center.y))
         }
-        ctx.stroke(targetLine, with: .color(DesignTokens.flag.opacity(0.55)), lineWidth: 0.9)
+        ctx.stroke(targetLine, with: .color(DesignTokens.flag.opacity(0.45)), lineWidth: 0.7)
 
+        // Target yardage label
         ctx.draw(
             Text("\(Int(targetYards))y")
                 .font(DispersionType.mono(9, weight: .regular))
                 .foregroundStyle(DesignTokens.flag.opacity(0.85)),
-            at: CGPoint(x: size.width - pad + 6, y: center.y + 3),
-            anchor: .leading
+            at: CGPoint(x: size.width - 8, y: center.y - 8),
+            anchor: .trailing
         )
 
-        // Measured live ellipse (centered on bias, not target).
+        // Measured live ellipse (centered on bias)
         if measured.n >= 2, measured.carrySd > 0, measured.lateralSd > 0 {
             let biasCenter = CGPoint(
-                x: center.x + CGFloat(measured.latBias) * geom.scaleX,
-                y: center.y - CGFloat(measured.longBias) * geom.scaleY
+                x: center.x + CGFloat(measured.latBias) * geom.scale,
+                y: center.y - CGFloat(measured.longBias) * geom.scale
             )
-            for (k, opacity) in [(2.5, 0.18), (1.8, 0.28), (1.2, 0.40)] {
+            for (k, opacity) in [(2.5, 0.18), (1.8, 0.28), (1.2, 0.40)] as [(Double, Double)] {
                 let path = Path(ellipseIn: CGRect(
-                    x: biasCenter.x - CGFloat(measured.lateralSd * k) * geom.scaleX,
-                    y: biasCenter.y - CGFloat(measured.carrySd * k) * geom.scaleY,
-                    width: CGFloat(measured.lateralSd * k * 2) * geom.scaleX,
-                    height: CGFloat(measured.carrySd * k * 2) * geom.scaleY
+                    x: biasCenter.x - CGFloat(measured.lateralSd * k) * geom.scale,
+                    y: biasCenter.y - CGFloat(measured.carrySd * k) * geom.scale,
+                    width: CGFloat(measured.lateralSd * k * 2) * geom.scale,
+                    height: CGFloat(measured.carrySd * k * 2) * geom.scale
                 ))
                 ctx.fill(path, with: .color(DesignTokens.bentgrass.opacity(opacity)))
             }
-            // Bias arrow.
+            // Bias arrow
             let arrow = Path { p in
                 p.move(to: center)
                 p.addLine(to: biasCenter)
@@ -213,11 +209,11 @@ public struct RangeRadarField: View {
                 with: .color(DesignTokens.heat4.opacity(0.55)),
                 style: StrokeStyle(lineWidth: 1, dash: [2, 2])
             )
-            let dot = Path(ellipseIn: CGRect(x: biasCenter.x - 3, y: biasCenter.y - 3, width: 6, height: 6))
-            ctx.fill(dot, with: .color(DesignTokens.heat4))
+            let biasDot = Path(ellipseIn: CGRect(x: biasCenter.x - 3, y: biasCenter.y - 3, width: 6, height: 6))
+            ctx.fill(biasDot, with: .color(DesignTokens.heat4))
         }
 
-        // Target reticle.
+        // Target reticle
         let reticle = Path(ellipseIn: CGRect(x: center.x - 9, y: center.y - 9, width: 18, height: 18))
         ctx.stroke(reticle, with: .color(DesignTokens.flag), lineWidth: 1.2)
         ctx.fill(
@@ -229,21 +225,20 @@ public struct RangeRadarField: View {
         let compassFont = Font.system(size: 8, design: .monospaced).weight(.medium)
         let compassColor = Color.white.opacity(0.2)
         ctx.draw(Text("LONG").font(compassFont).foregroundStyle(compassColor),
-                 at: CGPoint(x: center.x, y: pad - 10), anchor: .center)
+                 at: CGPoint(x: center.x, y: 14), anchor: .center)
         ctx.draw(Text("SHORT").font(compassFont).foregroundStyle(compassColor),
-                 at: CGPoint(x: center.x, y: size.height - pad + 12), anchor: .center)
+                 at: CGPoint(x: center.x, y: size.height - 14), anchor: .center)
         ctx.draw(Text("L").font(compassFont).foregroundStyle(compassColor),
-                 at: CGPoint(x: pad - 10, y: center.y), anchor: .center)
+                 at: CGPoint(x: 12, y: center.y), anchor: .center)
         ctx.draw(Text("R").font(compassFont).foregroundStyle(compassColor),
-                 at: CGPoint(x: size.width - pad + 10, y: center.y), anchor: .center)
+                 at: CGPoint(x: size.width - 12, y: center.y), anchor: .center)
 
         // Logged shots
-        for (i, shot) in shotsToRender.enumerated() {
+        for (i, shot) in displayShots.enumerated() {
             let p = CGPoint(x: geom.sx(shot.lat), y: geom.sy(shot.long))
-            let isLatest = i == shotsToRender.count - 1
+            let isLatest = i == displayShots.count - 1
 
-            // Halo on latest shot
-            if isLatest && shots.count > 0 {
+            if isLatest && !displayShots.isEmpty {
                 let halo = Path(ellipseIn: CGRect(x: p.x - 10, y: p.y - 10, width: 20, height: 20))
                 ctx.fill(halo, with: .color(DesignTokens.primary.opacity(0.2)))
             }
@@ -253,8 +248,7 @@ public struct RangeRadarField: View {
             ctx.fill(dot, with: .color(isLatest ? DesignTokens.primary : DesignTokens.cream))
             ctx.stroke(dot, with: .color(DesignTokens.backgroundDeep), lineWidth: 1)
 
-            // Shot number
-            if shotsToRender.count <= 20 {
+            if displayShots.count <= 20 {
                 ctx.draw(
                     Text("\(i + 1)")
                         .font(.system(size: 7, design: .monospaced))
@@ -265,7 +259,7 @@ public struct RangeRadarField: View {
         }
 
         // Empty hint
-        if shotsToRender.isEmpty {
+        if displayShots.isEmpty {
             ctx.draw(
                 Text("TAP WHERE IT LANDED")
                     .font(DispersionType.mono(9, weight: .regular))
@@ -274,5 +268,12 @@ public struct RangeRadarField: View {
                 at: CGPoint(x: center.x, y: center.y + 32)
             )
         }
+    }
+
+    private func arcStep(for span: Double) -> Double {
+        if span <= 15 { return 3 }
+        if span <= 35 { return 5 }
+        if span <= 70 { return 10 }
+        return 20
     }
 }

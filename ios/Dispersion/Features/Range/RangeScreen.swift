@@ -162,9 +162,9 @@ struct LiveRangeView: View {
             // Drag coordinate readout — rendered above everything
             if let ds = dragReadout {
                 VStack(spacing: 2) {
-                    Text("\(ds.long >= 0 ? "+" : "")\(Int(ds.long))y long")
+                    Text("\(Int(abs(ds.long)))y \(ds.long >= 0 ? "long" : "short")")
                         .font(DispersionType.mono(16, weight: .semibold))
-                    Text("\(ds.lat >= 0 ? "R" : "L") \(Int(abs(ds.lat)))y")
+                    Text("\(Int(abs(ds.lat)))y \(ds.lat >= 0 ? "right" : "left")")
                         .font(DispersionType.mono(16, weight: .semibold))
                 }
                 .foregroundStyle(DesignTokens.primary)
