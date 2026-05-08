@@ -454,9 +454,11 @@ struct LiveRangeView: View {
 
     private func saveCalibration() {
         guard let club, taps.count >= 2 else { return }
+        // Absolute measured carry = target + mean long delta
+        let measuredCarry = effectiveTarget + stats.longBias
         let repo = ClubsRepo(context: modelContext)
         try? repo.update(id: club.id, patch: .init(
-            carryYards: club.carryYards + stats.longBias,
+            carryYards: measuredCarry,
             carrySd: stats.carrySd,
             lateralSd: stats.lateralSd
         ))
