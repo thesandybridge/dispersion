@@ -173,4 +173,51 @@ public struct CoursesRepo {
         for m in try context.fetch(d) { context.delete(m) }
         try context.save()
     }
+
+    // MARK: - Rounds
+
+    public func rounds(limit: Int = 100) throws -> [RoundSummary] {
+        var d = FetchDescriptor<RoundModel>(sortBy: [SortDescriptor(\.completedAt, order: .reverse)])
+        d.fetchLimit = limit
+        return try context.fetch(d).map { $0.toValue() }
+    }
+
+    public func rounds(courseId: String) throws -> [RoundSummary] {
+        let d = FetchDescriptor<RoundModel>(
+            predicate: #Predicate { $0.courseId == courseId },
+            sortBy: [SortDescriptor(\.completedAt, order: .reverse)]
+        )
+        return try context.fetch(d).map { $0.toValue() }
+    }
+
+    public func round(id: String) throws -> RoundSummary? {
+        var d = FetchDescriptor<RoundModel>(predicate: #Predicate { $0.id == id })
+        d.fetchLimit = 1
+        return try context.fetch(d).first?.toValue()
+    }
+
+    @discardableResult
+    public func createRound(_ round: RoundSummary) throws -> RoundSummary {
+        let model = RoundModel(
+            id: round.id, courseId: round.courseId, courseName: round.courseName,
+            startedAt: round.startedAt, completedAt: round.completedAt,
+            holeCount: round.holeCount, startHole: round.startHole,
+            totalScore: round.totalScore, totalPar: round.totalPar,
+            holesPlayed: round.holesPlayed, totalPutts: round.totalPutts,
+            fairwaysHit: round.fairwaysHit, fairwaysTotal: round.fairwaysTotal,
+            greensHit: round.greensHit, greensTotal: round.greensTotal,
+            upAndDowns: round.upAndDowns, upAndDownAttempts: round.upAndDownAttempts,
+            sgTotal: round.sgTotal, sgAvg: round.sgAvg, sgShotCount: round.sgShotCount,
+            scoresJSON: try? JSONEncoder().encode(round.scores)
+        )
+        context.insert(model)
+        try context.save()
+        return round
+    }
+
+    public func deleteRound(id: String) throws {
+        let d = FetchDescriptor<RoundModel>(predicate: #Predicate { $0.id == id })
+        for m in try context.fetch(d) { context.delete(m) }
+        try context.save()
+    }
 }

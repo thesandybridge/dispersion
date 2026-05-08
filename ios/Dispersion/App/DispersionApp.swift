@@ -8,7 +8,8 @@ struct DispersionApp: App {
 
     private static let allModels: [any PersistentModel.Type] = [
         ClubModel.self, SessionModel.self, ShotModel.self, FaceStrikeModel.self,
-        CourseModel.self, PolygonModel.self, CourseShotModel.self, HoleInfoModel.self
+        CourseModel.self, PolygonModel.self, CourseShotModel.self, HoleInfoModel.self,
+        RoundModel.self
     ]
 
     init() {

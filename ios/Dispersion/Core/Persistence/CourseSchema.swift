@@ -128,6 +128,71 @@ public final class HoleInfoModel {
 }
 
 @Model
+public final class RoundModel {
+    @Attribute(.unique) public var id: String
+    public var courseId: String
+    public var courseName: String
+    public var startedAt: Date
+    public var completedAt: Date
+    public var holeCount: Int = 18
+    public var startHole: Int = 1
+    public var totalScore: Int = 0
+    public var totalPar: Int = 0
+    public var holesPlayed: Int = 0
+    public var totalPutts: Int = 0
+    public var fairwaysHit: Int = 0
+    public var fairwaysTotal: Int = 0
+    public var greensHit: Int = 0
+    public var greensTotal: Int = 0
+    public var upAndDowns: Int = 0
+    public var upAndDownAttempts: Int = 0
+    public var sgTotal: Double = 0
+    public var sgAvg: Double = 0
+    public var sgShotCount: Int = 0
+    public var scoresJSON: Data?
+
+    public init(
+        id: String, courseId: String, courseName: String,
+        startedAt: Date, completedAt: Date = .now,
+        holeCount: Int = 18, startHole: Int = 1,
+        totalScore: Int = 0, totalPar: Int = 0, holesPlayed: Int = 0,
+        totalPutts: Int = 0,
+        fairwaysHit: Int = 0, fairwaysTotal: Int = 0,
+        greensHit: Int = 0, greensTotal: Int = 0,
+        upAndDowns: Int = 0, upAndDownAttempts: Int = 0,
+        sgTotal: Double = 0, sgAvg: Double = 0, sgShotCount: Int = 0,
+        scoresJSON: Data? = nil
+    ) {
+        self.id = id; self.courseId = courseId; self.courseName = courseName
+        self.startedAt = startedAt; self.completedAt = completedAt
+        self.holeCount = holeCount; self.startHole = startHole
+        self.totalScore = totalScore; self.totalPar = totalPar; self.holesPlayed = holesPlayed
+        self.totalPutts = totalPutts
+        self.fairwaysHit = fairwaysHit; self.fairwaysTotal = fairwaysTotal
+        self.greensHit = greensHit; self.greensTotal = greensTotal
+        self.upAndDowns = upAndDowns; self.upAndDownAttempts = upAndDownAttempts
+        self.sgTotal = sgTotal; self.sgAvg = sgAvg; self.sgShotCount = sgShotCount
+        self.scoresJSON = scoresJSON
+    }
+
+    public func toValue() -> RoundSummary {
+        let scores = scoresJSON.flatMap { try? JSONDecoder().decode([HoleScore].self, from: $0) } ?? []
+        return RoundSummary(
+            id: id, courseId: courseId, courseName: courseName,
+            startedAt: startedAt, completedAt: completedAt,
+            holeCount: holeCount, startHole: startHole,
+            totalScore: totalScore, totalPar: totalPar, holesPlayed: holesPlayed,
+            totalPutts: totalPutts,
+            fairwaysHit: fairwaysHit, fairwaysTotal: fairwaysTotal,
+            greensHit: greensHit, greensTotal: greensTotal,
+            upAndDowns: upAndDowns, upAndDownAttempts: upAndDownAttempts,
+            sgTotal: sgTotal, sgAvg: sgAvg, sgShotCount: sgShotCount,
+            scores: scores
+        )
+    }
+}
+
+@Model
 public final class CourseShotModel {
     @Attribute(.unique) public var id: String
     public var courseId: String

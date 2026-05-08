@@ -298,6 +298,11 @@ struct LiveRangeView: View {
             Text("σ↔\(String(format: "%.1f", stats.lateralSd))")
                 .font(DispersionType.mono(10))
                 .foregroundStyle(DesignTokens.mutedForeground)
+            if taps.count < 10 {
+                Text("⚠️ \(taps.count)/10")
+                    .font(DispersionType.mono(9))
+                    .foregroundStyle(DesignTokens.pMarginal)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

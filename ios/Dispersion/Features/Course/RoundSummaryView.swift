@@ -13,6 +13,11 @@ struct RoundSummaryView: View {
     var onBack: () -> Void
 
     private var scores: [HoleScore] {
+        // Try SwiftData first, fall back to UserDefaults for old rounds
+        if let round = try? CoursesRepo(context: modelContext).round(id: sessionId),
+           !round.scores.isEmpty {
+            return round.scores.sorted { $0.hole < $1.hole }
+        }
         guard let data = UserDefaults.standard.data(forKey: "roundScores.\(sessionId)"),
               let decoded = try? JSONDecoder().decode([HoleScore].self, from: data)
         else { return [] }

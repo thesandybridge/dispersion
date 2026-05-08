@@ -606,6 +606,15 @@ struct CoursePlayView: View {
                 .buttonStyle(.dispersion(.outline, size: .icon))
 
                 Button {
+                    tracker.scores[tracker.currentHole]?.penaltyStrokes += 1
+                    tracker.scores[tracker.currentHole]?.score += 1
+                    Haptics.error()
+                } label: {
+                    Image(systemName: "exclamationmark.triangle").font(.system(size: 14))
+                }
+                .buttonStyle(.dispersion(.ghost, size: .icon))
+
+                Button {
                     let shots = tracker.shotsForHole(tracker.currentHole).count
                     tracker.setScore(hole: tracker.currentHole, score: max(shots, 1))
                     showScoreEdit = true
@@ -882,10 +891,20 @@ struct CoursePlayView: View {
     }
 
     private func nextHole() {
+        let hole = tracker.currentHole
+        let score = tracker.scores[hole]?.score ?? 0
+        let par = tracker.scores[hole]?.par ?? 4
         tracker.finishHole()
         tracker.nextHole()
         tracker.save()
-        Haptics.light()
+        // Haptic feedback based on score
+        if score > 0 && score <= par - 1 {
+            Haptics.success() // birdie or better
+        } else if score > par {
+            Haptics.error() // bogey or worse
+        } else {
+            Haptics.medium() // par
+        }
     }
 
     // MARK: - Round setup
@@ -1028,10 +1047,43 @@ struct CoursePlayView: View {
 
     private func finishRound() {
         tracker.state = .roundComplete
-        // Persist scorecard data keyed by sessionId
-        if let data = try? JSONEncoder().encode(Array(tracker.scores.values)) {
+
+        // Compute strokes gained from session shots
+        let sessionShots = (try? ShotsRepo(context: modelContext).listBySession(tracker.sessionId)) ?? []
+        let sg = StrokesGained.aggregate(sessionShots)
+
+        // Persist round to SwiftData
+        let scores = Array(tracker.scores.values).sorted { $0.hole < $1.hole }
+        let round = RoundSummary(
+            id: tracker.sessionId,
+            courseId: courseId,
+            courseName: cachedCourse?.name ?? "Round",
+            startedAt: tracker.startedAt,
+            completedAt: .now,
+            holeCount: tracker.holeCount,
+            startHole: tracker.startHole,
+            totalScore: tracker.totalScore,
+            totalPar: tracker.totalPar,
+            holesPlayed: tracker.holesPlayed,
+            totalPutts: tracker.totalPutts,
+            fairwaysHit: tracker.fairwaysHit,
+            fairwaysTotal: tracker.fairwaysTotal,
+            greensHit: tracker.greensHit,
+            greensTotal: tracker.holesPlayed,
+            upAndDowns: tracker.upAndDowns,
+            upAndDownAttempts: tracker.upAndDownAttempts,
+            sgTotal: sg.totalSG,
+            sgAvg: sg.avgSG,
+            sgShotCount: sg.shotCount,
+            scores: scores
+        )
+        _ = try? CoursesRepo(context: modelContext).createRound(round)
+
+        // Keep UserDefaults for backward compat
+        if let data = try? JSONEncoder().encode(scores) {
             UserDefaults.standard.set(data, forKey: "roundScores.\(tracker.sessionId)")
         }
+
         tracker.clearSave()
         SessionStore.shared.clear()
         Haptics.success()

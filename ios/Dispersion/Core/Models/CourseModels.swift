@@ -226,6 +226,37 @@ public struct CourseShot: Identifiable, Hashable, Codable, Sendable {
     }
 }
 
+// MARK: - Round summary (persisted after round completion)
+
+public struct RoundSummary: Identifiable, Hashable, Sendable {
+    public var id: String
+    public var courseId: String
+    public var courseName: String
+    public var startedAt: Date
+    public var completedAt: Date
+    public var holeCount: Int
+    public var startHole: Int
+    public var totalScore: Int
+    public var totalPar: Int
+    public var holesPlayed: Int
+    public var totalPutts: Int
+    public var fairwaysHit: Int
+    public var fairwaysTotal: Int
+    public var greensHit: Int
+    public var greensTotal: Int
+    public var upAndDowns: Int
+    public var upAndDownAttempts: Int
+    public var sgTotal: Double
+    public var sgAvg: Double
+    public var sgShotCount: Int
+    public var scores: [HoleScore]
+
+    public var toPar: Int { totalScore - totalPar }
+    public var girPct: Double { greensTotal > 0 ? Double(greensHit) / Double(greensTotal) : 0 }
+    public var firPct: Double { fairwaysTotal > 0 ? Double(fairwaysHit) / Double(fairwaysTotal) : 0 }
+    public var puttsPerHole: Double { holesPlayed > 0 ? Double(totalPutts) / Double(holesPlayed) : 0 }
+}
+
 // MARK: - Geo math
 
 public func haversineYards(from a: Coord, to b: Coord) -> Double {

@@ -14,6 +14,7 @@ public struct CourseScreen: View {
     @State private var coursePath = NavigationPath()
     @State private var searchOpen = false
     @State private var buildingCourse: Course?
+    @State private var showHistory = false
     @State private var importerOpen = false
     @State private var importStatus: String?
     @State private var dial = DialStore.shared
@@ -62,6 +63,15 @@ public struct CourseScreen: View {
             MapBuilderView(courseId: course.id, course: course) {
                 buildingCourse = nil
             }
+        }
+        .fullScreenCover(isPresented: $showHistory) {
+            RoundHistoryView(
+                onBack: { showHistory = false },
+                onSelectRound: { id in
+                    showHistory = false
+                    coursePath.append(id)
+                }
+            )
         }
         .fileImporter(isPresented: $importerOpen, allowedContentTypes: [.json]) { result in
             importCourse(result)
@@ -129,17 +139,27 @@ public struct CourseScreen: View {
                     .padding(.horizontal, 16)
                 }
 
-                if !roundSessions.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Round history").eyebrow()
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20)
-                        ForEach(roundSessions, id: \.id) { session in
-                            roundRow(session)
-                        }
+                // Round history link
+                Button { showHistory = true; Haptics.light() } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 14))
+                            .foregroundStyle(accent)
+                        Text("Round History")
+                            .font(DispersionType.ui(14, weight: .medium))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11))
+                            .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(ThemedCardFill(cornerRadius: 12))
+                    .foregroundStyle(DesignTokens.foreground)
                 }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
 
                 Spacer().frame(height: 100)
             }
@@ -229,30 +249,7 @@ public struct CourseScreen: View {
 
     // MARK: - Round row
 
-    private func roundRow(_ session: Session) -> some View {
-        Button { coursePath.append(session.id); Haptics.light() } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "flag.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(accent)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(session.label)
-                        .font(DispersionType.ui(14, weight: .medium))
-                        .foregroundStyle(DesignTokens.foreground)
-                    Text(session.createdAt.formatted(.dateTime.month(.abbreviated).day().hour().minute()))
-                        .font(DispersionType.mono(10))
-                        .foregroundStyle(DesignTokens.mutedForeground)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11))
-                    .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
-            }
-            .padding(12)
-            .background(ThemedCardFill(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-    }
+
 
     // MARK: - Share / Import
 
@@ -306,9 +303,4 @@ public struct CourseScreen: View {
         }
     }
 
-
-    private var roundSessions: [Session] {
-        ((try? SessionsRepo(context: modelContext).list()) ?? [])
-            .filter { $0.kind == .round }
-    }
 }
