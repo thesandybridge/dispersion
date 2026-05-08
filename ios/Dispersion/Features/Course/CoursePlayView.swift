@@ -751,6 +751,16 @@ struct CoursePlayView: View {
             _ = try? CoursesRepo(context: modelContext).createShot(shot)
         }
 
+        // Drop/penalty: add penalty stroke
+        if shotType == .penalty {
+            let h = tracker.currentHole
+            if tracker.scores[h] == nil {
+                tracker.scores[h] = HoleScore(hole: h, par: holePar)
+            }
+            tracker.scores[h]?.penaltyStrokes += 1
+            tracker.scores[h]?.score += 1
+        }
+
         // Auto-detect shot outcome relative to target line
         if let flag = flagCoord {
             lastShotOutcome = classifyShot(from: start, landing: end, target: flag, clubId: clubId, swing: swing)
@@ -1200,10 +1210,7 @@ struct CoursePlayView: View {
             greensTotal: tracker.holesPlayed,
             upAndDowns: tracker.upAndDowns,
             upAndDownAttempts: tracker.upAndDownAttempts,
-            onDone: isComplete ? {
-                showRoundSummary = false
-                onBack()
-            } : nil
+            onDone: nil
         )
     }
 
@@ -1239,6 +1246,31 @@ struct CoursePlayView: View {
             eyebrow: "Shot \(tracker.shotsForHole(tracker.currentHole).count + 1) · \(shotDist)y",
             title: "What did you hit?"
         )
+
+        // Quick actions — non-dispersion shots (don't affect club stats)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach([("Drop", "arrow.down.circle", ShotType.penalty),
+                         ("Chip", "arrow.down.right", ShotType.chip),
+                         ("Punch", "arrow.right", ShotType.punch),
+                         ("Sand", "sun.dust", ShotType.sand)], id: \.0) { label, icon, type in
+                    Button {
+                        completeShot(clubId: selectedClubId, swing: .full, shotType: type)
+                        showClubPicker = false
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: icon).font(.system(size: 10))
+                            Text(label).font(DispersionType.mono(10, weight: .medium))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(DesignTokens.surface))
+                        .foregroundStyle(DesignTokens.pMarginal)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
 
         // Recommended club (one-tap confirm)
         if let rec = preselected, let club = clubs.first(where: { $0.id == rec.club.id }) {
@@ -1277,7 +1309,7 @@ struct CoursePlayView: View {
             .buttonStyle(.plain)
         }
 
-        // Full club list — only full swings, compact
+        // Full club list
         ScrollView {
             VStack(spacing: 3) {
                 ForEach(clubs, id: \.id) { club in
