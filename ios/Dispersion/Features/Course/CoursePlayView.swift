@@ -389,7 +389,7 @@ struct CoursePlayView: View {
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(.ultraThinMaterial)
+                                .fill(DesignTokens.popover)
                                                         )
                     }
                     Spacer()

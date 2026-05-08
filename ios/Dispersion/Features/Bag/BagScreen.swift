@@ -49,13 +49,13 @@ public struct BagScreen: View {
             ClubEditSheet(initial: c, onClose: { editingClub = nil })
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
+                .presentationBackground(DesignTokens.popover)
         }
         .sheet(isPresented: $creatingNewClub) {
             ClubEditSheet(initial: nil, onClose: { creatingNewClub = false })
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
+                .presentationBackground(DesignTokens.popover)
         }
         .onAppear {
             registerDialActions()

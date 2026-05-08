@@ -232,7 +232,7 @@ public struct HoleMapView: View {
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(.ultraThinMaterial)
+                                .fill(DesignTokens.popover)
                                                         )
                     }
                     .buttonStyle(.plain)

@@ -25,7 +25,7 @@ struct DebugOverlay: View {
         .padding(8)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(DesignTokens.popover)
                         )
         .padding(.leading, 8)
         .padding(.top, 52)

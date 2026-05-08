@@ -410,7 +410,7 @@ struct MapBuilderView: View {
                         .foregroundStyle(quickEdit ? accent : .white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+                        .background(Capsule().fill(DesignTokens.popover).environment(\.colorScheme, .dark))
                     }
                     .buttonStyle(.plain)
                 }
@@ -426,7 +426,7 @@ struct MapBuilderView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+                        .background(Capsule().fill(DesignTokens.popover).environment(\.colorScheme, .dark))
                 }
                 .buttonStyle(.plain)
             }
@@ -453,7 +453,7 @@ struct MapBuilderView: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(DesignTokens.popover)
                                 )
             .padding(.horizontal, 12)
             .padding(.bottom, 12)

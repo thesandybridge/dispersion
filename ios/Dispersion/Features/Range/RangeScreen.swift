@@ -281,7 +281,7 @@ struct LiveRangeView: View {
         .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(.ultraThinMaterial)
+                .fill(DesignTokens.popover)
                         )
     }
 
@@ -306,7 +306,7 @@ struct LiveRangeView: View {
         .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(.ultraThinMaterial)
+                .fill(DesignTokens.popover)
                         )
     }
 
@@ -510,7 +510,7 @@ struct LiveRangeView: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(DesignTokens.popover)
                         )
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
