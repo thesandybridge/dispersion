@@ -59,6 +59,75 @@ public final class PolygonModel {
 }
 
 @Model
+public final class HoleInfoModel {
+    @Attribute(.unique) public var id: String
+    public var courseId: String
+    public var holeNumber: Int
+    public var par: Int = 4
+    public var handicap: Int = 0
+    // Legacy scalar fields (kept for backward compat with existing data)
+    public var yardage: Int = 0
+    public var teeLat: Double?
+    public var teeLng: Double?
+    public var pinLat: Double?
+    public var pinLng: Double?
+    // New: JSON-encoded arrays for multiple tees and pin positions
+    public var teeBoxesJSON: Data?
+    public var pinPositionsJSON: Data?
+
+    public init(id: String, courseId: String, holeNumber: Int,
+                par: Int = 4, handicap: Int = 0,
+                yardage: Int = 0,
+                teeLat: Double? = nil, teeLng: Double? = nil,
+                pinLat: Double? = nil, pinLng: Double? = nil,
+                teeBoxesJSON: Data? = nil, pinPositionsJSON: Data? = nil) {
+        self.id = id
+        self.courseId = courseId
+        self.holeNumber = holeNumber
+        self.par = par
+        self.handicap = handicap
+        self.yardage = yardage
+        self.teeLat = teeLat
+        self.teeLng = teeLng
+        self.pinLat = pinLat
+        self.pinLng = pinLng
+        self.teeBoxesJSON = teeBoxesJSON
+        self.pinPositionsJSON = pinPositionsJSON
+    }
+
+    public func toValue() -> HoleInfo {
+        // Prefer JSON arrays if available; fall back to legacy scalar fields
+        let tees: [TeeBox]
+        if let data = teeBoxesJSON, let decoded = try? JSONDecoder().decode([TeeBox].self, from: data), !decoded.isEmpty {
+            tees = decoded
+        } else if let lat = teeLat, let lng = teeLng {
+            tees = [TeeBox(name: "White", color: "white", coord: Coord(lat: lat, lng: lng), yardage: yardage)]
+        } else {
+            tees = []
+        }
+
+        let pins: [HolePinPosition]
+        if let data = pinPositionsJSON, let decoded = try? JSONDecoder().decode([HolePinPosition].self, from: data) {
+            pins = decoded
+        } else if let lat = pinLat, let lng = pinLng {
+            pins = [
+                HolePinPosition(zone: .front),
+                HolePinPosition(zone: .middle, coord: Coord(lat: lat, lng: lng)),
+                HolePinPosition(zone: .back)
+            ]
+        } else {
+            pins = PinZone.allCases.map { HolePinPosition(zone: $0) }
+        }
+
+        return HoleInfo(
+            id: id, courseId: courseId, holeNumber: holeNumber,
+            par: par, handicap: handicap,
+            teeBoxes: tees, pinPositions: pins
+        )
+    }
+}
+
+@Model
 public final class CourseShotModel {
     @Attribute(.unique) public var id: String
     public var courseId: String

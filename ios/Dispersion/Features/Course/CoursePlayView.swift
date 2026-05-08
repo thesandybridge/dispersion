@@ -1,5 +1,5 @@
-// Live round view with real GolfBert data — tee boxes, flag positions,
-// pars, yardages, polygon overlays, and GPS shot tracking.
+// Live round view — tee boxes, flag positions, pars, yardages, polygon
+// overlays, and GPS shot tracking. All data from local HoleInfo records.
 
 import MapKit
 import SwiftData
@@ -23,30 +23,30 @@ struct CoursePlayView: View {
     @State private var showScorecard = false
     @State private var showRoundSummary = false
     @State private var deleteConfirm = false
-    @State private var teeColor = "White"
     @State private var selectedClubId: String?
     @State private var selectedSwing: SwingType = .full
     @State private var crosshairCoord: Coord?
     @State private var teeOverrides: [Int: Coord] = [:]
+    @State private var activeTee: String = "White"
+    @State private var activePinZone: PinZone = .middle
 
     // Cached data — loaded once on appear and on hole change, not per frame
     @State private var cachedCourse: Course?
     @State private var cachedHolePolygons: [CoursePolygon] = []
-    @State private var cachedGBHoles: [GolfBertClient.GBHole] = []
-    @State private var cachedScorecard: [GolfBertClient.GBHoleTeebox] = []
+    @State private var cachedHoleInfos: [Int: HoleInfo] = [:]
     @State private var cachedClubOptions: [ClubOption] = []
 
     private var course: Course? { cachedCourse }
     private var holePolygons: [CoursePolygon] { cachedHolePolygons }
-    private var gbHoles: [GolfBertClient.GBHole] { cachedGBHoles }
-    private var gbScorecard: [GolfBertClient.GBHoleTeebox] { cachedScorecard }
 
-    private var currentGBHole: GolfBertClient.GBHole? {
-        cachedGBHoles.first(where: { $0.number == tracker.currentHole })
+    private var flagCoord: Coord? {
+        cachedHoleInfos[tracker.currentHole]?.pin(activePinZone)
+            ?? cachedHoleInfos[tracker.currentHole]?.defaultPinCoord
     }
-    private var flagCoord: Coord? { currentGBHole?.flagPosition }
     private var teeCoord: Coord? {
-        teeOverrides[tracker.currentHole] ?? currentGBHole?.teePosition(color: teeColor)
+        teeOverrides[tracker.currentHole]
+            ?? cachedHoleInfos[tracker.currentHole]?.teeBox(named: activeTee)?.coord
+            ?? cachedHoleInfos[tracker.currentHole]?.firstTeeCoord
     }
     private var teeIsOverridden: Bool { teeOverrides[tracker.currentHole] != nil }
     struct ClubOption: Identifiable {
@@ -95,15 +95,9 @@ struct CoursePlayView: View {
         )
     }
 
-    private var holePar: Int {
-        gbScorecard.first(where: { $0.holenumber == tracker.currentHole && $0.color == teeColor })?.par ?? 4
-    }
-    private var holeYardage: Int {
-        gbScorecard.first(where: { $0.holenumber == tracker.currentHole && $0.color == teeColor })?.length ?? 0
-    }
-    private var holeHandicap: Int {
-        gbScorecard.first(where: { $0.holenumber == tracker.currentHole && $0.color == teeColor })?.handicap ?? 0
-    }
+    private var holePar: Int { cachedHoleInfos[tracker.currentHole]?.par ?? 4 }
+    private var holeYardage: Int { cachedHoleInfos[tracker.currentHole]?.yardage(tee: activeTee) ?? 0 }
+    private var holeHandicap: Int { cachedHoleInfos[tracker.currentHole]?.handicap ?? 0 }
 
     private var distanceToGreen: Int? {
         guard let flag = flagCoord, let loc = location.lastCoord else { return nil }
@@ -113,12 +107,6 @@ struct CoursePlayView: View {
     private var clubs: [Club] { clubModels.map { $0.toValue() } }
     private var putter: Club? {
         clubs.first { ClubCategoryRegistry.categorize(name: $0.name, carryYards: $0.carryYards) == .putter }
-    }
-    private var teeColors: [String] {
-        Array(Set(gbScorecard.map(\.color))).sorted { a, b in
-            let order = ["Blue": 0, "White": 1, "Red": 2]
-            return (order[a] ?? 3) < (order[b] ?? 3)
-        }
     }
 
     var body: some View {
@@ -134,20 +122,15 @@ struct CoursePlayView: View {
             loadHoleData()
             if tracker.state == .idle, let c = cachedCourse {
                 if !tracker.loadIfExists(courseId: c.id) {
-                    tracker.startRound(courseId: c.id, holeCount: max(c.holeCount, cachedGBHoles.count))
-                    for tb in cachedScorecard where tb.color == teeColor {
-                        tracker.setPar(hole: tb.holenumber, par: tb.par)
+                    tracker.startRound(courseId: c.id, holeCount: c.holeCount)
+                    for (hole, info) in cachedHoleInfos {
+                        tracker.setPar(hole: hole, par: info.par)
                     }
                 }
                 // Create/update session
                 let session = Session(id: tracker.sessionId, kind: .round, label: c.name)
                 _ = try? SessionsRepo(context: modelContext).create(session)
                 SessionStore.shared.setActive(ActiveSession(id: tracker.sessionId, kind: .round, label: c.name))
-            }
-        }
-        .onChange(of: teeColor) { _, _ in
-            for tb in cachedScorecard where tb.color == teeColor {
-                tracker.setPar(hole: tb.holenumber, par: tb.par)
             }
         }
         .onChange(of: tracker.currentHole) { _, _ in
@@ -251,36 +234,60 @@ struct CoursePlayView: View {
             }
             .padding(.horizontal, 16)
 
-            // Tee selector — segmented pill
-            if teeColors.count > 1 {
-                HStack(spacing: 0) {
-                    ForEach(teeColors, id: \.self) { color in
-                        let isSelected = teeColor == color
-                        let yds = gbScorecard.first(where: { $0.holenumber == tracker.currentHole && $0.color == color })?.length ?? 0
-                        Button {
-                            teeColor = color
-                            Haptics.medium()
-                        } label: {
-                            HStack(spacing: 5) {
-                                Circle()
-                                    .fill(teeColorSwift(color))
-                                    .frame(width: 8, height: 8)
-                                    .overlay(Circle().strokeBorder(color == "White" ? Color.gray.opacity(0.4) : .clear, lineWidth: 0.5))
-                                Text("\(yds)y")
-                                    .font(DispersionType.mono(11, weight: .medium))
+            // Tee + pin selectors
+            let tees = cachedHoleInfos.values.flatMap(\.teeBoxes).map(\.name)
+            let uniqueTees = Array(Set(tees)).sorted {
+                let order = ["Blue": 0, "White": 1, "Red": 2, "Gold": 3]
+                return (order[$0] ?? 4) < (order[$1] ?? 4)
+            }
+            if uniqueTees.count > 1 || true {
+                HStack(spacing: 6) {
+                    if uniqueTees.count > 1 {
+                        ForEach(uniqueTees, id: \.self) { name in
+                            Button {
+                                activeTee = name
+                                Haptics.light()
+                            } label: {
+                                let color = TeeBox.defaultColors.first { $0.name == name }?.color ?? "white"
+                                HStack(spacing: 4) {
+                                    Circle().fill(teeDisplayColor(color)).frame(width: 6, height: 6)
+                                    if holeYardage > 0 {
+                                        Text("\(holeYardage)y")
+                                            .font(DispersionType.mono(10, weight: .medium))
+                                    } else {
+                                        Text(name)
+                                            .font(DispersionType.mono(10, weight: .medium))
+                                    }
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Capsule().fill(activeTee == name ? accent : DesignTokens.surface))
+                                .foregroundStyle(activeTee == name ? DesignTokens.primaryForeground : DesignTokens.foreground)
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .frame(maxWidth: .infinity)
-                            .background(isSelected ? DesignTokens.primary : Color.clear)
-                            .foregroundStyle(isSelected ? DesignTokens.primaryForeground : DesignTokens.foreground)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                    }
+
+                    Spacer()
+
+                    // Pin zone selector
+                    ForEach(PinZone.allCases, id: \.self) { zone in
+                        let hasCoord = cachedHoleInfos[tracker.currentHole]?.pin(zone) != nil
+                        if hasCoord {
+                            Button {
+                                activePinZone = zone
+                                Haptics.light()
+                            } label: {
+                                Text(zone.label.prefix(1).uppercased())
+                                    .font(DispersionType.mono(10, weight: .bold))
+                                    .frame(width: 24, height: 24)
+                                    .background(Circle().fill(activePinZone == zone ? accent : DesignTokens.surface))
+                                    .foregroundStyle(activePinZone == zone ? DesignTokens.primaryForeground : DesignTokens.foreground)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
-                .background(DesignTokens.surface)
-                .clipShape(Capsule())
-                .overlay(Capsule().strokeBorder(DesignTokens.border, lineWidth: 1))
                 .padding(.horizontal, 16)
             }
 
@@ -288,6 +295,16 @@ struct CoursePlayView: View {
         }
         .padding(.top, 4)
         .background(DesignTokens.background)
+    }
+
+    private func teeDisplayColor(_ color: String) -> Color {
+        switch color {
+        case "blue": return .blue
+        case "white": return .white
+        case "red": return .red
+        case "gold": return .yellow
+        default: return .gray
+        }
     }
 
     // MARK: - Map
@@ -585,13 +602,10 @@ struct CoursePlayView: View {
     // MARK: - Data loading (called once, not per frame)
 
     private func loadCourseData() {
-        cachedCourse = try? CoursesRepo(context: modelContext).get(id: courseId)
-        if let data = UserDefaults.standard.data(forKey: "holes.\(courseId)") {
-            cachedGBHoles = (try? JSONDecoder().decode([GolfBertClient.GBHole].self, from: data)) ?? []
-        }
-        if let data = UserDefaults.standard.data(forKey: "scorecard.\(courseId)") {
-            cachedScorecard = (try? JSONDecoder().decode([GolfBertClient.GBHoleTeebox].self, from: data)) ?? []
-        }
+        let repo = CoursesRepo(context: modelContext)
+        cachedCourse = try? repo.get(id: courseId)
+        let infos = (try? repo.holeInfos(courseId: courseId)) ?? []
+        cachedHoleInfos = Dictionary(uniqueKeysWithValues: infos.map { ($0.holeNumber, $0) })
         // Load tee overrides
         if let data = UserDefaults.standard.data(forKey: "teeOverrides.\(courseId)") {
             teeOverrides = (try? JSONDecoder().decode([Int: Coord].self, from: data)) ?? [:]
@@ -860,11 +874,7 @@ struct CoursePlayView: View {
     }
 
     private func scorecardContent(isComplete: Bool) -> some View {
-        let parsMap = Dictionary(
-            uniqueKeysWithValues: cachedScorecard
-                .filter { $0.color == teeColor }
-                .map { ($0.holenumber, $0.par) }
-        )
+        let parsMap = Dictionary(uniqueKeysWithValues: cachedHoleInfos.map { ($0.key, $0.value.par) })
         return RoundScorecardView(
             scores: tracker.scores,
             holeCount: tracker.holeCount,
@@ -903,17 +913,6 @@ struct CoursePlayView: View {
         tracker.currentHole -= 1
         tracker.state = .holeInProgress(hole: tracker.currentHole, shotCount: tracker.shotsForHole(tracker.currentHole).count)
         Haptics.light()
-    }
-
-    private func teeColorSwift(_ color: String) -> Color {
-        switch color {
-        case "Blue": return .blue
-        case "White": return .white
-        case "Red": return .red
-        case "Gold", "Yellow": return .yellow
-        case "Black": return .black
-        default: return .gray
-        }
     }
 
     // MARK: - Club picker
@@ -1144,7 +1143,7 @@ struct CoursePlayView: View {
             HStack(spacing: 3) {
                 ForEach(1...tracker.holeCount, id: \.self) { hole in
                     let hs = tracker.scores[hole]
-                    let p = gbScorecard.first(where: { $0.holenumber == hole && $0.color == teeColor })?.par ?? 4
+                    let p = cachedHoleInfos[hole]?.par ?? 4
                     VStack(spacing: 2) {
                         Text("\(hole)").font(DispersionType.mono(8)).foregroundStyle(DesignTokens.mutedForeground)
                         Text(hs?.score ?? 0 > 0 ? "\(hs!.score)" : "-")

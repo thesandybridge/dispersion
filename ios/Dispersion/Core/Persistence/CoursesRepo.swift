@@ -34,11 +34,59 @@ public struct CoursesRepo {
     public func deleteCourse(id: String) throws {
         let d = FetchDescriptor<CourseModel>(predicate: #Predicate { $0.id == id })
         for m in try context.fetch(d) { context.delete(m) }
-        // Cascade: delete polygons + shots
+        // Cascade: delete polygons, hole infos, and shots
         let pd = FetchDescriptor<PolygonModel>(predicate: #Predicate { $0.courseId == id })
         for m in try context.fetch(pd) { context.delete(m) }
+        let hd = FetchDescriptor<HoleInfoModel>(predicate: #Predicate { $0.courseId == id })
+        for m in try context.fetch(hd) { context.delete(m) }
         let sd = FetchDescriptor<CourseShotModel>(predicate: #Predicate { $0.courseId == id })
         for m in try context.fetch(sd) { context.delete(m) }
+        try context.save()
+    }
+
+    // MARK: - Hole info
+
+    public func holeInfos(courseId: String) throws -> [HoleInfo] {
+        let d = FetchDescriptor<HoleInfoModel>(
+            predicate: #Predicate { $0.courseId == courseId },
+            sortBy: [SortDescriptor(\.holeNumber)]
+        )
+        return try context.fetch(d).map { $0.toValue() }
+    }
+
+    public func holeInfo(courseId: String, hole: Int) throws -> HoleInfo? {
+        var d = FetchDescriptor<HoleInfoModel>(
+            predicate: #Predicate { $0.courseId == courseId && $0.holeNumber == hole }
+        )
+        d.fetchLimit = 1
+        return try context.fetch(d).first?.toValue()
+    }
+
+    public func upsertHoleInfo(_ info: HoleInfo) throws {
+        let teeData = try? JSONEncoder().encode(info.teeBoxes)
+        let pinData = try? JSONEncoder().encode(info.pinPositions)
+
+        var d = FetchDescriptor<HoleInfoModel>(predicate: #Predicate { $0.id == info.id })
+        d.fetchLimit = 1
+        if let existing = try context.fetch(d).first {
+            existing.par = info.par
+            existing.handicap = info.handicap
+            existing.teeBoxesJSON = teeData
+            existing.pinPositionsJSON = pinData
+        } else {
+            let model = HoleInfoModel(
+                id: info.id, courseId: info.courseId, holeNumber: info.holeNumber,
+                par: info.par, handicap: info.handicap,
+                teeBoxesJSON: teeData, pinPositionsJSON: pinData
+            )
+            context.insert(model)
+        }
+        try context.save()
+    }
+
+    public func deleteHoleInfos(courseId: String) throws {
+        let d = FetchDescriptor<HoleInfoModel>(predicate: #Predicate { $0.courseId == courseId })
+        for m in try context.fetch(d) { context.delete(m) }
         try context.save()
     }
 
@@ -67,6 +115,23 @@ public struct CoursesRepo {
             )
             context.insert(model)
         }
+        try context.save()
+    }
+
+    public func deletePolygon(id: String) throws {
+        var d = FetchDescriptor<PolygonModel>(predicate: #Predicate { $0.id == id })
+        d.fetchLimit = 1
+        if let m = try context.fetch(d).first {
+            context.delete(m)
+            try context.save()
+        }
+    }
+
+    public func deletePolygons(courseId: String, hole: Int) throws {
+        let d = FetchDescriptor<PolygonModel>(predicate: #Predicate {
+            $0.courseId == courseId && $0.holeNumber == hole
+        })
+        for m in try context.fetch(d) { context.delete(m) }
         try context.save()
     }
 

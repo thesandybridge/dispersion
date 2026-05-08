@@ -99,6 +99,94 @@ public struct CourseHole: Identifiable, Hashable, Sendable {
     }
 }
 
+// MARK: - Tee box
+
+public struct TeeBox: Hashable, Codable, Sendable, Identifiable {
+    public var id: String
+    public var name: String       // display name ("Tips", "Members", etc.)
+    public var color: String      // "blue", "white", "red", "gold", "black"
+    public var coord: Coord?
+    public var yardage: Int
+
+    public init(id: String = UUID().uuidString.lowercased(),
+                name: String, color: String, coord: Coord? = nil, yardage: Int = 0) {
+        self.id = id
+        self.name = name
+        self.color = color
+        self.coord = coord
+        self.yardage = yardage
+    }
+
+    public static let defaultColors: [(name: String, color: String)] = [
+        ("Blue", "blue"), ("White", "white"), ("Red", "red"), ("Gold", "gold")
+    ]
+}
+
+// MARK: - Pin position
+
+public enum PinZone: String, Codable, CaseIterable, Sendable {
+    case front, middle, back
+
+    public var label: String { rawValue.capitalized }
+}
+
+public struct HolePinPosition: Hashable, Codable, Sendable {
+    public var zone: PinZone
+    public var coord: Coord?
+
+    public init(zone: PinZone, coord: Coord? = nil) {
+        self.zone = zone
+        self.coord = coord
+    }
+}
+
+// MARK: - Hole info (local-first)
+
+public struct HoleInfo: Identifiable, Hashable, Codable, Sendable {
+    public var id: String
+    public var courseId: String
+    public var holeNumber: Int
+    public var par: Int
+    public var handicap: Int
+    public var teeBoxes: [TeeBox]
+    public var pinPositions: [HolePinPosition]
+
+    public init(
+        id: String = UUID().uuidString.lowercased(),
+        courseId: String, holeNumber: Int,
+        par: Int = 4, handicap: Int = 0,
+        teeBoxes: [TeeBox] = [],
+        pinPositions: [HolePinPosition] = PinZone.allCases.map { HolePinPosition(zone: $0) }
+    ) {
+        self.id = id
+        self.courseId = courseId
+        self.holeNumber = holeNumber
+        self.par = par
+        self.handicap = handicap
+        self.teeBoxes = teeBoxes
+        self.pinPositions = pinPositions
+    }
+
+    public func teeBox(named name: String) -> TeeBox? {
+        teeBoxes.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+    }
+
+    public func pin(_ zone: PinZone) -> Coord? {
+        pinPositions.first { $0.zone == zone }?.coord
+    }
+
+    public func yardage(tee name: String) -> Int {
+        teeBox(named: name)?.yardage ?? 0
+    }
+
+    // Convenience: first tee with a coord
+    public var firstTeeCoord: Coord? { teeBoxes.first(where: { $0.coord != nil })?.coord }
+    // Convenience: active pin (middle preferred, then first available)
+    public var defaultPinCoord: Coord? {
+        pin(.middle) ?? pin(.front) ?? pin(.back)
+    }
+}
+
 // MARK: - Course shot (absolute GPS)
 
 public struct CourseShot: Identifiable, Hashable, Codable, Sendable {

@@ -58,6 +58,15 @@ public struct HoleMapView: View {
             MapReader { proxy in
                 Map(position: $position) {
 
+                    // Course surface polygons
+                    ForEach(sortedPolygons, id: \.id) { polygon in
+                        MapPolygon(coordinates: polygon.coordinates.map {
+                            CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
+                        })
+                        .foregroundStyle(fillFor(polygon.surface).opacity(0.5))
+                        .stroke(strokeColor.opacity(0.6), lineWidth: 1)
+                    }
+
                     // Flag pin
                     if let gc = greenCoord {
                         Annotation("", coordinate: CLLocationCoordinate2D(latitude: gc.lat, longitude: gc.lng)) {
