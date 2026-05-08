@@ -5,49 +5,6 @@ import SceneKit
 import SwiftData
 import SwiftUI
 
-enum TagMaterial: String, CaseIterable, Codable {
-    case silver, black, gold, roseGold
-
-    var label: String {
-        switch self {
-        case .silver: return "Silver"
-        case .black: return "Black"
-        case .gold: return "Gold"
-        case .roseGold: return "Rose Gold"
-        }
-    }
-    var baseColor: UIColor {
-        switch self {
-        case .silver: return UIColor(red: 0.75, green: 0.76, blue: 0.78, alpha: 1)
-        case .black: return UIColor(red: 0.12, green: 0.13, blue: 0.14, alpha: 1)
-        case .gold: return UIColor(red: 0.83, green: 0.69, blue: 0.42, alpha: 1)
-        case .roseGold: return UIColor(red: 0.72, green: 0.45, blue: 0.45, alpha: 1)
-        }
-    }
-    var edgeColor: UIColor {
-        switch self {
-        case .silver: return UIColor(red: 0.82, green: 0.83, blue: 0.85, alpha: 1)
-        case .black: return UIColor(red: 0.2, green: 0.21, blue: 0.22, alpha: 1)
-        case .gold: return UIColor(red: 0.88, green: 0.76, blue: 0.5, alpha: 1)
-        case .roseGold: return UIColor(red: 0.78, green: 0.52, blue: 0.52, alpha: 1)
-        }
-    }
-    var texBg: [Color] {
-        switch self {
-        case .silver: return [hex("#4a4d50"), hex("#3a3d40"), hex("#2e3133")]
-        case .black: return [hex("#1e2022"), hex("#161819"), hex("#111314")]
-        case .gold: return [hex("#5c4a2a"), hex("#4a3b22"), hex("#3a2e1a")]
-        case .roseGold: return [hex("#4a2e2e"), hex("#3a2424"), hex("#2e1c1c")]
-        }
-    }
-    var textOpacity: Double {
-        self == .black ? 0.85 : 0.95
-    }
-    var preview: Color {
-        Color(baseColor)
-    }
-}
-
 struct BagTagView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ClubModel.carryYards, order: .reverse) private var clubModels: [ClubModel]
@@ -55,7 +12,6 @@ struct BagTagView: View {
     @State private var profile = ProfileStore.shared
     @State private var editing = false
     @State private var scene: SCNScene?
-    @State private var material: TagMaterial = .silver
 
     private var accent: Color { profile.accent.color }
     private var clubs: [Club] { clubModels.map { $0.toValue() } }
@@ -75,16 +31,16 @@ struct BagTagView: View {
 
             // Material picker
             HStack(spacing: 10) {
-                ForEach(TagMaterial.allCases, id: \.self) { mat in
+                ForEach(ProfileMaterial.allCases, id: \.self) { mat in
                     Button {
-                        material = mat
+                        profile.setProfile(material: mat)
                         buildScene()
                         Haptics.light()
                     } label: {
                         Circle().fill(mat.preview)
                             .frame(width: 26, height: 26)
                             .overlay {
-                                if material == mat {
+                                if profile.material == mat {
                                     Circle().strokeBorder(.white, lineWidth: 2).frame(width: 22, height: 22)
                                 }
                             }
@@ -122,6 +78,7 @@ struct BagTagView: View {
         .onChange(of: profile.motto) { _, _ in buildScene() }
         .onChange(of: profile.font) { _, _ in buildScene() }
         .onChange(of: profile.contact) { _, _ in buildScene() }
+        .onChange(of: profile.material) { _, _ in buildScene() }
         .dispersionSheet(isPresented: $editing, detents: [.large]) {
             tagEditContent
         }
@@ -160,7 +117,7 @@ struct BagTagView: View {
         edgeMat.lightingModel = .physicallyBased
         edgeMat.metalness.contents = 0.95
         edgeMat.roughness.contents = 0.1
-        edgeMat.diffuse.contents = material.edgeColor
+        edgeMat.diffuse.contents = profile.material.edgeColor
 
         // Back material
         let backMat = SCNMaterial()
@@ -228,7 +185,7 @@ struct BagTagView: View {
         let renderer = ImageRenderer(content:
             frontFaceContent
                 .frame(width: 300, height: 480)
-                .background(LinearGradient(colors: material.texBg, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .background(LinearGradient(colors: profile.material.texBg, startPoint: .topLeading, endPoint: .bottomTrailing))
                 .environment(\.colorScheme, .dark)
         )
         renderer.scale = 2
@@ -240,7 +197,7 @@ struct BagTagView: View {
         let renderer = ImageRenderer(content:
             backFaceContent
                 .frame(width: 300, height: 480)
-                .background(LinearGradient(colors: material.texBg, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .background(LinearGradient(colors: profile.material.texBg, startPoint: .topLeading, endPoint: .bottomTrailing))
                 .environment(\.colorScheme, .dark)
         )
         renderer.scale = 2
@@ -283,7 +240,7 @@ struct BagTagView: View {
                 Text(profile.name.isEmpty ? "YOUR NAME" : profile.name.uppercased())
                     .font(profile.font.font(size: 24, weight: .thin))
                     .tracking(4)
-                    .foregroundStyle(Color.white.opacity(material.textOpacity))
+                    .foregroundStyle(Color.white.opacity(profile.material.textOpacity))
                     .lineLimit(2)
 
                 if !profile.homeCourse.isEmpty {
@@ -378,66 +335,8 @@ struct BagTagView: View {
 
     // MARK: - Abstract topo lines
 
-    /// Etched topo — flag in the bottom-right corner with smooth contour
-    /// lines radiating outward. Lines run right to the tag edge and are
-    /// masked with a radial gradient so they fade naturally from the flag.
-    private var topoLines: some View {
-        Canvas { ctx, size in
-            let w = size.width, h = size.height
-
-            // Flag position — bottom-right area
-            let flagX = w * 0.78
-            let flagY = h * 0.88
-
-            // Flag pin
-            let poleH = h * 0.08
-            var pole = Path()
-            pole.move(to: CGPoint(x: flagX, y: flagY))
-            pole.addLine(to: CGPoint(x: flagX, y: flagY - poleH))
-            ctx.stroke(pole, with: .color(.white), lineWidth: 0.6)
-
-            // Flag pennant
-            let ft = CGPoint(x: flagX, y: flagY - poleH)
-            var flag = Path()
-            flag.move(to: ft)
-            flag.addLine(to: CGPoint(x: ft.x + w * 0.035, y: ft.y + h * 0.015))
-            flag.addLine(to: CGPoint(x: ft.x, y: ft.y + h * 0.028))
-            flag.closeSubpath()
-            ctx.fill(flag, with: .color(.white))
-
-            // Green ovals around the flag
-            for ring in 0..<3 {
-                let r = w * 0.07 + Double(ring) * w * 0.018
-                let circle = Path(ellipseIn: CGRect(
-                    x: flagX - r, y: flagY - r * 0.8,
-                    width: r * 2, height: r * 1.6
-                ))
-                ctx.stroke(circle, with: .color(.white.opacity(0.9 - Double(ring) * 0.25)), lineWidth: 0.4)
-            }
-
-            // Smooth contour arcs — single path per line, clipped by the canvas
-            for i in 0..<12 {
-                let t = Double(i)
-                let spread = (t + 3) * w * 0.035
-                var path = Path()
-                let steps = 120
-                for s in 0...steps {
-                    let frac = Double(s) / Double(steps)
-                    let angle = Double.pi * (0.15 + frac * 1.7)
-                    let baseR = spread + sin(frac * .pi) * spread * 0.12
-                    let wobble = sin(frac * .pi * 4.5 + t * 1.3) * w * 0.005
-
-                    let x = flagX + cos(angle) * (baseR + wobble)
-                    let y = flagY + sin(angle) * (baseR + wobble) * 0.75
-
-                    if s == 0 { path.move(to: CGPoint(x: x, y: y)) }
-                    else { path.addLine(to: CGPoint(x: x, y: y)) }
-                }
-
-                ctx.stroke(path, with: .color(.white), lineWidth: 0.5)
-            }
-        }
-    }
+    // Placeholder — topo etching to be designed later
+    private var topoLines: some View { Color.clear }
 
     private func computeInitials(_ name: String) -> String {
         (name.isEmpty ? "—" : name)

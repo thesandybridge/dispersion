@@ -49,38 +49,55 @@ public enum ProfileFont: String, CaseIterable, Codable, Sendable {
 // MARK: - Material
 
 public enum ProfileMaterial: String, CaseIterable, Codable, Sendable {
-    case brass, silver, copper, leather, carbon
+    case silver, black, gold, roseGold
 
-    public var label: String { rawValue.capitalized }
-
-    public var strapTop: Color {
+    public var label: String {
         switch self {
-        case .brass:   return hex("#c4a444")
-        case .silver:  return hex("#b8bcc0")
-        case .copper:  return hex("#c07848")
-        case .leather: return hex("#6b4423")
-        case .carbon:  return hex("#2a2a2a")
+        case .silver: return "Silver"
+        case .black: return "Black"
+        case .gold: return "Gold"
+        case .roseGold: return "Rose Gold"
         }
     }
 
-    public var strapBottom: Color {
+    public var preview: Color {
         switch self {
-        case .brass:   return hex("#8b7030")
-        case .silver:  return hex("#808488")
-        case .copper:  return hex("#8a5433")
-        case .leather: return hex("#3d2613")
-        case .carbon:  return hex("#111111")
+        case .silver:   return Color(red: 0.75, green: 0.76, blue: 0.78)
+        case .black:    return Color(red: 0.12, green: 0.13, blue: 0.14)
+        case .gold:     return Color(red: 0.83, green: 0.69, blue: 0.42)
+        case .roseGold: return Color(red: 0.72, green: 0.45, blue: 0.45)
         }
     }
 
-    public var grommet: Color {
+    public var baseUIColor: UIColor {
         switch self {
-        case .brass:   return hex("#d4b44e")
-        case .silver:  return hex("#e0e2e4")
-        case .copper:  return hex("#d09060")
-        case .leather: return hex("#8b5e3c")
-        case .carbon:  return hex("#444444")
+        case .silver:   return UIColor(red: 0.75, green: 0.76, blue: 0.78, alpha: 1)
+        case .black:    return UIColor(red: 0.12, green: 0.13, blue: 0.14, alpha: 1)
+        case .gold:     return UIColor(red: 0.83, green: 0.69, blue: 0.42, alpha: 1)
+        case .roseGold: return UIColor(red: 0.72, green: 0.45, blue: 0.45, alpha: 1)
         }
+    }
+
+    public var edgeColor: UIColor {
+        switch self {
+        case .silver:   return UIColor(red: 0.82, green: 0.83, blue: 0.85, alpha: 1)
+        case .black:    return UIColor(red: 0.2, green: 0.21, blue: 0.22, alpha: 1)
+        case .gold:     return UIColor(red: 0.88, green: 0.76, blue: 0.5, alpha: 1)
+        case .roseGold: return UIColor(red: 0.78, green: 0.52, blue: 0.52, alpha: 1)
+        }
+    }
+
+    public var texBg: [Color] {
+        switch self {
+        case .silver:   return [hex("#4a4d50"), hex("#3a3d40"), hex("#2e3133")]
+        case .black:    return [hex("#1e2022"), hex("#161819"), hex("#111314")]
+        case .gold:     return [hex("#5c4a2a"), hex("#4a3b22"), hex("#3a2e1a")]
+        case .roseGold: return [hex("#4a2e2e"), hex("#3a2424"), hex("#2e1c1c")]
+        }
+    }
+
+    public var textOpacity: Double {
+        self == .black ? 0.85 : 0.95
     }
 }
 
@@ -98,7 +115,7 @@ public final class ProfileStore {
     public var contact: String = ""
     public var accent: ProfileAccent = .bentgrass
     public var font: ProfileFont = .serif
-    public var material: ProfileMaterial = .leather
+    public var material: ProfileMaterial = .silver
 
     private let defaults = UserDefaults.standard
     private let key = "dispersion.profile.v1"
@@ -147,7 +164,7 @@ public final class ProfileStore {
         contact = decoded.contact
         accent = ProfileAccent(rawValue: decoded.accent) ?? .bentgrass
         font = ProfileFont(rawValue: decoded.font) ?? .serif
-        material = ProfileMaterial(rawValue: decoded.material) ?? .leather
+        material = ProfileMaterial(rawValue: decoded.material) ?? .silver
     }
 }
 
