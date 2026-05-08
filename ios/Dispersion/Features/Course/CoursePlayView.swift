@@ -22,7 +22,10 @@ struct CoursePlayView: View {
     @State private var showEndRound = false
     @State private var showScorecard = false
     @State private var showRoundSummary = false
+    @State private var showRoundSetup = false
+    @State private var showHolePicker = false
     @State private var deleteConfirm = false
+    @State private var startingHole: Int = 1
     @State private var selectedClubId: String?
     @State private var selectedSwing: SwingType = .full
     @State private var crosshairCoord: Coord?
@@ -121,16 +124,15 @@ struct CoursePlayView: View {
             loadCourseData()
             loadHoleData()
             if tracker.state == .idle, let c = cachedCourse {
-                if !tracker.loadIfExists(courseId: c.id) {
-                    tracker.startRound(courseId: c.id, holeCount: c.holeCount)
-                    for (hole, info) in cachedHoleInfos {
-                        tracker.setPar(hole: hole, par: info.par)
-                    }
+                if tracker.loadIfExists(courseId: c.id) {
+                    // Resume existing round
+                    let session = Session(id: tracker.sessionId, kind: .round, label: c.name)
+                    _ = try? SessionsRepo(context: modelContext).create(session)
+                    SessionStore.shared.setActive(ActiveSession(id: tracker.sessionId, kind: .round, label: c.name))
+                } else {
+                    // New round — show setup
+                    showRoundSetup = true
                 }
-                // Create/update session
-                let session = Session(id: tracker.sessionId, kind: .round, label: c.name)
-                _ = try? SessionsRepo(context: modelContext).create(session)
-                SessionStore.shared.setActive(ActiveSession(id: tracker.sessionId, kind: .round, label: c.name))
             }
         }
         .onChange(of: tracker.currentHole) { _, _ in
@@ -145,13 +147,30 @@ struct CoursePlayView: View {
         .dispersionSheet(isPresented: $showScorecard, detents: [.large]) {
             scorecardContent(isComplete: false)
         }
-        .confirmationDialog("End round?", isPresented: $showEndRound, titleVisibility: .visible) {
-            Button("Finish & save") { finishRound() }
-            Button("Cancel round", role: .destructive) { cancelRound() }
+        .dispersionSheet(isPresented: $showRoundSetup, detents: [.medium]) {
+            roundSetupContent
+        }
+        .dispersionSheet(isPresented: $showHolePicker, detents: [.medium]) {
+            holePickerContent(
+                range: tracker.startHole...tracker.lastHole,
+                current: tracker.currentHole,
+                scores: tracker.scores,
+                pars: cachedHoleInfos
+            ) { hole in
+                tracker.currentHole = hole
+                tracker.state = .holeInProgress(hole: hole, shotCount: tracker.shotsForHole(hole).count)
+                loadHoleData()
+                showHolePicker = false
+                Haptics.medium()
+            }
+        }
+        .alert("End round?", isPresented: $showEndRound) {
+            Button("Save & finish") { finishRound() }
+            Button("Discard", role: .destructive) { cancelRound() }
             Button("Keep playing", role: .cancel) {}
         } message: {
             Text(tracker.holesPlayed > 0
-                 ? "\(tracker.holesPlayed) holes played · \(tracker.totalScore) strokes"
+                 ? "\(tracker.holesPlayed) holes · \(tracker.totalScore) strokes"
                  : "No holes scored yet")
         }
         .fullScreenCover(isPresented: $showRoundSummary) {
@@ -203,8 +222,16 @@ struct CoursePlayView: View {
 
             // Hole info + tee selector
             HStack(spacing: 10) {
-                Text("Hole \(tracker.currentHole)")
-                    .font(DispersionType.display(22, weight: .regular))
+                Button { showHolePicker = true; Haptics.light() } label: {
+                    HStack(spacing: 4) {
+                        Text("Hole \(tracker.currentHole)")
+                            .font(DispersionType.display(22, weight: .regular))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                    }
+                }
+                .buttonStyle(.plain)
                 Text("Par \(holePar)")
                     .font(DispersionType.mono(12, weight: .medium))
                     .foregroundStyle(DesignTokens.mutedForeground)
@@ -215,7 +242,7 @@ struct CoursePlayView: View {
                 }
                 Spacer()
                 // Hole nav
-                if tracker.currentHole > 1 {
+                if tracker.currentHole > tracker.startHole {
                     Button { prevHole() } label: {
                         Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
                             .frame(width: 28, height: 28)
@@ -223,7 +250,7 @@ struct CoursePlayView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                if tracker.currentHole < tracker.holeCount {
+                if tracker.currentHole < tracker.lastHole {
                     Button { nextHole() } label: {
                         Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
                             .frame(width: 28, height: 28)
@@ -861,6 +888,144 @@ struct CoursePlayView: View {
         Haptics.light()
     }
 
+    // MARK: - Round setup
+
+    @ViewBuilder
+    private var roundSetupContent: some View {
+        DSheetHeader(eyebrow: cachedCourse?.name ?? "Round", title: "How many holes?")
+
+        VStack(spacing: 8) {
+            roundOption("Front 9", holes: 9, start: 1)
+            roundOption("Back 9", holes: 9, start: 10)
+            roundOption("Full 18", holes: 18, start: 1)
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Custom").eyebrow()
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Start").font(DispersionType.mono(9)).foregroundStyle(DesignTokens.mutedForeground)
+                    Picker("", selection: $startingHole) {
+                        ForEach(1...(cachedCourse?.holeCount ?? 18), id: \.self) { h in
+                            Text("\(h)").tag(h)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(height: 80)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Holes").font(DispersionType.mono(9)).foregroundStyle(DesignTokens.mutedForeground)
+                    Picker("", selection: $customHoleCount) {
+                        ForEach(1...maxCustomHoles, id: \.self) { h in
+                            Text("\(h)").tag(h)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(height: 80)
+                }
+            }
+            Button { beginRound(holeCount: customHoleCount, start: startingHole) } label: {
+                Text("Start from hole \(startingHole)").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.dispersion(.solid))
+        }
+    }
+
+    @State private var customHoleCount: Int = 9
+
+    private var maxCustomHoles: Int {
+        (cachedCourse?.holeCount ?? 18) - startingHole + 1
+    }
+
+    private func roundOption(_ label: String, holes: Int, start: Int) -> some View {
+        Button {
+            beginRound(holeCount: holes, start: start)
+        } label: {
+            HStack {
+                Text(label).font(DispersionType.ui(14, weight: .medium))
+                Spacer()
+                Text("Holes \(start)-\(start + holes - 1)")
+                    .font(DispersionType.mono(11))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(DesignTokens.card)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(DesignTokens.border, lineWidth: 1)
+                    )
+            )
+            .foregroundStyle(DesignTokens.foreground)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func beginRound(holeCount: Int, start: Int) {
+        guard let c = cachedCourse else { return }
+        startingHole = start
+        tracker.startRound(courseId: c.id, holeCount: holeCount, startHole: start)
+        for (hole, info) in cachedHoleInfos {
+            tracker.setPar(hole: hole, par: info.par)
+        }
+        let session = Session(id: tracker.sessionId, kind: .round, label: c.name)
+        _ = try? SessionsRepo(context: modelContext).create(session)
+        SessionStore.shared.setActive(ActiveSession(id: tracker.sessionId, kind: .round, label: c.name))
+        showRoundSetup = false
+        loadHoleData()
+        Haptics.success()
+    }
+
+    @ViewBuilder
+    private func holePickerContent(
+        range: ClosedRange<Int>, current: Int,
+        scores: [Int: HoleScore], pars: [Int: HoleInfo],
+        onSelect: @escaping (Int) -> Void
+    ) -> some View {
+        DSheetHeader(eyebrow: "Jump to", title: "Select hole")
+
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 6)
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(Array(range), id: \.self) { hole in
+                let score = scores[hole]?.score ?? 0
+                let par = pars[hole]?.par ?? 4
+                let isCurrent = hole == current
+                Button { onSelect(hole) } label: {
+                    VStack(spacing: 2) {
+                        Text("\(hole)")
+                            .font(DispersionType.display(18, weight: .regular))
+                            .monospacedDigit()
+                        if score > 0 {
+                            Text("\(score)")
+                                .font(DispersionType.mono(10, weight: .medium))
+                                .foregroundStyle(score < par ? DesignTokens.primary
+                                    : score == par ? DesignTokens.foreground
+                                    : DesignTokens.pPoor)
+                        } else {
+                            Text("·")
+                                .font(DispersionType.mono(10))
+                                .foregroundStyle(DesignTokens.mutedForeground)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(isCurrent ? accent.opacity(0.2) : DesignTokens.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .strokeBorder(isCurrent ? accent : Color.clear, lineWidth: 1.5)
+                            )
+                    )
+                    .foregroundStyle(DesignTokens.foreground)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     private func finishRound() {
         tracker.state = .roundComplete
         // Persist scorecard data keyed by sessionId
@@ -1132,7 +1297,7 @@ struct CoursePlayView: View {
             showScoreEdit = false
             nextHole()
         } label: {
-            Text(tracker.currentHole < tracker.holeCount ? "Next hole →" : "Finish round")
+            Text(tracker.currentHole < tracker.lastHole ? "Next hole →" : "Finish round")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.dispersion(.primary, size: .lg))

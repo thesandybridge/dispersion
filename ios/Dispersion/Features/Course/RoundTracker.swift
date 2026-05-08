@@ -23,17 +23,20 @@ public final class RoundTracker {
     public var scores: [Int: HoleScore] = [:]
     public var lastPosition: Coord?
     public var holeCount: Int = 18
+    public var startHole: Int = 1
+    public var lastHole: Int { startHole + holeCount - 1 }
     public var startedAt: Date = .now
 
-    public func startRound(courseId: String, holeCount: Int) {
+    public func startRound(courseId: String, holeCount: Int, startHole: Int = 1) {
         self.courseId = courseId
         self.sessionId = UUID().uuidString.lowercased()
         self.holeCount = holeCount
-        self.currentHole = 1
+        self.startHole = startHole
+        self.currentHole = startHole
         self.shots = []
         self.scores = [:]
         self.startedAt = .now
-        self.state = .awaitingTeeShot(hole: 1)
+        self.state = .awaitingTeeShot(hole: startHole)
         initScores()
     }
 
@@ -76,7 +79,7 @@ public final class RoundTracker {
     }
 
     public func nextHole() {
-        if currentHole >= holeCount {
+        if currentHole >= lastHole {
             state = .roundComplete
         } else {
             currentHole += 1
@@ -112,7 +115,7 @@ public final class RoundTracker {
     }
 
     private func initScores() {
-        for h in 1...holeCount {
+        for h in startHole...lastHole {
             scores[h] = HoleScore(hole: h, par: 4, score: 0)
         }
     }
@@ -127,6 +130,7 @@ public final class RoundTracker {
             sessionId: sessionId,
             currentHole: currentHole,
             holeCount: holeCount,
+            startHole: startHole,
             scores: scores,
             shots: shots,
             startedAt: startedAt
@@ -145,6 +149,7 @@ public final class RoundTracker {
         self.sessionId = round.sessionId
         self.currentHole = round.currentHole
         self.holeCount = round.holeCount
+        self.startHole = round.startHole ?? 1
         self.scores = round.scores
         self.shots = round.shots
         self.startedAt = round.startedAt
@@ -182,6 +187,7 @@ private struct RoundData: Codable {
     var sessionId: String
     var currentHole: Int
     var holeCount: Int
+    var startHole: Int?  // optional for backward compat with saved rounds
     var scores: [Int: HoleScore]
     var shots: [CourseShot]
     var startedAt: Date

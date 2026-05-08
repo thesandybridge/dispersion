@@ -38,6 +38,7 @@ struct MapBuilderView: View {
     @State private var traceProgress: CGFloat = 0
     @State private var traceSurface: SurfaceType = .fairway
     @State private var selectedPolygonId: String?
+    @State private var selectedVertexIndex: Int?
 
     // Tee/pin editing
     @State private var selectedTeeColor: String = "white"
@@ -46,6 +47,7 @@ struct MapBuilderView: View {
     @State private var holeInfos: [Int: HoleInfo] = [:]
     @State private var holePolygons: [CoursePolygon] = []
     @State private var showScorecard = false
+    @State private var showHolePicker = false
 
     private var holeInfo: HoleInfo? { holeInfos[currentHole] }
 
@@ -71,6 +73,9 @@ struct MapBuilderView: View {
             loadHolePolygons()
             updateStep()
             flyToHole()
+        }
+        .dispersionSheet(isPresented: $showHolePicker, detents: [.medium]) {
+            builderHolePicker
         }
         .dispersionSheet(isPresented: $showScorecard, detents: [.large]) {
             ScorecardEditorSheet(courseId: courseId, holeCount: course.holeCount) {
@@ -112,8 +117,16 @@ struct MapBuilderView: View {
             .padding(.horizontal, 16)
 
             HStack(spacing: 10) {
-                Text("Hole \(currentHole)")
-                    .font(DispersionType.display(22, weight: .regular))
+                Button { showHolePicker = true; Haptics.light() } label: {
+                    HStack(spacing: 4) {
+                        Text("Hole \(currentHole)")
+                            .font(DispersionType.display(22, weight: .regular))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                    }
+                }
+                .buttonStyle(.plain)
                 if let info = holeInfo, info.par > 0 {
                     Text("Par \(info.par)")
                         .font(DispersionType.mono(12, weight: .medium))
@@ -197,6 +210,30 @@ struct MapBuilderView: View {
                 .stroke(isSelected ? Color.white : Color.white.opacity(0.6),
                         lineWidth: isSelected ? 2.5 : 1)
 
+            }
+
+            // Vertex handles for selected polygon
+            if let selId = selectedPolygonId,
+               let selPoly = holePolygons.first(where: { $0.id == selId }) {
+                ForEach(Array(selPoly.coordinates.enumerated()), id: \.offset) { i, coord in
+                    Annotation("", coordinate: CLLocationCoordinate2D(latitude: coord.lat, longitude: coord.lng)) {
+                        let isActiveVertex = selectedVertexIndex == i
+                        ZStack {
+                            Circle()
+                                .fill(isActiveVertex ? Color.white : fillColor(selPoly.surface))
+                                .frame(width: isActiveVertex ? 16 : 10, height: isActiveVertex ? 16 : 10)
+                            if isActiveVertex {
+                                Circle()
+                                    .strokeBorder(fillColor(selPoly.surface), lineWidth: 2)
+                                    .frame(width: 16, height: 16)
+                            }
+                        }
+                        .onTapGesture {
+                            selectedVertexIndex = (selectedVertexIndex == i) ? nil : i
+                            Haptics.light()
+                        }
+                    }
+                }
             }
 
             // In-progress polygon preview — filled with dashed outline
@@ -640,6 +677,7 @@ struct MapBuilderView: View {
                             let isSel = selectedPolygonId == poly.id
                             Button {
                                 selectedPolygonId = isSel ? nil : poly.id
+                                selectedVertexIndex = nil
                                 Haptics.light()
                             } label: {
                                 HStack(spacing: 3) {
@@ -660,8 +698,35 @@ struct MapBuilderView: View {
                     }
                 }
 
+                // Vertex editing — when a polygon is selected and a vertex is tapped
+                if selectedPolygonId != nil, let vi = selectedVertexIndex {
+                    HStack(spacing: 8) {
+                        Button {
+                            guard let coord = crosshairCoord else { return }
+                            moveVertex(to: coord)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                                    .font(.system(size: 12))
+                                Text("Move pt \(vi + 1)")
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.dispersion(.primary))
+
+                        Button { deleteVertex() } label: {
+                            Image(systemName: "minus.circle").font(.system(size: 14))
+                        }
+                        .buttonStyle(.dispersion(.ghost, size: .icon))
+
+                        Button { selectedVertexIndex = nil } label: {
+                            Image(systemName: "xmark").font(.system(size: 12))
+                        }
+                        .buttonStyle(.dispersion(.ghost, size: .icon))
+                    }
+                }
+
                 HStack(spacing: 6) {
-                    // Undo last
                     Button {
                         if let last = holePolygons.last {
                             deletePolygon(id: last.id)
@@ -671,7 +736,6 @@ struct MapBuilderView: View {
                     }
                     .buttonStyle(.dispersion(.ghost, size: .icon))
 
-                    // Delete selected
                     if let selId = selectedPolygonId {
                         Button { deletePolygon(id: selId) } label: {
                             HStack(spacing: 4) {
@@ -698,6 +762,54 @@ struct MapBuilderView: View {
     }
 
     // MARK: - Actions
+
+    @ViewBuilder
+    private var builderHolePicker: some View {
+        DSheetHeader(eyebrow: "Jump to", title: "Select hole")
+
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 6)
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(1...course.holeCount, id: \.self) { hole in
+                let info = holeInfos[hole]
+                let hasTee = info?.teeBoxes.contains(where: { $0.coord != nil }) == true
+                let hasPin = info?.defaultPinCoord != nil
+                let hasPolys = (try? CoursesRepo(context: modelContext).polygons(courseId: courseId, hole: hole).contains { $0.holeNumber == hole }) ?? false
+                let isCurrent = hole == currentHole
+                Button {
+                    currentPoints = []
+                    selectedPolygonId = nil
+                    selectedVertexIndex = nil
+                    currentHole = hole
+                    showHolePicker = false
+                    Haptics.medium()
+                } label: {
+                    VStack(spacing: 3) {
+                        Text("\(hole)")
+                            .font(DispersionType.display(18, weight: .regular))
+                            .monospacedDigit()
+                        HStack(spacing: 2) {
+                            if hasTee { Circle().fill(hex("#B8C880")).frame(width: 4, height: 4) }
+                            if hasPin { Circle().fill(accent).frame(width: 4, height: 4) }
+                            if hasPolys { Circle().fill(hex("#C4D49A")).frame(width: 4, height: 4) }
+                        }
+                        .frame(height: 6)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(isCurrent ? accent.opacity(0.2) : DesignTokens.surface)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .strokeBorder(isCurrent ? accent : Color.clear, lineWidth: 1.5)
+                            )
+                    )
+                    .foregroundStyle(DesignTokens.foreground)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
 
     private func ensureHoleInfo() -> HoleInfo {
         if let existing = holeInfos[currentHole] { return existing }
@@ -818,6 +930,35 @@ struct MapBuilderView: View {
             result = smoothed
         }
         return result
+    }
+
+    private func moveVertex(to coord: Coord) {
+        guard let selId = selectedPolygonId,
+              let polyIdx = holePolygons.firstIndex(where: { $0.id == selId }),
+              let vi = selectedVertexIndex,
+              vi < holePolygons[polyIdx].coordinates.count else { return }
+        holePolygons[polyIdx].coordinates[vi] = coord
+        // Persist: delete old, insert updated
+        let updated = holePolygons[polyIdx]
+        let repo = CoursesRepo(context: modelContext)
+        try? repo.deletePolygon(id: selId)
+        try? repo.insertPolygons([updated])
+        Haptics.medium()
+    }
+
+    private func deleteVertex() {
+        guard let selId = selectedPolygonId,
+              let polyIdx = holePolygons.firstIndex(where: { $0.id == selId }),
+              let vi = selectedVertexIndex,
+              vi < holePolygons[polyIdx].coordinates.count,
+              holePolygons[polyIdx].coordinates.count > 3 else { return }
+        holePolygons[polyIdx].coordinates.remove(at: vi)
+        selectedVertexIndex = nil
+        let updated = holePolygons[polyIdx]
+        let repo = CoursesRepo(context: modelContext)
+        try? repo.deletePolygon(id: selId)
+        try? repo.insertPolygons([updated])
+        Haptics.medium()
     }
 
     private func deletePolygon(id: String) {
