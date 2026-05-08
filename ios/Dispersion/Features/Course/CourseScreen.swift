@@ -121,9 +121,9 @@ public struct CourseScreen: View {
                 if courses.isEmpty {
                     emptyState
                 } else {
-                    LazyVStack(spacing: 12) {
+                    VStack(spacing: 6) {
                         ForEach(courses) { course in
-                            courseCard(course)
+                            courseRow(course)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -170,61 +170,54 @@ public struct CourseScreen: View {
 
     // MARK: - Course card
 
-    private func courseCard(_ course: Course) -> some View {
+    private func courseRow(_ course: Course) -> some View {
         Button { selectedCourseId = course.id; Haptics.light() } label: {
-            VStack(spacing: 0) {
-                // Map preview
-                Map(initialPosition: .camera(MapCamera(
-                    centerCoordinate: CLLocationCoordinate2D(latitude: course.centerLat, longitude: course.centerLng),
-                    distance: 1500
-                ))) {
-                    let polys = (try? CoursesRepo(context: modelContext).polygons(courseId: course.id)) ?? []
-                    ForEach(polys.filter { $0.coordinates.count >= 3 }, id: \.id) { polygon in
-                        MapPolygon(coordinates: polygon.coordinates.map {
-                            CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
-                        })
-                        .foregroundStyle(mapFill(polygon.surface))
-                        .stroke(Color.white.opacity(0.4), lineWidth: 0.5)
-                    }
-                }
-                .mapStyle(.imagery)
-                .frame(height: 120)
-                .allowsHitTesting(false)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            HStack(spacing: 12) {
+                // Course icon
+                Image(systemName: "flag.2.crossed")
+                    .font(.system(size: 16))
+                    .foregroundStyle(accent)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(accent.opacity(0.15)))
 
-                // Info
-                HStack(spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(course.name)
-                            .font(DispersionType.ui(15, weight: .medium))
-                            .foregroundStyle(DesignTokens.foreground)
-                            .lineLimit(1)
-                        Text("\(course.holeCount) holes")
-                            .font(DispersionType.mono(10))
-                            .foregroundStyle(DesignTokens.mutedForeground)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11))
-                        .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(course.name)
+                        .font(DispersionType.ui(15, weight: .medium))
+                        .foregroundStyle(DesignTokens.foreground)
+                        .lineLimit(1)
+                    Text("\(course.holeCount) holes")
+                        .font(DispersionType.mono(10))
+                        .foregroundStyle(DesignTokens.mutedForeground)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                Spacer()
+
+                // Quick actions
+                Button { buildingCourse = course; Haptics.light() } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 13))
+                        .foregroundStyle(DesignTokens.mutedForeground)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+
+                Button { shareCourse(course); Haptics.light() } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 13))
+                        .foregroundStyle(DesignTokens.mutedForeground)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11))
+                    .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
             }
-            .background(ThemedCardFill(cornerRadius: 14))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(ThemedCardFill(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            Button { selectedCourseId = course.id } label: {
-                Label("Play", systemImage: "flag.fill")
-            }
-            Button { buildingCourse = course } label: {
-                Label("Edit map", systemImage: "pencil")
-            }
-            Button { shareCourse(course) } label: {
-                Label("Share", systemImage: "square.and.arrow.up")
-            }
+        .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
                 try? CoursesRepo(context: modelContext).deleteCourse(id: course.id)
                 Haptics.medium()
@@ -313,16 +306,6 @@ public struct CourseScreen: View {
         }
     }
 
-    private func mapFill(_ surface: SurfaceType) -> Color {
-        switch surface {
-        case .green:   return hex("#A8C97F").opacity(0.6)
-        case .fairway: return hex("#C4D49A").opacity(0.5)
-        case .bunker:  return hex("#E8DCC0").opacity(0.5)
-        case .water:   return hex("#7EA5C4").opacity(0.5)
-        case .tee:     return hex("#B8C880").opacity(0.5)
-        case .rough:   return hex("#8FA66B").opacity(0.4)
-        }
-    }
 
     private var roundSessions: [Session] {
         ((try? SessionsRepo(context: modelContext).list()) ?? [])

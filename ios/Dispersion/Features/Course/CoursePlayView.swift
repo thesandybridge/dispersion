@@ -240,7 +240,7 @@ struct CoursePlayView: View {
                 let order = ["Blue": 0, "White": 1, "Red": 2, "Gold": 3]
                 return (order[$0] ?? 4) < (order[$1] ?? 4)
             }
-            if uniqueTees.count > 1 || true {
+            if uniqueTees.count > 1 || PinZone.allCases.contains(where: { cachedHoleInfos[tracker.currentHole]?.pin($0) != nil }) {
                 HStack(spacing: 6) {
                     if uniqueTees.count > 1 {
                         ForEach(uniqueTees, id: \.self) { name in

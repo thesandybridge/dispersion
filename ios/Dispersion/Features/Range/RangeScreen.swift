@@ -242,12 +242,20 @@ struct LiveRangeView: View {
         } message: {
             Text(taps.isEmpty ? "No shots to save." : "\(taps.count) shots stay in the log.")
         }
-        .alert("Save measured σ?", isPresented: $saveConfirm) {
+        .alert("Save calibration?", isPresented: $saveConfirm) {
             Button("Save") { saveCalibration(); Haptics.success() }
             Button("Cancel", role: .cancel) {}
         } message: {
             if let c = club {
-                Text("Updates \(c.name)'s σ from \(taps.count) shots.")
+                let newCarry = Int(effectiveTarget + stats.longBias)
+                let sampleNote = taps.count < 10 ? " (⚠️ \(taps.count) shots — 10+ recommended)" : ""
+                Text("""
+                \(c.name) · \(taps.count) shots\(sampleNote)
+
+                Carry: \(Int(c.carryYards))y → \(newCarry)y
+                σ carry: \(String(format: "%.1f", c.carrySd)) → \(String(format: "%.1f", stats.carrySd))
+                σ lateral: \(String(format: "%.1f", c.lateralSd)) → \(String(format: "%.1f", stats.lateralSd))
+                """)
             }
         }
     }

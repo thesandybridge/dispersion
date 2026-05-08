@@ -230,8 +230,9 @@ public struct OnboardingScreen: View {
             VStack(alignment: .leading, spacing: 12) {
                 featureRow("Local-first storage")
                 featureRow("Export / import as JSON")
-                featureRow("Customizable theme accent")
-                featureRow("Measure real dispersion at the range")
+                featureRow("Build course maps from satellite imagery")
+                featureRow("Calibrate your clubs at the range")
+                featureRow("Track rounds with GPS shot logging")
             }
             .padding(.top, 12)
 

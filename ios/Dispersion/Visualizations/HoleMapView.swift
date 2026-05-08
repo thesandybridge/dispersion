@@ -58,15 +58,6 @@ public struct HoleMapView: View {
             MapReader { proxy in
                 Map(position: $position) {
 
-                    // Course surface polygons
-                    ForEach(sortedPolygons, id: \.id) { polygon in
-                        MapPolygon(coordinates: polygon.coordinates.map {
-                            CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
-                        })
-                        .foregroundStyle(fillFor(polygon.surface).opacity(0.5))
-                        .stroke(strokeColor.opacity(0.6), lineWidth: 1)
-                    }
-
                     // Flag pin
                     if let gc = greenCoord {
                         Annotation("", coordinate: CLLocationCoordinate2D(latitude: gc.lat, longitude: gc.lng)) {
@@ -196,9 +187,24 @@ public struct HoleMapView: View {
                     MapScaleView()
                 }
                 .onMapCameraChange(frequency: .continuous) { context in
-                    let c = context.camera.centerCoordinate
-                    cameraCenter = c
-                    crosshairCoord = Coord(lat: c.latitude, lng: c.longitude)
+                    cameraCenter = context.camera.centerCoordinate
+                    crosshairCoord = Coord(
+                        lat: context.camera.centerCoordinate.latitude,
+                        lng: context.camera.centerCoordinate.longitude
+                    )
+                }
+                .overlay {
+                    // Use MapProxy to get the true coordinate at screen center
+                    // This corrects for perspective distortion when pitched
+                    GeometryReader { geo in
+                        Color.clear.onChange(of: cameraCenter?.latitude) { _, _ in
+                            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+                            if let coord = proxy.convert(center, from: .local) {
+                                crosshairCoord = Coord(lat: coord.latitude, lng: coord.longitude)
+                            }
+                        }
+                    }
+                    .allowsHitTesting(false)
                 }
             }
 

@@ -263,7 +263,21 @@ public struct SettingsScreen: View {
         let clubs = (try? ClubsRepo(context: modelContext).list()) ?? []
         let sessions = (try? SessionsRepo(context: modelContext).list()) ?? []
         let shots = (try? ShotsRepo(context: modelContext).listAll()) ?? []
-        let data = Backup.build(clubs: clubs, sessions: sessions, shots: shots)
+        var allStrikes: [FaceStrike] = []
+        for c in clubs { allStrikes += (try? FaceStrikesRepo(context: modelContext).listByClub(c.id)) ?? [] }
+        let coursesRepo = CoursesRepo(context: modelContext)
+        let courses = (try? coursesRepo.list()) ?? []
+        var allHoleInfos: [HoleInfo] = []
+        var allPolygons: [CoursePolygon] = []
+        for c in courses {
+            allHoleInfos += (try? coursesRepo.holeInfos(courseId: c.id)) ?? []
+            allPolygons += (try? coursesRepo.polygons(courseId: c.id)) ?? []
+        }
+        let data = Backup.build(
+            clubs: clubs, sessions: sessions, shots: shots,
+            faceStrikes: allStrikes,
+            courses: courses, holeInfos: allHoleInfos, polygons: allPolygons
+        )
         exportData = ExportFile(data: data)
     }
 
@@ -284,15 +298,23 @@ public struct SettingsScreen: View {
                 try ClubsRepo(context: modelContext).deleteAll()
                 try SessionsRepo(context: modelContext).deleteAll()
                 try ShotsRepo(context: modelContext).deleteAll()
-                // Also clear face strikes on full import
                 try FaceStrikesRepo(context: modelContext).deleteAll()
+                let coursesRepo = CoursesRepo(context: modelContext)
+                for c in (try? coursesRepo.list()) ?? [] {
+                    try? coursesRepo.deleteCourse(id: c.id)
+                }
                 let clubsRepo = ClubsRepo(context: modelContext)
                 for c in parsed.clubs { try clubsRepo.create(c) }
                 let sessionsRepo = SessionsRepo(context: modelContext)
                 for s in parsed.sessions { try sessionsRepo.create(s) }
                 let shotsRepo = ShotsRepo(context: modelContext)
                 for s in parsed.shots { try shotsRepo.create(s) }
-                var msg = "Imported \(parsed.clubs.count) clubs, \(parsed.sessions.count) sessions, \(parsed.shots.count) shots."
+                let strikesRepo = FaceStrikesRepo(context: modelContext)
+                for f in parsed.faceStrikes { try strikesRepo.create(f) }
+                for c in parsed.courses { try coursesRepo.createCourse(c) }
+                for h in parsed.holeInfos { try coursesRepo.upsertHoleInfo(h) }
+                if !parsed.polygons.isEmpty { try coursesRepo.insertPolygons(parsed.polygons) }
+                var msg = "Imported \(parsed.clubs.count) clubs, \(parsed.courses.count) courses, \(parsed.shots.count) shots."
                 if !parsed.warnings.isEmpty {
                     msg += " (\(parsed.warnings.count) items skipped)"
                 }

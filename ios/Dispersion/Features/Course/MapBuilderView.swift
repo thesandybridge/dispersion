@@ -26,8 +26,18 @@ struct MapBuilderView: View {
     @State private var activeTool: SurfaceType = .fairway
     @State private var currentPoints: [Coord] = []
     @State private var crosshairCoord: Coord?
+    @State private var previewCoord: Coord?
     @State private var position: MapCameraPosition = .automatic
     @State private var is3D = false
+    @State private var quickEdit = true   // auto-fill mode vs manual draw
+    @State private var filling = false
+    @State private var fillError: String?
+    @State private var visibleRegion: MKCoordinateRegion?
+    @State private var fillTolerance: Double = 5
+    @State private var traceCoords: [Coord]?
+    @State private var traceProgress: CGFloat = 0
+    @State private var traceSurface: SurfaceType = .fairway
+    @State private var selectedPolygonId: String?
 
     // Tee/pin editing
     @State private var selectedTeeColor: String = "white"
@@ -44,6 +54,7 @@ struct MapBuilderView: View {
             topBar
             ZStack {
                 mapContent
+                traceOverlay
                 crosshairOverlay
                 bottomToolbar
                 mapControls
@@ -148,7 +159,7 @@ struct MapBuilderView: View {
                     .font(.system(size: 9))
                     .foregroundStyle(DesignTokens.primary)
             }
-            Text(label)
+            Text(active ? label : (done ? "✎ \(label)" : label))
                 .font(DispersionType.mono(10, weight: .medium))
         }
         .padding(.horizontal, 10)
@@ -167,32 +178,52 @@ struct MapBuilderView: View {
 
     // MARK: - Map
 
+    private var sortedHolePolygons: [CoursePolygon] {
+        holePolygons
+            .filter { $0.coordinates.count >= 3 }
+            .sorted { $0.surface.zOrder < $1.surface.zOrder }
+    }
+
     private var mapContent: some View {
+        MapReader { proxy in
         Map(position: $position) {
-            // Completed polygons for this hole
-            ForEach(holePolygons, id: \.id) { polygon in
-                if polygon.coordinates.count >= 3 {
-                    MapPolygon(coordinates: polygon.coordinates.map {
-                        CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
-                    })
-                    .foregroundStyle(fillColor(polygon.surface).opacity(0.45))
-                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                }
+            // Completed polygons — z-ordered
+            ForEach(sortedHolePolygons, id: \.id) { polygon in
+                let isSelected = selectedPolygonId == polygon.id
+                MapPolygon(coordinates: polygon.coordinates.map {
+                    CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng)
+                })
+                .foregroundStyle(fillColor(polygon.surface).opacity(polygon.surface.zOrder >= 2 ? 0.7 : 0.4))
+                .stroke(isSelected ? Color.white : Color.white.opacity(0.6),
+                        lineWidth: isSelected ? 2.5 : 1)
+
             }
 
-            // In-progress polygon preview
-            if currentPoints.count >= 2 {
-                MapPolyline(coordinates: closedPreviewCoords)
-                    .stroke(fillColor(activeTool), lineWidth: 2)
+            // In-progress polygon preview — filled with dashed outline
+            if currentPoints.count >= 2, let preview = previewPolygonCoords {
+                MapPolygon(coordinates: preview)
+                    .foregroundStyle(fillColor(activeTool).opacity(0.2))
+                    .stroke(fillColor(activeTool), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+            } else if currentPoints.count == 1, let pc = previewCoord {
+                // Single line from first point to crosshair
+                MapPolyline(coordinates: [
+                    CLLocationCoordinate2D(latitude: currentPoints[0].lat, longitude: currentPoints[0].lng),
+                    CLLocationCoordinate2D(latitude: pc.lat, longitude: pc.lng)
+                ])
+                .stroke(fillColor(activeTool).opacity(0.6), lineWidth: 1.5)
             }
 
-            // In-progress points
+            // Vertex markers with numbers
             ForEach(currentPoints.indices, id: \.self) { i in
                 Annotation("", coordinate: CLLocationCoordinate2D(
                     latitude: currentPoints[i].lat, longitude: currentPoints[i].lng
                 )) {
-                    Circle().fill(.white).frame(width: 8, height: 8)
-                        .overlay(Circle().strokeBorder(fillColor(activeTool), lineWidth: 2))
+                    ZStack {
+                        Circle().fill(fillColor(activeTool)).frame(width: 14, height: 14)
+                        Text("\(i + 1)")
+                            .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white)
+                    }
                 }
             }
 
@@ -210,7 +241,6 @@ struct MapBuilderView: View {
                     }
                 }
 
-                // Pin markers
                 ForEach(info.pinPositions.filter { $0.coord != nil }, id: \.zone) { pin in
                     if let coord = pin.coord {
                         Annotation(pin.zone.label, coordinate: CLLocationCoordinate2D(latitude: coord.lat, longitude: coord.lng)) {
@@ -228,24 +258,69 @@ struct MapBuilderView: View {
                 }
             }
         }
-        .mapStyle(.imagery(elevation: .realistic))
+        .mapStyle(step == .draw && quickEdit
+            ? .standard(elevation: .realistic, pointsOfInterest: .excludingAll)
+            : .imagery(elevation: .realistic))
+        .mapControls { MapCompass() }
         .onMapCameraChange(frequency: .continuous) { context in
-            crosshairCoord = Coord(
+            let coord = Coord(
                 lat: context.camera.centerCoordinate.latitude,
                 lng: context.camera.centerCoordinate.longitude
             )
+            crosshairCoord = coord
+            visibleRegion = context.region
+            if step == .draw, !currentPoints.isEmpty {
+                previewCoord = coord
+            }
         }
+        } // MapReader
     }
 
-    private var closedPreviewCoords: [CLLocationCoordinate2D] {
+    private var previewPolygonCoords: [CLLocationCoordinate2D]? {
+        guard currentPoints.count >= 2 else { return nil }
         var coords = currentPoints.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) }
-        if let ch = crosshairCoord {
-            coords.append(CLLocationCoordinate2D(latitude: ch.lat, longitude: ch.lng))
+        if let pc = previewCoord {
+            coords.append(CLLocationCoordinate2D(latitude: pc.lat, longitude: pc.lng))
         }
-        if currentPoints.count >= 3 {
-            coords.append(coords[0])
-        }
+        coords.append(coords[0])
         return coords
+    }
+
+    // MARK: - Trace animation
+
+    private var traceOverlay: some View {
+        GeometryReader { geo in
+            if let coords = traceCoords, let region = visibleRegion, coords.count >= 3 {
+                let screenPts = coords.map { coord -> CGPoint in
+                    let fracX = (coord.lng - (region.center.longitude - region.span.longitudeDelta / 2))
+                        / region.span.longitudeDelta
+                    let fracY = 1.0 - (coord.lat - (region.center.latitude - region.span.latitudeDelta / 2))
+                        / region.span.latitudeDelta
+                    return CGPoint(x: fracX * geo.size.width, y: fracY * geo.size.height)
+                }
+                let color = fillColor(traceSurface)
+
+                // Glowing fill that fades in
+                Path { path in
+                    path.move(to: screenPts[0])
+                    for pt in screenPts.dropFirst() { path.addLine(to: pt) }
+                    path.closeSubpath()
+                }
+                .fill(color.opacity(0.3 * traceProgress))
+
+                // Tracing stroke
+                Path { path in
+                    path.move(to: screenPts[0])
+                    for pt in screenPts.dropFirst() { path.addLine(to: pt) }
+                    path.closeSubpath()
+                }
+                .trim(from: 0, to: traceProgress)
+                .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                .shadow(color: color, radius: 8)
+                .shadow(color: color, radius: 4)
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     private var crosshairOverlay: some View {
@@ -266,28 +341,50 @@ struct MapBuilderView: View {
         }
     }
 
-    // MARK: - Map controls (3D toggle)
+    // MARK: - Map controls (top overlay)
 
     private var mapControls: some View {
         VStack {
-            Spacer()
-            HStack {
+            HStack(spacing: 8) {
+                if step == .draw {
+                    Button {
+                        quickEdit.toggle()
+                        currentPoints = []
+                        Haptics.light()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: quickEdit ? "wand.and.stars" : "pencil.tip")
+                                .font(.system(size: 11))
+                            Text(quickEdit ? "Auto" : "Manual")
+                                .font(DispersionType.mono(10, weight: .medium))
+                        }
+                        .foregroundStyle(quickEdit ? accent : .white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Spacer()
+
                 Button {
                     is3D.toggle()
                     if is3D { flyToHole3D() } else { flyToHoleOverhead() }
                     Haptics.light()
                 } label: {
                     Image(systemName: is3D ? "view.2d" : "view.3d").font(.system(size: 14))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.trailing, 12)
-            .padding(.bottom, 180)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+
+            Spacer()
         }
     }
 
@@ -356,7 +453,8 @@ struct MapBuilderView: View {
             } label: {
                 HStack(spacing: 6) {
                     Circle().fill(teeDisplayColor(selectedTeeColor)).frame(width: 8, height: 8)
-                    Text("Set \(teeColorName(selectedTeeColor)) Tee")
+                    let hasTee = holeInfo?.teeBoxes.first(where: { $0.color == selectedTeeColor })?.coord != nil
+                    Text(hasTee ? "Move \(teeColorName(selectedTeeColor)) Tee" : "Set \(teeColorName(selectedTeeColor)) Tee")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -415,7 +513,8 @@ struct MapBuilderView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "flag.fill").font(.system(size: 12))
                         .foregroundStyle(pinZoneColor(selectedPinZone))
-                    Text("Set \(selectedPinZone.label) Pin")
+                    let hasPin = holeInfo?.pin(selectedPinZone) != nil
+                    Text(hasPin ? "Move \(selectedPinZone.label) Pin" : "Set \(selectedPinZone.label) Pin")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -437,78 +536,163 @@ struct MapBuilderView: View {
 
     private var drawToolbar: some View {
         VStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach([SurfaceType.fairway, .green, .bunker, .water, .rough, .tee], id: \.self) { surface in
-                        Button {
-                            activeTool = surface
-                            currentPoints = []
-                            Haptics.light()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Circle().fill(fillColor(surface)).frame(width: 8, height: 8)
-                                Text(surface.rawValue.capitalized)
-                                    .font(DispersionType.mono(10, weight: .medium))
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule().fill(activeTool == surface ? fillColor(surface).opacity(0.25) : DesignTokens.surface)
-                            )
-                            .foregroundStyle(activeTool == surface ? .white : DesignTokens.foreground)
+            // Surface type selector — full width
+            HStack(spacing: 5) {
+                ForEach([SurfaceType.fairway, .green, .bunker, .water, .rough, .tee], id: \.self) { surface in
+                    Button {
+                        activeTool = surface
+                        currentPoints = []
+                        Haptics.light()
+                    } label: {
+                        VStack(spacing: 3) {
+                            Circle().fill(fillColor(surface)).frame(width: 10, height: 10)
+                            Text(surface.rawValue.capitalized)
+                                .font(DispersionType.mono(8, weight: .medium))
                         }
-                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(activeTool == surface ? fillColor(surface).opacity(0.25) : DesignTokens.surface)
+                        )
+                        .foregroundStyle(activeTool == surface ? .white : DesignTokens.foreground)
                     }
+                    .buttonStyle(.plain)
                 }
             }
 
-            HStack(spacing: 8) {
+
+            if quickEdit {
+                // Auto-fill mode
                 Button {
-                    guard let coord = crosshairCoord else { return }
-                    currentPoints.append(coord)
-                    Haptics.light()
+                    handleQuickFill()
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus").font(.system(size: 12))
-                        Text("Point")
+                    HStack(spacing: 6) {
+                        if filling {
+                            ProgressView().scaleEffect(0.6)
+                        } else {
+                            Image(systemName: "wand.and.stars").font(.system(size: 13))
+                        }
+                        Text(filling ? "Tracing..." : "Fill \(activeTool.rawValue.capitalized)")
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.dispersion(.solid))
+                .buttonStyle(.dispersion(.primary))
+                .disabled(filling)
 
-                if !currentPoints.isEmpty {
-                    Button {
-                        currentPoints.removeLast()
-                        Haptics.light()
-                    } label: {
-                        Image(systemName: "arrow.uturn.backward").font(.system(size: 13))
-                    }
-                    .buttonStyle(.dispersion(.ghost, size: .icon))
+                HStack(spacing: 8) {
+                    Text("Sensitivity").font(DispersionType.mono(9)).foregroundStyle(DesignTokens.mutedForeground)
+                    Slider(value: $fillTolerance, in: 1...30, step: 1)
+                        .tint(accent)
+                    Text("\(Int(fillTolerance))").font(DispersionType.mono(9)).foregroundStyle(DesignTokens.mutedForeground)
+                        .frame(width: 24)
                 }
 
-                if currentPoints.count >= 3 {
-                    Button { closePolygon() } label: {
+                if let err = fillError {
+                    Text(err)
+                        .font(DispersionType.mono(9))
+                        .foregroundStyle(DesignTokens.destructive)
+                }
+            } else {
+                // Manual draw mode
+                HStack(spacing: 8) {
+                    Button {
+                        guard let coord = crosshairCoord else { return }
+                        currentPoints.append(coord)
+                        Haptics.light()
+                    } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "checkmark").font(.system(size: 12))
-                            Text("Close")
+                            Image(systemName: "plus").font(.system(size: 12))
+                            Text("Point")
                         }
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.dispersion(.primary))
+
+                    if !currentPoints.isEmpty {
+                        Button {
+                            currentPoints.removeLast()
+                            Haptics.light()
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward").font(.system(size: 13))
+                        }
+                        .buttonStyle(.dispersion(.ghost, size: .icon))
+                    }
+
+                    if currentPoints.count >= 3 {
+                        Button { closePolygon() } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark").font(.system(size: 12))
+                                Text("Close")
+                            }
+                        }
+                        .buttonStyle(.dispersion(.solid, size: .icon))
+                    }
                 }
             }
 
-            HStack(spacing: 8) {
-                if !holePolygons.isEmpty {
-                    Button { deleteLastPolygon() } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "trash").font(.system(size: 11))
-                            Text("Delete last")
+            // Polygon management
+            if !holePolygons.isEmpty {
+                // Polygon chips — tap to select, shows surface type
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(holePolygons, id: \.id) { poly in
+                            let isSel = selectedPolygonId == poly.id
+                            Button {
+                                selectedPolygonId = isSel ? nil : poly.id
+                                Haptics.light()
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Circle().fill(fillColor(poly.surface)).frame(width: 6, height: 6)
+                                    Text(poly.surface.rawValue.prefix(3).uppercased())
+                                        .font(DispersionType.mono(8, weight: .bold))
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule().fill(isSel ? Color.white.opacity(0.2) : DesignTokens.surface)
+                                )
+                                .overlay(Capsule().strokeBorder(isSel ? Color.white : Color.clear, lineWidth: 1))
+                                .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                    .buttonStyle(.dispersion(.ghost, size: .sm))
                 }
-                Spacer()
+
+                HStack(spacing: 6) {
+                    // Undo last
+                    Button {
+                        if let last = holePolygons.last {
+                            deletePolygon(id: last.id)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward").font(.system(size: 12))
+                    }
+                    .buttonStyle(.dispersion(.ghost, size: .icon))
+
+                    // Delete selected
+                    if let selId = selectedPolygonId {
+                        Button { deletePolygon(id: selId) } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "trash").font(.system(size: 11))
+                                Text("Delete")
+                            }
+                        }
+                        .buttonStyle(.dispersion(.destructive, size: .sm))
+                    }
+
+                    Spacer()
+
+                    if holePolygons.count > 1 {
+                        Button { clearHolePolygons() } label: {
+                            Text("Clear all")
+                                .font(DispersionType.mono(9, weight: .medium))
+                                .foregroundStyle(DesignTokens.destructive)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
         }
     }
@@ -548,14 +732,57 @@ struct MapBuilderView: View {
         Haptics.success()
     }
 
+    private func handleQuickFill() {
+        guard let coord = crosshairCoord, let region = visibleRegion else { return }
+        filling = true
+        fillError = nil
+        Haptics.light()
+        Task {
+            do {
+                let result = try await MapAutoFill.fill(
+                    center: CLLocationCoordinate2D(latitude: coord.lat, longitude: coord.lng),
+                    span: region.span,
+                    tolerance: Int(fillTolerance)
+                )
+
+                // Animate the trace
+                traceSurface = activeTool
+                traceCoords = result.coordinates
+                traceProgress = 0
+                withAnimation(.easeOut(duration: 0.5)) { traceProgress = 1 }
+                Haptics.success()
+
+                // Wait for animation, then save and clear
+                try await Task.sleep(for: .seconds(0.6))
+                let polygon = CoursePolygon(
+                    id: UUID().uuidString.lowercased(),
+                    courseId: courseId,
+                    holeNumber: currentHole,
+                    surface: activeTool,
+                    coordinates: result.coordinates
+                )
+                try CoursesRepo(context: modelContext).insertPolygons([polygon])
+                holePolygons.append(polygon)
+                withAnimation(.easeOut(duration: 0.3)) { traceCoords = nil }
+                fillError = nil
+            } catch {
+                fillError = error.localizedDescription
+                Haptics.error()
+            }
+            filling = false
+        }
+    }
+
     private func closePolygon() {
         guard currentPoints.count >= 3 else { return }
+        // Smooth sharp angles with Chaikin corner cutting (2 iterations)
+        let smoothed = chaikinSmooth(currentPoints, iterations: 2)
         let polygon = CoursePolygon(
             id: UUID().uuidString.lowercased(),
             courseId: courseId,
             holeNumber: currentHole,
             surface: activeTool,
-            coordinates: currentPoints
+            coordinates: smoothed
         )
         do {
             try CoursesRepo(context: modelContext).insertPolygons([polygon])
@@ -567,10 +794,43 @@ struct MapBuilderView: View {
         }
     }
 
-    private func deleteLastPolygon() {
-        guard let last = holePolygons.last else { return }
-        try? CoursesRepo(context: modelContext).deletePolygon(id: last.id)
-        holePolygons.removeLast()
+    /// Chaikin's corner-cutting algorithm — subdivides a closed polygon to
+    /// soften sharp angles. Each iteration replaces vertices with two new
+    /// points at 25% and 75% along each edge.
+    private func chaikinSmooth(_ points: [Coord], iterations: Int) -> [Coord] {
+        guard points.count >= 3, iterations > 0 else { return points }
+        var result = points
+        for _ in 0..<iterations {
+            var smoothed: [Coord] = []
+            let n = result.count
+            for i in 0..<n {
+                let a = result[i]
+                let b = result[(i + 1) % n]
+                smoothed.append(Coord(
+                    lat: a.lat * 0.75 + b.lat * 0.25,
+                    lng: a.lng * 0.75 + b.lng * 0.25
+                ))
+                smoothed.append(Coord(
+                    lat: a.lat * 0.25 + b.lat * 0.75,
+                    lng: a.lng * 0.25 + b.lng * 0.75
+                ))
+            }
+            result = smoothed
+        }
+        return result
+    }
+
+    private func deletePolygon(id: String) {
+        try? CoursesRepo(context: modelContext).deletePolygon(id: id)
+        holePolygons.removeAll { $0.id == id }
+        if selectedPolygonId == id { selectedPolygonId = nil }
+        Haptics.medium()
+    }
+
+    private func clearHolePolygons() {
+        try? CoursesRepo(context: modelContext).deletePolygons(courseId: courseId, hole: currentHole)
+        holePolygons.removeAll()
+        selectedPolygonId = nil
         Haptics.medium()
     }
 

@@ -1,4 +1,5 @@
-// Port of app/src/lib/backup.ts. JSON export/import of clubs, sessions, shots.
+// Full app backup — clubs, sessions, shots, face strikes, courses, hole
+// infos, and polygons. Everything the user has built, locally.
 
 import Foundation
 
@@ -6,41 +7,44 @@ public enum Backup {
 
     // MARK: - Export
 
-    public static func build(clubs: [Club], sessions: [Session], shots: [Shot]) -> Data {
+    public static func build(
+        clubs: [Club], sessions: [Session], shots: [Shot],
+        faceStrikes: [FaceStrike] = [],
+        courses: [Course] = [], holeInfos: [HoleInfo] = [], polygons: [CoursePolygon] = []
+    ) -> Data {
         let iso = ISO8601DateFormatter()
         let payload = BackupPayload(
-            version: 2,
+            version: 3,
             exportedAt: iso.string(from: .now),
             clubs: clubs.map { c in
-                .init(
-                    id: c.id,
-                    name: c.name,
-                    carryYards: c.carryYards,
-                    carrySd: c.carrySd,
-                    lateralSd: c.lateralSd,
-                    createdAt: iso.string(from: c.createdAt),
-                    updatedAt: iso.string(from: c.updatedAt)
-                )
+                .init(id: c.id, name: c.name, carryYards: c.carryYards,
+                      carrySd: c.carrySd, lateralSd: c.lateralSd,
+                      createdAt: iso.string(from: c.createdAt),
+                      updatedAt: iso.string(from: c.updatedAt))
             },
             sessions: sessions.map { s in
-                .init(
-                    id: s.id,
-                    kind: s.kind.rawValue,
-                    label: s.label,
-                    startedAt: iso.string(from: s.createdAt)
-                )
+                .init(id: s.id, kind: s.kind.rawValue, label: s.label,
+                      startedAt: iso.string(from: s.createdAt))
             },
             shots: shots.map { s in
-                .init(
-                    id: s.id,
-                    sessionId: s.sessionId,
-                    clubId: s.clubId,
-                    targetDistanceYards: s.targetDistanceYards,
-                    longDelta: s.longDelta,
-                    latDelta: s.latDelta,
-                    outcome: s.outcomes.isEmpty ? nil : Outcomes.encode(s.outcomes),
-                    timestamp: iso.string(from: s.timestamp)
-                )
+                .init(id: s.id, sessionId: s.sessionId, clubId: s.clubId,
+                      targetDistanceYards: s.targetDistanceYards,
+                      longDelta: s.longDelta, latDelta: s.latDelta,
+                      outcome: s.outcomes.isEmpty ? nil : Outcomes.encode(s.outcomes),
+                      timestamp: iso.string(from: s.timestamp))
+            },
+            faceStrikes: faceStrikes.map { f in
+                .init(id: f.id, clubId: f.clubId, x: f.x, y: f.y,
+                      timestamp: iso.string(from: f.timestamp))
+            },
+            courses: courses.map { c in
+                .init(id: c.id, name: c.name, centerLat: c.centerLat, centerLng: c.centerLng,
+                      holeCount: c.holeCount)
+            },
+            holeInfos: holeInfos,
+            polygons: polygons.map { p in
+                .init(id: p.id, courseId: p.courseId, holeNumber: p.holeNumber ?? 0,
+                      surface: p.surface.rawValue, coordinates: p.coordinates)
             }
         )
         let encoder = JSONEncoder()
@@ -54,18 +58,22 @@ public enum Backup {
         public var clubs: [Club]
         public var sessions: [Session]
         public var shots: [Shot]
+        public var faceStrikes: [FaceStrike]
+        public var courses: [Course]
+        public var holeInfos: [HoleInfo]
+        public var polygons: [CoursePolygon]
         public var warnings: [String]
     }
 
     public static func parse(_ data: Data) throws -> ParsedBackup {
         let payload = try JSONDecoder().decode(BackupPayload.self, from: data)
-        guard payload.version == 1 || payload.version == 2 else {
+        guard (1...3).contains(payload.version) else {
             throw BackupError.unsupportedVersion(payload.version)
         }
         let iso = ISO8601DateFormatter()
         var warnings: [String] = []
 
-        // Clubs — validate each entry
+        // Clubs
         var clubs: [Club] = []
         for c in payload.clubs {
             let name = c.name.trimmingCharacters(in: .whitespaces)
@@ -76,20 +84,14 @@ public enum Backup {
             guard c.carryYards.isFinite, c.carryYards >= 0,
                   c.carrySd.isFinite, c.carrySd >= 0,
                   c.lateralSd.isFinite, c.lateralSd >= 0 else {
-                warnings.append("Skipped club '\(name)' with invalid numeric values")
+                warnings.append("Skipped club '\(name)' with invalid values")
                 continue
             }
             let createdAt = iso.date(from: c.createdAt)
-            if createdAt == nil {
-                warnings.append("Club '\(name)' has malformed date, using import time")
-            }
             let updatedAt = c.updatedAt.flatMap { iso.date(from: $0) }
             clubs.append(Club(
-                id: c.id,
-                name: name,
-                carryYards: c.carryYards,
-                carrySd: c.carrySd,
-                lateralSd: c.lateralSd,
+                id: c.id, name: name,
+                carryYards: c.carryYards, carrySd: c.carrySd, lateralSd: c.lateralSd,
                 createdAt: createdAt ?? .now,
                 updatedAt: updatedAt ?? createdAt ?? .now
             ))
@@ -97,24 +99,17 @@ public enum Backup {
 
         // Sessions
         let sessions = (payload.sessions ?? []).map { s in
-            Session(
-                id: s.id,
-                kind: SessionKind(rawValue: s.kind) ?? .round,
-                label: s.label,
-                createdAt: iso.date(from: s.startedAt) ?? .now
-            )
+            Session(id: s.id, kind: SessionKind(rawValue: s.kind) ?? .round,
+                    label: s.label, createdAt: iso.date(from: s.startedAt) ?? .now)
         }
 
-        // Shots — validate and filter orphaned references
+        // Shots — validate refs
         let clubIds = Set(clubs.map(\.id))
         let sessionIds = Set(sessions.map(\.id))
         var shots: [Shot] = []
         for s in (payload.shots ?? []) {
             guard s.targetDistanceYards.isFinite, s.targetDistanceYards > 0,
-                  s.longDelta.isFinite, s.latDelta.isFinite else {
-                warnings.append("Skipped shot with invalid numeric values (id: \(s.id))")
-                continue
-            }
+                  s.longDelta.isFinite, s.latDelta.isFinite else { continue }
             if !clubIds.contains(s.clubId) {
                 warnings.append("Skipped shot referencing unknown club (id: \(s.id))")
                 continue
@@ -124,23 +119,50 @@ public enum Backup {
                 continue
             }
             shots.append(Shot(
-                id: s.id,
-                sessionId: s.sessionId,
-                clubId: s.clubId,
+                id: s.id, sessionId: s.sessionId, clubId: s.clubId,
                 targetDistanceYards: s.targetDistanceYards,
-                longDelta: s.longDelta,
-                latDelta: s.latDelta,
+                longDelta: s.longDelta, latDelta: s.latDelta,
                 outcomes: s.outcome.map { Outcomes.decode($0) } ?? [],
                 timestamp: iso.date(from: s.timestamp) ?? .now
             ))
         }
 
-        return ParsedBackup(clubs: clubs, sessions: sessions, shots: shots, warnings: warnings)
+        // Face strikes
+        let faceStrikes = (payload.faceStrikes ?? []).compactMap { f -> FaceStrike? in
+            guard clubIds.contains(f.clubId) else { return nil }
+            return FaceStrike(id: f.id, clubId: f.clubId, x: f.x, y: f.y,
+                              timestamp: iso.date(from: f.timestamp) ?? .now)
+        }
+
+        // Courses
+        let courses = (payload.courses ?? []).map { c in
+            Course(id: c.id, name: c.name, centerLat: c.centerLat, centerLng: c.centerLng,
+                   holeCount: c.holeCount)
+        }
+        let courseIds = Set(courses.map(\.id))
+
+        // Hole infos — filter to valid courses
+        let holeInfos = (payload.holeInfos ?? []).filter { courseIds.contains($0.courseId) }
+
+        // Polygons
+        let polygons = (payload.polygons ?? []).compactMap { p -> CoursePolygon? in
+            guard courseIds.contains(p.courseId),
+                  let surface = SurfaceType(rawValue: p.surface) else { return nil }
+            return CoursePolygon(id: p.id, courseId: p.courseId,
+                                holeNumber: p.holeNumber > 0 ? p.holeNumber : nil,
+                                surface: surface, coordinates: p.coordinates)
+        }
+
+        return ParsedBackup(
+            clubs: clubs, sessions: sessions, shots: shots,
+            faceStrikes: faceStrikes,
+            courses: courses, holeInfos: holeInfos, polygons: polygons,
+            warnings: warnings
+        )
     }
 
     public enum BackupError: LocalizedError {
         case unsupportedVersion(Int)
-
         public var errorDescription: String? {
             switch self {
             case .unsupportedVersion(let v): return "Unsupported backup version: \(v)"
@@ -157,32 +179,40 @@ private struct BackupPayload: Codable {
     var clubs: [ClubEntry]
     var sessions: [SessionEntry]?
     var shots: [ShotEntry]?
+    var faceStrikes: [FaceStrikeEntry]?
+    var courses: [CourseEntry]?
+    var holeInfos: [HoleInfo]?
+    var polygons: [PolygonEntry]?
 
     struct ClubEntry: Codable {
-        var id: String
-        var name: String
-        var carryYards: Double
-        var carrySd: Double
-        var lateralSd: Double
+        var id, name: String
+        var carryYards, carrySd, lateralSd: Double
         var createdAt: String
         var updatedAt: String?
     }
-
     struct SessionEntry: Codable {
-        var id: String
-        var kind: String
-        var label: String
-        var startedAt: String
+        var id, kind, label, startedAt: String
     }
-
     struct ShotEntry: Codable {
-        var id: String
-        var sessionId: String
-        var clubId: String
-        var targetDistanceYards: Double
-        var longDelta: Double
-        var latDelta: Double
+        var id, sessionId, clubId: String
+        var targetDistanceYards, longDelta, latDelta: Double
         var outcome: String?
         var timestamp: String
+    }
+    struct FaceStrikeEntry: Codable {
+        var id, clubId: String
+        var x, y: Double
+        var timestamp: String
+    }
+    struct CourseEntry: Codable {
+        var id, name: String
+        var centerLat, centerLng: Double
+        var holeCount: Int
+    }
+    struct PolygonEntry: Codable {
+        var id, courseId: String
+        var holeNumber: Int
+        var surface: String
+        var coordinates: [Coord]
     }
 }
