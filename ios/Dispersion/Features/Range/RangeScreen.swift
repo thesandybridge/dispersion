@@ -331,12 +331,13 @@ struct LiveRangeView: View {
                 .frame(width: 6, height: 6)
             Text(club.name)
                 .font(DispersionType.ui(13, weight: .medium))
+                .foregroundStyle(DesignTokens.foreground)
             Text("\(Int(effectiveTarget))y")
                 .font(DispersionType.mono(11))
                 .foregroundStyle(DesignTokens.mutedForeground)
             if taps.count > 0 {
                 Text("· \(taps.count)")
-                    .font(DispersionType.mono(11))
+                    .font(DispersionType.mono(11, weight: .medium))
                     .foregroundStyle(DesignTokens.primary)
             }
         }
@@ -345,7 +346,9 @@ struct LiveRangeView: View {
         .background(
             Capsule()
                 .fill(DesignTokens.popover)
-                        )
+                .overlay(Capsule().strokeBorder(DesignTokens.border, lineWidth: 1))
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        )
     }
 
     private func liveStatsCard(_ club: Club) -> some View {
@@ -361,6 +364,7 @@ struct LiveRangeView: View {
         return HStack(spacing: 8) {
             Text("\(measuredCarry)y")
                 .font(DispersionType.mono(13, weight: .medium))
+                .foregroundStyle(DesignTokens.foreground)
             Text("σ↕\(String(format: "%.1f", stats.carrySd))")
                 .font(DispersionType.mono(10))
                 .foregroundStyle(DesignTokens.mutedForeground)
@@ -379,6 +383,8 @@ struct LiveRangeView: View {
         .background(
             Capsule()
                 .fill(DesignTokens.popover)
+                .overlay(Capsule().strokeBorder(DesignTokens.border, lineWidth: 1))
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
         )
     }
 
@@ -848,7 +854,7 @@ struct LiveRangeView: View {
     @Environment(\.themeAccent) private var accent
 
     private var rangeToolbar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 4) {
             toolbarBtn("arrow.triangle.2.circlepath", label: "Club") { switchClubOpen = true }
             toolbarBtn("scope", label: "Target") { targetSheetOpen = true }
             toolbarBtn("pencil", label: "Manual") { addShotOpen = true }
@@ -860,7 +866,7 @@ struct LiveRangeView: View {
             }
 
             if taps.count >= 2 {
-                toolbarBtn("square.and.arrow.down", label: "Save", tint: accent) {
+                toolbarBtn("square.and.arrow.down", label: "Save", tint: accent, prominent: true) {
                     saveConfirm = true
                 }
             }
@@ -871,27 +877,43 @@ struct LiveRangeView: View {
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(6)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(DesignTokens.popover)
-                        )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .strokeBorder(DesignTokens.border, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+        )
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
     }
 
-    private func toolbarBtn(_ icon: String, label: String, tint: Color = DesignTokens.foreground, action: @escaping () -> Void) -> some View {
+    private func toolbarBtn(
+        _ icon: String,
+        label: String,
+        tint: Color = DesignTokens.foreground,
+        prominent: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button { action(); Haptics.light() } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 15))
-                    .foregroundStyle(tint)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(prominent ? DesignTokens.primaryForeground : tint)
                 Text(label)
-                    .font(DispersionType.mono(8, weight: .medium))
-                    .foregroundStyle(DesignTokens.mutedForeground)
+                    .font(DispersionType.mono(9, weight: .medium))
+                    .tracking(0.4)
+                    .foregroundStyle(prominent ? DesignTokens.primaryForeground : DesignTokens.mutedForeground)
             }
             .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(prominent ? tint : Color.clear)
+            )
         }
         .buttonStyle(.plain)
     }

@@ -117,7 +117,9 @@ public struct RangeRadarField: View {
     private func drawScene(ctx: GraphicsContext, size: CGSize, geom: Geom, displayShots: [ShotXY]) {
         let center = geom.center
 
-        // Background gradient
+        // Background — radial gradient that adapts to light/dark via semantic
+        // tokens. In dark mode this lands on pine; in light mode it reads as
+        // a soft cream field, both with a subtle vignette toward the corners.
         let bgRect = CGRect(origin: .zero, size: size)
         ctx.fill(Path(bgRect), with: .radialGradient(
             Gradient(colors: [DesignTokens.background, DesignTokens.backgroundDeep]),
@@ -126,7 +128,23 @@ public struct RangeRadarField: View {
             endRadius: max(size.width, size.height) * 0.6
         ))
 
-        // Distance arcs — concentric circles at regular yard intervals
+        // Subtle "field" tint over the gradient — bentgrass at low opacity
+        // gives the radar identity in both modes (a putting-green wash) without
+        // overwhelming the foreground.
+        ctx.fill(
+            Path(bgRect),
+            with: .radialGradient(
+                Gradient(colors: [
+                    DesignTokens.bentgrass.opacity(0.06),
+                    DesignTokens.bentgrass.opacity(0.0),
+                ]),
+                center: center,
+                startRadius: 0,
+                endRadius: max(size.width, size.height) * 0.55
+            )
+        )
+
+        // Distance arcs — concentric circles at regular yard intervals.
         let step = arcStep(for: geom.span)
         let maxArc = geom.span * 1.5
         var dist = step
@@ -139,17 +157,17 @@ public struct RangeRadarField: View {
             let isMainArc = dist.truncatingRemainder(dividingBy: step * 2) == 0 || step >= 10
             ctx.stroke(
                 arcPath,
-                with: .color(Color.white.opacity(isMainArc ? 0.10 : 0.05)),
-                style: StrokeStyle(lineWidth: 0.6, dash: [2, 3])
+                with: .color(isMainArc ? DesignTokens.borderStrong : DesignTokens.border),
+                style: StrokeStyle(lineWidth: 0.7, dash: [2, 3])
             )
 
-            // Label on the right, just above the target line
+            // Label on the right, just above the target line.
             let showLabel = step < 10 ? dist.truncatingRemainder(dividingBy: 10) == 0 || dist == step : true
             if showLabel {
                 ctx.draw(
                     Text("\(Int(dist))y")
                         .font(DispersionType.mono(8, weight: .regular))
-                        .foregroundStyle(Color.white.opacity(0.25)),
+                        .foregroundStyle(DesignTokens.subtleForeground),
                     at: CGPoint(x: center.x + r + 2, y: center.y - 6),
                     anchor: .leading
                 )
@@ -157,29 +175,29 @@ public struct RangeRadarField: View {
             dist += step
         }
 
-        // Centerline (dashed vertical)
+        // Centerline (dashed vertical).
         let centerline = Path { p in
             p.move(to: CGPoint(x: center.x, y: 0))
             p.addLine(to: CGPoint(x: center.x, y: size.height))
         }
         ctx.stroke(
             centerline,
-            with: .color(Color.white.opacity(0.15)),
-            style: StrokeStyle(lineWidth: 0.6, dash: [4, 5])
+            with: .color(DesignTokens.border),
+            style: StrokeStyle(lineWidth: 0.7, dash: [4, 5])
         )
 
-        // Target line (horizontal accent)
+        // Target line (horizontal accent).
         let targetLine = Path { p in
             p.move(to: CGPoint(x: 0, y: center.y))
             p.addLine(to: CGPoint(x: size.width, y: center.y))
         }
-        ctx.stroke(targetLine, with: .color(DesignTokens.flag.opacity(0.45)), lineWidth: 0.7)
+        ctx.stroke(targetLine, with: .color(DesignTokens.flag.opacity(0.55)), lineWidth: 0.8)
 
-        // Target yardage label
+        // Target yardage label.
         ctx.draw(
             Text("\(Int(targetYards))y")
-                .font(DispersionType.mono(9, weight: .regular))
-                .foregroundStyle(DesignTokens.flag.opacity(0.85)),
+                .font(DispersionType.mono(9, weight: .medium))
+                .foregroundStyle(DesignTokens.flag),
             at: CGPoint(x: size.width - 8, y: center.y - 8),
             anchor: .trailing
         )
@@ -221,9 +239,10 @@ public struct RangeRadarField: View {
             with: .color(DesignTokens.flag)
         )
 
-        // Compass labels
+        // Compass labels (LONG / SHORT / L / R) — subtleForeground adapts to
+        // light/dark, so they're readable in both modes without being shouty.
         let compassFont = Font.system(size: 8, design: .monospaced).weight(.medium)
-        let compassColor = Color.white.opacity(0.2)
+        let compassColor = DesignTokens.subtleForeground
         ctx.draw(Text("LONG").font(compassFont).foregroundStyle(compassColor),
                  at: CGPoint(x: center.x, y: 14), anchor: .center)
         ctx.draw(Text("SHORT").font(compassFont).foregroundStyle(compassColor),
@@ -233,38 +252,39 @@ public struct RangeRadarField: View {
         ctx.draw(Text("R").font(compassFont).foregroundStyle(compassColor),
                  at: CGPoint(x: size.width - 12, y: center.y), anchor: .center)
 
-        // Logged shots
+        // Logged shots. Older shots use `foreground` so they invert correctly
+        // in light mode (cream-on-cream would vanish). Latest shot stays primary.
         for (i, shot) in displayShots.enumerated() {
             let p = CGPoint(x: geom.sx(shot.lat), y: geom.sy(shot.long))
             let isLatest = i == displayShots.count - 1
 
             if isLatest && !displayShots.isEmpty {
                 let halo = Path(ellipseIn: CGRect(x: p.x - 10, y: p.y - 10, width: 20, height: 20))
-                ctx.fill(halo, with: .color(DesignTokens.primary.opacity(0.2)))
+                ctx.fill(halo, with: .color(DesignTokens.primary.opacity(0.22)))
             }
 
             let r: CGFloat = isLatest ? 5 : 3.5
             let dot = Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
-            ctx.fill(dot, with: .color(isLatest ? DesignTokens.primary : DesignTokens.cream))
-            ctx.stroke(dot, with: .color(DesignTokens.backgroundDeep), lineWidth: 1)
+            ctx.fill(dot, with: .color(isLatest ? DesignTokens.primary : DesignTokens.foreground))
+            ctx.stroke(dot, with: .color(DesignTokens.background), lineWidth: 1)
 
             if displayShots.count <= 20 {
                 ctx.draw(
                     Text("\(i + 1)")
                         .font(.system(size: 7, design: .monospaced))
-                        .foregroundStyle(Color.white.opacity(0.5)),
+                        .foregroundStyle(DesignTokens.mutedForeground),
                     at: CGPoint(x: p.x, y: p.y - r - 6)
                 )
             }
         }
 
-        // Empty hint
+        // Empty hint.
         if displayShots.isEmpty {
             ctx.draw(
                 Text("TAP WHERE IT LANDED")
-                    .font(DispersionType.mono(9, weight: .regular))
+                    .font(DispersionType.mono(10, weight: .medium))
                     .tracking(2)
-                    .foregroundStyle(Color.white.opacity(0.45)),
+                    .foregroundStyle(DesignTokens.mutedForeground),
                 at: CGPoint(x: center.x, y: center.y + 32)
             )
         }
