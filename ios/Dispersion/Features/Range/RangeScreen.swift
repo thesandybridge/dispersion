@@ -188,7 +188,20 @@ struct LiveRangeView: View {
 
     var body: some View {
         ZStack {
+            // Base background + a soft warm wash that extends into the area
+            // below the radar (under the toolbar) so there's no visible edge
+            // where the canvas ends.
             DesignTokens.background.ignoresSafeArea()
+            LinearGradient(
+                colors: [
+                    DesignTokens.bentgrass.opacity(0.08),
+                    DesignTokens.bentgrass.opacity(0.02),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             if let c = club {
                 RangeRadarField(
@@ -860,33 +873,49 @@ struct LiveRangeView: View {
     // utility actions. The dark color scheme is enforced because the
     // pills sit on the radar field, where light text on dark popover
     // reads in both light and dark mode.
+    /// Two-row toolbar.
+    /// Row 1 — per-shot utility actions (always present, identical set so
+    /// they never reflow). Row 2 — session-level actions (Save / End) that
+    /// appear only when the session has earned them. Splitting onto two
+    /// rows keeps the per-shot pills stable as Save/End come and go.
     private var rangeToolbar: some View {
-        HStack(spacing: 8) {
-            rangePill("arrow.triangle.2.circlepath", "Club") { switchClubOpen = true }
-            rangePill("scope", "Target") { targetSheetOpen = true }
-            rangePill("pencil", "Manual") { addShotOpen = true }
-
-            if !taps.isEmpty {
-                rangePill("arrow.uturn.backward", "Undo") {
-                    taps.removeLast(); Haptics.light()
+        VStack(spacing: 10) {
+            // Row 2 (session actions) sits ABOVE the utility row so the most
+            // contextual / decision-shaped pills get more visual prominence.
+            if taps.count >= 2 || sessionId != nil {
+                HStack(spacing: 8) {
+                    if taps.count >= 2 {
+                        rangePillTinted("square.and.arrow.down", "Save calibration", tint: accent) {
+                            saveConfirm = true
+                        }
+                    }
+                    if sessionId != nil {
+                        rangePillTinted("stop.circle.fill", "End session", tint: DesignTokens.destructive) {
+                            endConfirm = true
+                        }
+                    }
                 }
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            if taps.count >= 2 {
-                rangePillTinted("square.and.arrow.down", "Save", tint: accent) {
-                    saveConfirm = true
-                }
-            }
-
-            if sessionId != nil {
-                rangePillTinted("stop.circle.fill", "End", tint: DesignTokens.destructive) {
-                    endConfirm = true
+            // Row 1 — per-shot utility actions. Undo flips in/out but
+            // doesn't move the others because the row is centered as a unit.
+            HStack(spacing: 8) {
+                rangePill("arrow.triangle.2.circlepath", "Club") { switchClubOpen = true }
+                rangePill("scope", "Target") { targetSheetOpen = true }
+                rangePill("pencil", "Manual") { addShotOpen = true }
+                if !taps.isEmpty {
+                    rangePill("arrow.uturn.backward", "Undo") {
+                        taps.removeLast(); Haptics.light()
+                    }
                 }
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: taps.count)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: sessionId)
         .environment(\.colorScheme, .dark)
     }
 

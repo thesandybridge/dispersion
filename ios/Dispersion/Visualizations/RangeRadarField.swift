@@ -124,29 +124,23 @@ public struct RangeRadarField: View {
 
     private func drawScene(ctx: GraphicsContext, size: CGSize, geom: Geom, displayShots: [ShotXY]) {
         let center = geom.center
-        let bgRect = CGRect(origin: .zero, size: size)
 
-        // 1. Background — flat surface tint, no vignette. We rely on the
-        // semantic background token + a faint warm wash so the radar reads
-        // as a friendly practice surface rather than a deep dark cone.
-        ctx.fill(Path(bgRect), with: .color(DesignTokens.background))
-        ctx.fill(
-            Path(bgRect),
-            with: .linearGradient(
-                Gradient(colors: [
-                    DesignTokens.bentgrass.opacity(0.07),
-                    DesignTokens.bentgrass.opacity(0.03),
-                ]),
-                startPoint: CGPoint(x: 0, y: 0),
-                endPoint: CGPoint(x: 0, y: size.height)
-            )
-        )
+        // Canvas is transparent — the parent (RangeScreen) paints the
+        // background + warm wash for the entire screen so there's no edge
+        // transition where the canvas ends.
 
-        // 2. Distance arcs — *only* the major intervals, drawn as thin
-        // solid bentgrass lines at very low opacity. Drafting paper, not
-        // a sweeping radar.
+        // 1. Distance arcs — *only* the major intervals, and only the ones
+        // that fit fully inside the visible field. Drawing arcs that bleed
+        // off the edge gets clipped to the canvas bounds, which looks like
+        // sudden cuts. Bound maxArc by the narrower dimension so every
+        // ring is a complete circle.
         let majorStep = arcStep(for: geom.span)
-        let maxArc = geom.span * 1.5
+        let labelMargin: CGFloat = 24   // room for the "Ny" label tail on the right
+        let maxRingPx = min(
+            min(size.width / 2, size.height / 2) - labelMargin,
+            CGFloat(geom.span * 1.5) * geom.scale
+        )
+        let maxArc = max(majorStep, Double(maxRingPx / geom.scale))
         var dist = majorStep
         while dist <= maxArc {
             let r = CGFloat(dist) * geom.scale
