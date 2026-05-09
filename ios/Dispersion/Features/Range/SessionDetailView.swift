@@ -189,7 +189,7 @@ struct SessionDetailView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(ThemedCardFill(cornerRadius: 12))
+        .background(ThemedCardFill(cornerRadius: 14))
     }
 
     // MARK: actions

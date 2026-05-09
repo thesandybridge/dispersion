@@ -19,33 +19,48 @@ struct ShotLogView: View {
 
     var body: some View {
         List {
-            // Stats header
+            // Stats hero card — matches the Bag screen's heroCard pattern
+            // (HStack of stacked figures separated by DSeparator, wrapped in
+            // ThemedCardFill).
             Section {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("\(totalShots)")
-                            .font(DispersionType.display(32, weight: .regular))
+                            .font(DispersionType.display(40, weight: .regular))
                             .monospacedDigit()
+                            .foregroundStyle(DesignTokens.foreground)
                         Text("total shots")
                             .font(DispersionType.mono(10))
                             .foregroundStyle(DesignTokens.mutedForeground)
                     }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 2) {
+                    DSeparator(.vertical).frame(height: 40)
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("\(last30DayShots)")
-                            .font(DispersionType.display(24, weight: .regular))
+                            .font(DispersionType.mono(13, weight: .medium))
                             .monospacedDigit()
                             .foregroundStyle(accent)
                         Text("last \(AppConfig.recentActivityDays) days")
                             .font(DispersionType.mono(10))
                             .foregroundStyle(DesignTokens.mutedForeground)
                     }
+                    DSeparator(.vertical).frame(height: 40)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(sessions.count)")
+                            .font(DispersionType.mono(13, weight: .medium))
+                            .monospacedDigit()
+                            .foregroundStyle(DesignTokens.foreground)
+                        Text("sessions")
+                            .font(DispersionType.mono(10))
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                    }
+                    Spacer()
                 }
-                .padding(.vertical, 4)
+                .padding(16)
+                .background(ThemedCardFill(cornerRadius: 16))
             }
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
 
             // Per-club cards
             if !clubSummaries.isEmpty {
@@ -133,44 +148,56 @@ struct ShotLogView: View {
     // MARK: - Club card
 
     private func clubCard(club: Club, summary: ClubShotSummary) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(club.name)
-                    .font(DispersionType.ui(13, weight: .medium))
-                Spacer()
-                Text("\(summary.totalShots)")
-                    .font(DispersionType.mono(10))
-                    .foregroundStyle(DesignTokens.mutedForeground)
-            }
-            if let sd = summary.latestCarrySd {
-                HStack {
-                    Text("σ \(String(format: "%.1f", sd))")
+        let cat = ClubCategoryRegistry.categorize(name: club.name, carryYards: club.carryYards)
+        let style = ClubCategoryRegistry.style(for: cat)
+        return HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(LinearGradient(gradient: style.gradient, startPoint: .top, endPoint: .bottom))
+                .frame(width: 3, height: 32)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(club.name)
+                        .font(DispersionType.ui(13, weight: .medium))
+                        .foregroundStyle(DesignTokens.foreground)
+                    Spacer(minLength: 6)
+                    Text("\(summary.totalShots)")
                         .font(DispersionType.mono(10))
                         .foregroundStyle(DesignTokens.mutedForeground)
-                    if let delta = summary.deltaCarrySd {
-                        Text("\(delta < 0 ? "↓" : "↑")\(String(format: "%.1f", abs(delta)))")
+                }
+                if let sd = summary.latestCarrySd {
+                    HStack(spacing: 6) {
+                        Text("σ \(String(format: "%.1f", sd))")
                             .font(DispersionType.mono(10))
-                            .foregroundStyle(delta < 0 ? DesignTokens.primary : DesignTokens.pPoor)
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                        if let delta = summary.deltaCarrySd {
+                            Text("\(delta < 0 ? "↓" : "↑")\(String(format: "%.1f", abs(delta)))")
+                                .font(DispersionType.mono(10))
+                                .foregroundStyle(delta < 0 ? DesignTokens.primary : DesignTokens.pPoor)
+                        }
                     }
                 }
             }
         }
-        .padding(12)
-        .frame(minWidth: 130, alignment: .leading)
-        .background(ThemedCardFill(cornerRadius: 10))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(minWidth: 150, alignment: .leading)
+        .background(ThemedCardFill(cornerRadius: 14))
     }
 
     // MARK: - Session row
 
     private func sessionRow(_ session: Session) -> some View {
         let shotCount = (try? ShotsRepo(context: modelContext).listBySession(session.id))?.count ?? 0
+        let kindAccent: Color = session.kind == .range ? accent : DesignTokens.pMarginal
         return HStack(spacing: 12) {
-            Circle()
-                .fill(session.kind == .range ? accent : DesignTokens.pMarginal)
-                .frame(width: 8, height: 8)
-            VStack(alignment: .leading, spacing: 2) {
+            // Accent strip — same idiom as Bag's club rows + SessionDetailView header.
+            RoundedRectangle(cornerRadius: 2)
+                .fill(kindAccent)
+                .frame(width: 3, height: 36)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(session.label)
-                    .font(DispersionType.ui(14, weight: .medium))
+                    .font(DispersionType.ui(15, weight: .medium))
+                    .foregroundStyle(DesignTokens.foreground)
                 HStack(spacing: 6) {
                     Text(formatSessionDate(session.createdAt))
                         .font(DispersionType.mono(10))
@@ -184,12 +211,12 @@ struct ShotLogView: View {
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.system(size: 11))
-                .foregroundStyle(DesignTokens.mutedForeground.opacity(0.4))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(ThemedCardFill(cornerRadius: 12))
+        .background(ThemedCardFill(cornerRadius: 14))
     }
 
     // MARK: - Helpers

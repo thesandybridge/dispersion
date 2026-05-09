@@ -853,69 +853,74 @@ struct LiveRangeView: View {
 
     @Environment(\.themeAccent) private var accent
 
+    // Bottom toolbar — discrete floating pills, same chrome as the
+    // Course editor (MapBuilderView). Each action is its own capsule
+    // with `floatingPillStyle()`; primary state-changing actions
+    // (Save, End) get a tinted border so they read as decisions, not
+    // utility actions. The dark color scheme is enforced because the
+    // pills sit on the radar field, where light text on dark popover
+    // reads in both light and dark mode.
     private var rangeToolbar: some View {
-        HStack(spacing: 4) {
-            toolbarBtn("arrow.triangle.2.circlepath", label: "Club") { switchClubOpen = true }
-            toolbarBtn("scope", label: "Target") { targetSheetOpen = true }
-            toolbarBtn("pencil", label: "Manual") { addShotOpen = true }
+        HStack(spacing: 8) {
+            rangePill("arrow.triangle.2.circlepath", "Club") { switchClubOpen = true }
+            rangePill("scope", "Target") { targetSheetOpen = true }
+            rangePill("pencil", "Manual") { addShotOpen = true }
 
             if !taps.isEmpty {
-                toolbarBtn("arrow.uturn.backward", label: "Undo") {
+                rangePill("arrow.uturn.backward", "Undo") {
                     taps.removeLast(); Haptics.light()
                 }
             }
 
+            Spacer(minLength: 0)
+
             if taps.count >= 2 {
-                toolbarBtn("square.and.arrow.down", label: "Save", tint: accent, prominent: true) {
+                rangePillTinted("square.and.arrow.down", "Save", tint: accent) {
                     saveConfirm = true
                 }
             }
 
             if sessionId != nil {
-                toolbarBtn("stop.circle.fill", label: "End", tint: DesignTokens.destructive) {
+                rangePillTinted("stop.circle.fill", "End", tint: DesignTokens.destructive) {
                     endConfirm = true
                 }
             }
         }
-        .padding(6)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(DesignTokens.popover)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .strokeBorder(DesignTokens.border, lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
-        )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.bottom, 12)
+        .environment(\.colorScheme, .dark)
     }
 
-    private func toolbarBtn(
-        _ icon: String,
-        label: String,
-        tint: Color = DesignTokens.foreground,
-        prominent: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
+    private func rangePill(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
         Button { action(); Haptics.light() } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(prominent ? DesignTokens.primaryForeground : tint)
-                Text(label)
-                    .font(DispersionType.mono(9, weight: .medium))
-                    .tracking(0.4)
-                    .foregroundStyle(prominent ? DesignTokens.primaryForeground : DesignTokens.mutedForeground)
+            HStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 11))
+                Text(label).font(DispersionType.mono(11, weight: .medium))
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(prominent ? tint : Color.clear)
-            )
+            .floatingPillStyle()
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    private func rangePillTinted(_ icon: String, _ label: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button { action(); Haptics.light() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 11, weight: .semibold))
+                Text(label).font(DispersionType.mono(11, weight: .medium))
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(DesignTokens.popover.opacity(0.92))
+                    .overlay(Capsule().strokeBorder(tint.opacity(0.45), lineWidth: 1))
+            )
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     // MARK: sheets
