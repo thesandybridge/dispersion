@@ -99,27 +99,24 @@ public struct PuttingGreenField: View {
     // MARK: - Layout
 
     private struct Geom {
-        var cup: CGPoint        // anchor point — cup center
-        var tee: CGPoint        // player tee at the bottom of the lane
+        var cup: CGPoint        // cup center (anchor — y=0 in feet)
+        var tee: CGPoint        // player tee at the bottom of the line
         var scale: CGFloat      // pixels per foot
-        var laneWidth: CGFloat
         var size: CGSize
     }
 
     private func layout(in size: CGSize) -> Geom {
-        // Lane runs vertically. Reserve some headroom so the flag/cup don't
-        // crowd the top, and footer space for the tee.
-        let topPad: CGFloat = 56
-        let bottomPad: CGFloat = 64
+        // Reserve modest headroom for the cup + landing dots that may sit
+        // past the cup, plus enough footer space that the tee marker isn't
+        // hugging the bottom edge.
+        let topPad: CGFloat = 40
+        let bottomPad: CGFloat = 48
         let usableHeight = max(size.height - topPad - bottomPad, 100)
-        // Distance from cup (top) to tee (bottom) in feet, with a touch of
-        // slack past the practice distance so a long miss has room to land.
         let visibleFeet = max(practiceDistanceFeet * 1.1, practiceDistanceFeet + 2)
         let scale = usableHeight / CGFloat(visibleFeet)
         let cup = CGPoint(x: size.width / 2, y: topPad)
         let tee = CGPoint(x: size.width / 2, y: topPad + CGFloat(practiceDistanceFeet) * scale)
-        let laneWidth = min(size.width * 0.55, 220)
-        return Geom(cup: cup, tee: tee, scale: scale, laneWidth: laneWidth, size: size)
+        return Geom(cup: cup, tee: tee, scale: scale, size: size)
     }
 
     // MARK: - Draw
@@ -133,180 +130,118 @@ public struct PuttingGreenField: View {
     ) {
         let bgRect = CGRect(origin: .zero, size: size)
 
-        // 1. Green field — soft radial gradient bg.
+        // 1. Green — soft bentgrass radial gradient with a darker rim. No
+        // grain lines, no lane stripe. Just a clean field.
         ctx.fill(
             Path(bgRect),
             with: .radialGradient(
                 Gradient(colors: [
-                    DesignTokens.bentgrass.opacity(0.32),
+                    DesignTokens.bentgrass.opacity(0.30),
                     DesignTokens.fairwayShadow.opacity(0.22),
-                    DesignTokens.pine.opacity(0.30),
+                    DesignTokens.pine.opacity(0.32),
                 ]),
                 center: CGPoint(x: size.width / 2, y: size.height * 0.55),
                 startRadius: 0,
-                endRadius: max(size.width, size.height) * 0.7
+                endRadius: max(size.width, size.height) * 0.72
             )
         )
 
-        // 2. Faint horizontal grain — gives the green texture without
-        // competing for attention. Lines run perpendicular to the putt line
-        // so they don't fight the eye's vertical reading direction.
-        let grainSpacing: CGFloat = 14
-        var y: CGFloat = 0
-        while y < size.height {
-            var p = Path()
-            p.move(to: CGPoint(x: 0, y: y))
-            p.addLine(to: CGPoint(x: size.width, y: y))
-            ctx.stroke(p, with: .color(.white.opacity(0.025)), lineWidth: 0.5)
-            y += grainSpacing
-        }
-
-        // 3. Putting lane — soft cream/tan rounded-rect stripe running from
-        // tee to slightly past the cup. Reads as a polished line on the green.
-        let laneRect = CGRect(
-            x: geom.cup.x - geom.laneWidth / 2,
-            y: geom.cup.y - 18,
-            width: geom.laneWidth,
-            height: (geom.tee.y - geom.cup.y) + 36
-        )
-        let lanePath = Path(roundedRect: laneRect, cornerRadius: geom.laneWidth * 0.45)
-        ctx.fill(
-            lanePath,
-            with: .linearGradient(
-                Gradient(colors: [
-                    DesignTokens.bentgrass.opacity(0.22),
-                    DesignTokens.bentgrass.opacity(0.10),
-                ]),
-                startPoint: CGPoint(x: laneRect.midX, y: laneRect.minY),
-                endPoint: CGPoint(x: laneRect.midX, y: laneRect.maxY)
-            )
-        )
+        // 2. Centerline — thin solid white at low opacity. Subtle, doesn't
+        // shout "putt down here" the way a dashed lane did.
+        var line = Path()
+        line.move(to: CGPoint(x: geom.cup.x, y: geom.cup.y + 4))
+        line.addLine(to: CGPoint(x: geom.tee.x, y: geom.tee.y))
         ctx.stroke(
-            lanePath,
-            with: .color(DesignTokens.bentgrass.opacity(0.42)),
+            line,
+            with: .color(.white.opacity(0.10)),
             lineWidth: 1
         )
 
-        // 4. Putt line — dashed centerline from cup to tee. The visual
-        // promise: "send the ball straight down this line."
-        var line = Path()
-        line.move(to: geom.cup)
-        line.addLine(to: geom.tee)
-        ctx.stroke(
-            line,
-            with: .color(.white.opacity(0.20)),
-            style: StrokeStyle(lineWidth: 1, dash: [4, 5])
-        )
-
-        // 5. Distance ticks along the line. Step depends on practice
-        // distance — coarser for long putts so the lane doesn't get crowded.
+        // 3. Distance ticks — small marks on the right of the line, numbers
+        // only (no "ft" suffix; redundant once the user has the context).
         let tickStep: Double = practiceDistanceFeet >= 20
             ? 5
             : (practiceDistanceFeet >= 10 ? 3 : 1)
         var d = tickStep
         while d <= practiceDistanceFeet - 0.1 {
             let yPos = geom.cup.y + CGFloat(d) * geom.scale
-            // tick mark
             var tick = Path()
-            tick.move(to: CGPoint(x: geom.cup.x - 14, y: yPos))
-            tick.addLine(to: CGPoint(x: geom.cup.x - 6, y: yPos))
-            tick.move(to: CGPoint(x: geom.cup.x + 6, y: yPos))
-            tick.addLine(to: CGPoint(x: geom.cup.x + 14, y: yPos))
-            ctx.stroke(tick, with: .color(.white.opacity(0.40)), lineWidth: 1)
+            tick.move(to: CGPoint(x: geom.cup.x + 4, y: yPos))
+            tick.addLine(to: CGPoint(x: geom.cup.x + 12, y: yPos))
+            ctx.stroke(tick, with: .color(.white.opacity(0.30)), lineWidth: 0.8)
 
             ctx.draw(
-                Text("\(Int(d)) ft")
-                    .font(DispersionType.mono(9, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55)),
+                Text("\(Int(d))")
+                    .font(DispersionType.mono(9, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.45)),
                 at: CGPoint(x: geom.cup.x + 18, y: yPos),
                 anchor: .leading
             )
             d += tickStep
         }
 
-        // 6. Cup glyph at the top — clean dark hole + flag pin rising above.
-        let cupR: CGFloat = 9
+        // 4. Cup at the top — concentric circles for depth (rim + hole),
+        // no flag pin. Top-down views read better without perspective props.
+        let cupR: CGFloat = 8
+        let rimR = cupR + 3
+        ctx.fill(
+            Path(ellipseIn: CGRect(x: geom.cup.x - rimR, y: geom.cup.y - rimR, width: rimR * 2, height: rimR * 2)),
+            with: .color(.white.opacity(0.10))
+        )
         let cupRect = CGRect(x: geom.cup.x - cupR, y: geom.cup.y - cupR, width: cupR * 2, height: cupR * 2)
-        ctx.fill(Path(ellipseIn: cupRect), with: .color(.black.opacity(0.85)))
-        ctx.stroke(Path(ellipseIn: cupRect), with: .color(.white.opacity(0.7)), lineWidth: 1.2)
-        // Pin
-        var pin = Path()
-        pin.move(to: geom.cup)
-        pin.addLine(to: CGPoint(x: geom.cup.x, y: geom.cup.y - 38))
-        ctx.stroke(pin, with: .color(.white.opacity(0.92)), lineWidth: 1.6)
-        // Flag
-        var flag = Path()
-        flag.move(to: CGPoint(x: geom.cup.x, y: geom.cup.y - 38))
-        flag.addLine(to: CGPoint(x: geom.cup.x + 14, y: geom.cup.y - 33))
-        flag.addLine(to: CGPoint(x: geom.cup.x, y: geom.cup.y - 28))
-        flag.closeSubpath()
-        ctx.fill(flag, with: .color(palette.flag))
+        ctx.fill(Path(ellipseIn: cupRect), with: .color(.black.opacity(0.78)))
+        ctx.stroke(Path(ellipseIn: cupRect), with: .color(.white.opacity(0.55)), lineWidth: 1)
 
-        // 7. Distance label above the flag.
-        ctx.draw(
-            Text("\(Int(practiceDistanceFeet)) ft")
-                .font(DispersionType.mono(11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.85)),
-            at: CGPoint(x: geom.cup.x, y: geom.cup.y - 50),
-            anchor: .center
+        // 5. Tee marker at the bottom — minimal inline tick, no caption.
+        let teeR: CGFloat = 4
+        ctx.fill(
+            Path(ellipseIn: CGRect(x: geom.tee.x - teeR, y: geom.tee.y - teeR, width: teeR * 2, height: teeR * 2)),
+            with: .color(.white.opacity(0.45))
+        )
+        ctx.stroke(
+            Path(ellipseIn: CGRect(x: geom.tee.x - 7, y: geom.tee.y - 7, width: 14, height: 14)),
+            with: .color(.white.opacity(0.18)),
+            lineWidth: 0.8
         )
 
-        // 8. Tee marker at the bottom — small ground tick + label.
-        let teeBarW: CGFloat = 32
-        var teeBar = Path()
-        teeBar.move(to: CGPoint(x: geom.tee.x - teeBarW / 2, y: geom.tee.y))
-        teeBar.addLine(to: CGPoint(x: geom.tee.x + teeBarW / 2, y: geom.tee.y))
-        ctx.stroke(teeBar, with: .color(.white.opacity(0.55)), lineWidth: 2)
-        ctx.draw(
-            Text("YOU")
-                .font(DispersionType.mono(9, weight: .semibold))
-                .tracking(2)
-                .foregroundStyle(.white.opacity(0.65)),
-            at: CGPoint(x: geom.tee.x, y: geom.tee.y + 16),
-            anchor: .center
-        )
-
-        // 9. Landing point — shows the user's last logged putt (or live drag
-        // preview while finger is down). During a drag we additionally render
-        // a dashed "lag line" from cup to landing so the user can see the
-        // residual at a glance.
+        // 6. Landing point — last logged putt or live drag preview. During a
+        // drag, render a faint accent line from cup to cursor so the residual
+        // distance reads visually alongside the badge readout.
         if let landing = liveLanding {
             let p = CGPoint(
                 x: geom.cup.x + CGFloat(landing.x) * geom.scale,
                 y: geom.cup.y + CGFloat(-landing.y) * geom.scale
             )
-            // (note: landing.y > 0 means past the cup — moves UP the screen
-            //  from cup, which is decreasing y in screen coords. landing.y < 0
-            //  means short — moves DOWN. -landing.y handles both.)
+            // (landing.y > 0 = past the cup → moves UP the screen
+            //  landing.y < 0 = short → moves DOWN. -landing.y handles both.)
 
             if isDragging {
-                // Lag line from cup to live cursor.
                 var lag = Path()
                 lag.move(to: geom.cup)
                 lag.addLine(to: p)
                 ctx.stroke(
                     lag,
-                    with: .color(palette.primary.opacity(0.65)),
-                    style: StrokeStyle(lineWidth: 1.2, dash: [3, 3])
+                    with: .color(palette.primary.opacity(0.55)),
+                    lineWidth: 1
                 )
             }
 
-            let halo = Path(ellipseIn: CGRect(x: p.x - 14, y: p.y - 14, width: 28, height: 28))
-            ctx.fill(halo, with: .color(palette.primary.opacity(isDragging ? 0.40 : 0.30)))
-            let dotR: CGFloat = isDragging ? 7 : 5.5
+            let haloR: CGFloat = isDragging ? 14 : 11
+            let halo = Path(ellipseIn: CGRect(x: p.x - haloR, y: p.y - haloR, width: haloR * 2, height: haloR * 2))
+            ctx.fill(halo, with: .color(palette.primary.opacity(isDragging ? 0.32 : 0.22)))
+            let dotR: CGFloat = isDragging ? 6 : 5
             let dot = Path(ellipseIn: CGRect(x: p.x - dotR, y: p.y - dotR, width: dotR * 2, height: dotR * 2))
             ctx.fill(dot, with: .color(palette.primary))
-            ctx.stroke(dot, with: .color(.white.opacity(0.7)), lineWidth: 1.2)
+            ctx.stroke(dot, with: .color(.white.opacity(0.7)), lineWidth: 1)
         }
 
-        // 10. Empty hint — only when no landing has been logged or previewed.
+        // 7. Empty hint — sentence case, low contrast, sized for ambience.
         if liveLanding == nil {
             ctx.draw(
-                Text("TAP OR DRAG WHERE IT STOPPED")
-                    .font(DispersionType.mono(10, weight: .semibold))
-                    .tracking(2.4)
-                    .foregroundStyle(.white.opacity(0.45)),
-                at: CGPoint(x: size.width / 2, y: size.height - 28),
+                Text("Tap or drag where it stopped")
+                    .font(DispersionType.mono(10, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.35)),
+                at: CGPoint(x: size.width / 2, y: size.height - 24),
                 anchor: .center
             )
         }
