@@ -872,8 +872,6 @@ struct LiveRangeView: View {
                 }
             }
 
-            Spacer(minLength: 0)
-
             if taps.count >= 2 {
                 rangePillTinted("square.and.arrow.down", "Save", tint: accent) {
                     saveConfirm = true
@@ -886,6 +884,7 @@ struct LiveRangeView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
         .environment(\.colorScheme, .dark)
