@@ -514,10 +514,10 @@ public struct CalculatorScreen: View {
             }
     }
 
-    /// Condition chips — wind, elevation, lie, probability threshold. Each
-    /// renders as its own floating pill to match the rest of the app. Hidden
-    /// entirely when nothing is set, since the radial dial offers a Reset
-    /// action for the conditions screen.
+    /// Condition chips — wind, elevation, lie, probability threshold, plus
+    /// the lateral aim status when non-zero. Each renders as its own
+    /// floating pill, sitting in the bottom panel above the recommended
+    /// card so it's always visible above the system tab bar.
     private var conditionsRow: some View {
         let items = activeConditionItems
         return Group {
@@ -527,7 +527,7 @@ public struct CalculatorScreen: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(items, id: \.key) { item in
-                            conditionChip(label: item.label, icon: item.icon, isAlert: item.alert)
+                            conditionChip(item: item)
                         }
                     }
                 }
@@ -542,6 +542,9 @@ public struct CalculatorScreen: View {
         let label: String
         let icon: String
         let alert: Bool
+        /// Action to fire when the chip is tapped. Most chips open the
+        /// zone sheet; the aim chip resets the aim instead.
+        let action: () -> Void
     }
 
     private var activeConditionItems: [ConditionItem] {
@@ -553,7 +556,8 @@ public struct CalculatorScreen: View {
                     ? "+\(Int(scenario.windMph)) tail"
                     : "\(Int(abs(scenario.windMph))) head",
                 icon: "wind",
-                alert: false
+                alert: false,
+                action: { zoneOpen = true }
             ))
         }
         if scenario.elevationFt != 0 {
@@ -563,11 +567,33 @@ public struct CalculatorScreen: View {
                     ? "+\(Int(scenario.elevationFt))ft"
                     : "\(Int(abs(scenario.elevationFt)))ft↓",
                 icon: "mountain.2",
-                alert: false
+                alert: false,
+                action: { zoneOpen = true }
             ))
         }
         if scenario.lie != .fairway && scenario.lie != .tee {
-            items.append(.init(key: "lie", label: scenario.lie.label, icon: "leaf", alert: false))
+            items.append(.init(
+                key: "lie",
+                label: scenario.lie.label,
+                icon: "leaf",
+                alert: false,
+                action: { zoneOpen = true }
+            ))
+        }
+        if abs(scenario.aimLateralYards) > 0.5 {
+            let yards = Int(abs(scenario.aimLateralYards).rounded())
+            let direction = scenario.aimLateralYards < 0 ? "left" : "right"
+            let icon = scenario.aimLateralYards < 0 ? "arrow.left" : "arrow.right"
+            items.append(.init(
+                key: "aim",
+                label: "Aim \(yards)y \(direction) · clear",
+                icon: icon,
+                alert: false,
+                action: {
+                    scenario.update(.init(aimLateralYards: 0))
+                    Haptics.medium()
+                }
+            ))
         }
         if scenario.minProbability > 0 {
             let pct = Int((scenario.minProbability * 100).rounded())
@@ -575,21 +601,25 @@ public struct CalculatorScreen: View {
                 key: "thresh",
                 label: noneQualify ? "≥\(pct)% · none qualify" : "≥\(pct)%",
                 icon: "percent",
-                alert: noneQualify
+                alert: noneQualify,
+                action: { zoneOpen = true }
             ))
         }
         return items
     }
 
-    private func conditionChip(label: String, icon: String, isAlert: Bool) -> some View {
-        Button { zoneOpen = true; Haptics.light() } label: {
+    private func conditionChip(item: ConditionItem) -> some View {
+        Button {
+            item.action()
+            if item.key != "aim" { Haptics.light() }
+        } label: {
             HStack(spacing: 4) {
-                Image(systemName: icon)
+                Image(systemName: item.icon)
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(isAlert ? DesignTokens.destructive : .white.opacity(0.7))
-                Text(label)
+                    .foregroundStyle(item.alert ? DesignTokens.destructive : .white.opacity(0.7))
+                Text(item.label)
                     .font(DispersionType.mono(10, weight: .medium))
-                    .foregroundStyle(isAlert ? DesignTokens.destructive : .white)
+                    .foregroundStyle(item.alert ? DesignTokens.destructive : .white)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -599,7 +629,7 @@ public struct CalculatorScreen: View {
                     .overlay(
                         Capsule()
                             .strokeBorder(
-                                isAlert ? DesignTokens.destructive.opacity(0.45) : .white.opacity(0.08),
+                                item.alert ? DesignTokens.destructive.opacity(0.45) : .white.opacity(0.08),
                                 lineWidth: 1
                             )
                     )
@@ -607,6 +637,7 @@ public struct CalculatorScreen: View {
             .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(item.key == "aim" ? "\(item.label). Tap to clear aim." : item.label)
     }
 
     private func viewingBanner(club: Club, prob: Double) -> some View {

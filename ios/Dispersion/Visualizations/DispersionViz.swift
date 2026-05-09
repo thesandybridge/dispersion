@@ -380,11 +380,9 @@ public struct DispersionViz: View {
                 )
         }
 
-        // Aim badge — bottom-center of the viz, only when there's a non-zero aim.
-        if abs(aimLateralYards) > 0.5 {
-            aimBadge
-                .position(x: size.width / 2, y: size.height - 38)
-        }
+        // Aim status badge intentionally lives outside the viz now —
+        // CalculatorScreen renders it in the conditions row above the
+        // recommended card so the system tab bar can't clip it.
     }
 
     private func probabilityBadge(_ p: Double) -> some View {
@@ -408,27 +406,4 @@ public struct DispersionViz: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: pct)
     }
 
-    private var aimBadge: some View {
-        let yards = Int(abs(aimLateralYards).rounded())
-        let direction = aimLateralYards < 0 ? "left" : "right"
-        let icon = aimLateralYards < 0 ? "arrow.left" : "arrow.right"
-        return HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 9, weight: .semibold))
-            Text("Aim \(yards)y \(direction)")
-                .font(DispersionType.mono(11, weight: .medium))
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(.black.opacity(0.55))
-                .overlay(
-                    Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1)
-                )
-        )
-        .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
-        .transition(.opacity.combined(with: .scale(scale: 0.92)))
-    }
 }

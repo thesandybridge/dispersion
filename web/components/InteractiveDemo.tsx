@@ -69,12 +69,16 @@ export function InteractiveDemo() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.18 }}
-              className="absolute right-4 top-4 flex items-baseline gap-1 rounded-full bg-canvas-50/95 px-4 py-2 text-pine shadow-xl ring-1 ring-pine/15 backdrop-blur"
+              className="absolute right-4 top-4 flex items-baseline gap-1 rounded-full bg-black/55 px-4 py-2 text-[#f6f1e1] shadow-xl backdrop-blur"
+              style={{ boxShadow: `0 0 0 1px ${lbl.color}66, 0 12px 24px -8px rgba(0,0,0,0.45)` }}
             >
-              <span className="font-display text-2xl font-semibold tabular-nums">
+              <span
+                className="font-display text-2xl font-semibold tabular-nums"
+                style={{ color: lbl.color }}
+              >
                 {Math.round(recommended.probabilityInZone * 100)}
               </span>
-              <span className="font-mono text-xs text-canvas-500">%</span>
+              <span className="font-mono text-xs text-[#f6f1e1]/55">%</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -86,10 +90,12 @@ export function InteractiveDemo() {
           {/* Distance */}
           <div className="space-y-2">
             <div className="flex items-baseline justify-between">
-              <span className="eyebrow">Distance to target</span>
-              <span className="font-display text-3xl font-semibold tabular-nums text-pine">
+              <span className="eyebrow" style={{ color: "#a9d18e" }}>
+                Distance to target
+              </span>
+              <span className="font-display text-3xl font-semibold tabular-nums text-[#f6f1e1]">
                 {distance}
-                <span className="ml-1 text-base font-normal text-canvas-400">y</span>
+                <span className="ml-1 text-base font-normal text-[#f6f1e1]/55">y</span>
               </span>
             </div>
             <input
@@ -99,10 +105,11 @@ export function InteractiveDemo() {
               step={1}
               value={distance}
               onChange={(e) => setDistance(parseInt(e.target.value))}
-              className="w-full accent-bentgrass"
+              className="w-full"
+              style={{ accentColor: "#62b375" }}
               aria-label="Distance to target in yards"
             />
-            <div className="flex justify-between font-mono text-xs text-canvas-400">
+            <div className="flex justify-between font-mono text-xs text-[#f6f1e1]/45">
               <span>50y</span>
               <span>260y</span>
             </div>
@@ -110,7 +117,9 @@ export function InteractiveDemo() {
 
           {/* Zone preset */}
           <div className="space-y-2">
-            <span className="eyebrow">Target type</span>
+            <span className="eyebrow" style={{ color: "#a9d18e" }}>
+              Target type
+            </span>
             <div className="flex flex-wrap gap-2">
               {PRESETS.map((p) => (
                 <button
@@ -120,15 +129,15 @@ export function InteractiveDemo() {
                   className={
                     "rounded-full px-4 py-1.5 text-sm font-medium transition " +
                     (presetId === p.id
-                      ? "bg-pine text-canvas-50"
-                      : "bg-canvas-100 text-canvas-600 hover:bg-canvas-200")
+                      ? "bg-[#62b375] text-[#0b3d2e]"
+                      : "bg-[#f6f1e1]/8 text-[#f6f1e1]/75 hover:bg-[#f6f1e1]/14")
                   }
                 >
                   {p.label}
                 </button>
               ))}
             </div>
-            <div className="font-mono text-xs text-canvas-400">
+            <div className="font-mono text-xs text-[#f6f1e1]/45">
               {preset.w}y wide · {preset.d}y deep
             </div>
           </div>
@@ -141,19 +150,19 @@ export function InteractiveDemo() {
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22 }}
-            className="rounded-2xl border border-canvas-200 bg-white p-5 shadow-sm"
+            className="rounded-2xl border border-[#f6f1e1]/15 bg-[#f6f1e1]/5 p-5 backdrop-blur"
           >
-            <div className="eyebrow flex items-center gap-2">
+            <div className="eyebrow flex items-center gap-2" style={{ color: "#a9d18e" }}>
               <span
                 className="h-1.5 w-1.5 rounded-full"
                 style={{ backgroundColor: lbl.color }}
               />
               <span>Recommended · {lbl.label.toLowerCase()}</span>
             </div>
-            <div className="mt-1 font-display text-display-xs font-semibold tracking-display-tight text-pine">
+            <div className="mt-1 font-display text-display-xs font-semibold tracking-display-tight text-[#f6f1e1]">
               {recClub.name}
             </div>
-            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 font-mono text-xs text-canvas-500">
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 font-mono text-xs text-[#f6f1e1]/55">
               <span>EXP {Math.round(recClub.carryYards)}y</span>
               <span>σ↕ {recClub.carrySd.toFixed(1)}</span>
               <span>σ↔ {recClub.lateralSd.toFixed(1)}</span>
@@ -161,7 +170,7 @@ export function InteractiveDemo() {
 
             {/* Top 3 alternates */}
             <div className="mt-5 space-y-2">
-              <div className="eyebrow">Other options</div>
+              <div className="eyebrow" style={{ color: "#a9d18e" }}>Other options</div>
               <div className="flex flex-col gap-1.5">
                 {ranked.slice(1, 4).map((r) => {
                   const c = SAMPLE_BAG.find((x) => x.id === r.clubId);
@@ -172,8 +181,8 @@ export function InteractiveDemo() {
                       key={r.clubId}
                       className="flex items-center gap-3 text-sm"
                     >
-                      <span className="text-canvas-700 w-16">{c.name}</span>
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-canvas-100">
+                      <span className="w-16 text-[#f6f1e1]/85">{c.name}</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#f6f1e1]/12">
                         <div
                           className="h-full rounded-full transition-[width]"
                           style={{

@@ -17,20 +17,26 @@ export const metadata: Metadata = {
   },
 };
 
+const accentStrong = { color: "var(--accent-strong)" };
+const accent = { color: "var(--accent)" };
+
 export default function MathPage() {
   return (
-    <main className="relative bg-canvas-50">
+    <main className="relative surface-bg">
       <Header />
 
       {/* Hero */}
       <section className="section gradient-hero pt-32 pb-16 sm:pt-40 sm:pb-20">
         <div className="container-prose">
           <span className="eyebrow">The math</span>
-          <h1 className="mt-3 max-w-4xl font-display text-display-sm font-semibold tracking-display-tight text-pine text-balance sm:text-display">
+          <h1
+            className="mt-3 max-w-4xl font-display text-display-sm font-semibold tracking-display-tight text-balance sm:text-display"
+            style={accentStrong}
+          >
             Every shot is a distribution.{" "}
-            <span className="italic text-fairway">Not a number.</span>
+            <span className="italic" style={accent}>Not a number.</span>
           </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-relaxed text-canvas-600">
+          <p className="surface-muted mt-6 max-w-2xl text-lg leading-relaxed">
             This page explains the actual algorithm Dispersion runs to pick a
             club. There's no hand-waving — the formulas are short, the
             assumptions are explicit, and the math is honest about what it
@@ -40,14 +46,17 @@ export default function MathPage() {
       </section>
 
       {/* TOC */}
-      <section className="border-y border-canvas-200 bg-canvas-100 py-6">
+      <section
+        className="border-y surface-elev py-6"
+        style={{ borderColor: "var(--border)" }}
+      >
         <div className="container-prose">
-          <nav className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs uppercase tracking-widest text-canvas-500">
-            <a href="#sigma" className="transition hover:text-pine">σ — what it means</a>
-            <a href="#bands" className="transition hover:text-pine">Gaussian band integration</a>
-            <a href="#decade" className="transition hover:text-pine">DECADE short-side bias</a>
-            <a href="#try" className="transition hover:text-pine">Try it</a>
-            <a href="#caveats" className="transition hover:text-pine">What this doesn't model</a>
+          <nav className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs uppercase tracking-widest surface-muted">
+            <a href="#sigma" className="transition hover:text-[color:var(--accent-strong)]">σ — what it means</a>
+            <a href="#bands" className="transition hover:text-[color:var(--accent-strong)]">Gaussian band integration</a>
+            <a href="#decade" className="transition hover:text-[color:var(--accent-strong)]">DECADE short-side bias</a>
+            <a href="#try" className="transition hover:text-[color:var(--accent-strong)]">Try it</a>
+            <a href="#caveats" className="transition hover:text-[color:var(--accent-strong)]">What this doesn't model</a>
           </nav>
         </div>
       </section>
@@ -57,33 +66,33 @@ export default function MathPage() {
         <div className="prose prose-lg max-w-3xl">
           {/* Sigma */}
           <section id="sigma" className="mb-16">
-            <h2 className="font-display text-display-xs font-semibold tracking-display-tight text-pine">
+            <h2 className="font-display text-display-xs font-semibold tracking-display-tight" style={accentStrong}>
               σ — what it means
             </h2>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               Every club has two numbers that describe how predictable it is:{" "}
-              <strong className="text-pine">σ↕ (sigma long)</strong>, the
+              <strong style={accentStrong}>σ↕ (sigma long)</strong>, the
               standard deviation of carry distance, and{" "}
-              <strong className="text-pine">σ↔ (sigma lateral)</strong>, the
+              <strong style={accentStrong}>σ↔ (sigma lateral)</strong>, the
               standard deviation of left-right miss. These are not hit-or-miss
               ratings. They're the parameters of a normal distribution.
             </p>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               If your 7 iron has σ↕ = 6 yards, that means roughly 68% of your
               7 iron shots fall within ±6 yards of your average carry, and
               ~95% within ±12 yards. The math doesn't care whether you call
               that "good" or "bad" — it just integrates over the curve.
             </p>
-            <div className="mt-6 rounded-2xl bg-canvas-100 p-6">
-              <div className="font-mono text-xs uppercase tracking-widest text-canvas-500">
+            <div className="mt-6 rounded-2xl surface-elev p-6">
+              <div className="font-mono text-xs uppercase tracking-widest surface-muted">
                 Reasonable σ to start with
               </div>
-              <ul className="mt-3 space-y-1 font-mono text-sm text-canvas-700">
+              <ul className="surface-soft mt-3 space-y-1 font-mono text-sm">
                 <li>Driver — σ↕ 8–14, σ↔ 12–18</li>
                 <li>Mid iron — σ↕ 4–8, σ↔ 5–10</li>
                 <li>Wedge — σ↕ 3–6, σ↔ 4–7</li>
               </ul>
-              <p className="mt-3 text-sm text-canvas-500">
+              <p className="surface-muted mt-3 text-sm">
                 These are educated guesses. The app's Range mode dials them in
                 from your actual shots over time.
               </p>
@@ -92,26 +101,26 @@ export default function MathPage() {
 
           {/* Gaussian band */}
           <section id="bands" className="mb-16">
-            <h2 className="font-display text-display-xs font-semibold tracking-display-tight text-pine">
+            <h2 className="font-display text-display-xs font-semibold tracking-display-tight" style={accentStrong}>
               Gaussian band integration
             </h2>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               The probability your shot lands in a safe zone is a 2D
               integral. We model carry and lateral as independent normals,
               so the integrals separate:
             </p>
-            <pre className="mt-6 overflow-x-auto rounded-2xl bg-pine p-6 font-mono text-sm leading-relaxed text-canvas-50">
+            <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#0b3d2e] p-6 font-mono text-sm leading-relaxed text-[#f6f1e1]">
 {`P(in zone) =
   P(carry ∈ [target − depth/2, target + depth/2])
 × P(lateral ∈ [aim − width/2, aim + width/2])`}
             </pre>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               Each term is just a difference of normal CDFs:{" "}
-              <code className="rounded bg-canvas-100 px-1.5 py-0.5 font-mono text-base text-pine">
+              <code className="surface-elev rounded px-1.5 py-0.5 font-mono text-base" style={accentStrong}>
                 Φ(z₂) − Φ(z₁)
               </code>
               {" "}where{" "}
-              <code className="rounded bg-canvas-100 px-1.5 py-0.5 font-mono text-base text-pine">
+              <code className="surface-elev rounded px-1.5 py-0.5 font-mono text-base" style={accentStrong}>
                 z = (bound − mean) / σ
               </code>
               . Standard probability — every stats textbook has this. The CDF
@@ -122,10 +131,10 @@ export default function MathPage() {
 
           {/* DECADE bias */}
           <section id="decade" className="mb-16">
-            <h2 className="font-display text-display-xs font-semibold tracking-display-tight text-pine">
+            <h2 className="font-display text-display-xs font-semibold tracking-display-tight" style={accentStrong}>
               DECADE short-side bias
             </h2>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               The raw probability isn't quite enough. Two clubs can have
               identical P(in zone) — say both 60% — but if one of them
               gets that 60% by being expected to land 5 yards short of the
@@ -134,16 +143,16 @@ export default function MathPage() {
               almost always worse than coming up long, especially around
               greens.
             </p>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               Following the DECADE methodology, we apply a multiplicative
               penalty when the club's expected carry is short of the target:
             </p>
-            <pre className="mt-6 overflow-x-auto rounded-2xl bg-pine p-6 font-mono text-sm leading-relaxed text-canvas-50">
+            <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#0b3d2e] p-6 font-mono text-sm leading-relaxed text-[#f6f1e1]">
 {`if expectedCarry < target:
   penalty = exp(−bias × shortness)
   P *= penalty`}
             </pre>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               With the default bias coefficient of 0.08, a club expected to
               come up 5 yards short loses about 25% of its raw score; 10
               yards short loses ~45%. The coefficient is tunable in
@@ -155,10 +164,10 @@ export default function MathPage() {
 
           {/* Demo */}
           <section id="try" className="mb-16">
-            <h2 className="font-display text-display-xs font-semibold tracking-display-tight text-pine">
+            <h2 className="font-display text-display-xs font-semibold tracking-display-tight" style={accentStrong}>
               Try it
             </h2>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               Below is the actual probability calc running on a sample mid-
               handicap bag. Drag the distance, switch the target type, watch
               which club leads.
@@ -168,7 +177,7 @@ export default function MathPage() {
       </article>
 
       {/* Inline interactive demo */}
-      <section className="bg-pine py-16 sm:py-20">
+      <section className="surface-inverse py-16 sm:py-20">
         <div className="container-prose">
           <InteractiveDemo />
         </div>
@@ -178,10 +187,10 @@ export default function MathPage() {
       <article className="container-prose py-16 sm:py-20">
         <div className="prose prose-lg max-w-3xl">
           <section id="caveats">
-            <h2 className="font-display text-display-xs font-semibold tracking-display-tight text-pine">
+            <h2 className="font-display text-display-xs font-semibold tracking-display-tight" style={accentStrong}>
               What this doesn't model
             </h2>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               Honesty section. The model assumes carry and lateral are
               independent — in reality they're weakly correlated for most
               players (fades tend to come up shorter than draws of the same
@@ -192,7 +201,7 @@ export default function MathPage() {
               spin, launch angle, or roll-out at all — only the carry
               landing point.
             </p>
-            <p className="mt-4 text-lg leading-relaxed text-canvas-700">
+            <p className="surface-soft mt-4 text-lg leading-relaxed">
               That said: an honest model with reasonable defaults beats no
               model. The point is to make the tradeoff between two clubs
               explicit. Whether you take the 7 iron or the 8 iron is a
@@ -200,10 +209,11 @@ export default function MathPage() {
             </p>
           </section>
 
-          <section className="mt-16 border-t border-canvas-200 pt-10">
+          <section className="mt-16 border-t pt-10" style={{ borderColor: "var(--border)" }}>
             <Link
               href="/"
-              className="inline-flex items-center gap-2 text-base font-medium text-pine transition hover:text-fairway"
+              className="inline-flex items-center gap-2 text-base font-medium transition hover:text-[color:var(--accent)]"
+              style={accentStrong}
             >
               <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor" className="h-4 w-4">
                 <path d="M19 12H5M12 5l-7 7 7 7" strokeLinecap="round" strokeLinejoin="round" />

@@ -83,14 +83,17 @@ const FEATURES = [
 
 export function FeatureGrid() {
   return (
-    <section id="how" className="section bg-canvas-50 py-24 sm:py-32">
+    <section id="how" className="section surface-bg py-24 sm:py-32">
       <div className="container-prose">
         <div className="max-w-2xl">
           <span className="eyebrow">Built for serious amateurs</span>
-          <h2 className="mt-3 font-display text-display-xs font-semibold tracking-display-tight text-pine sm:text-display-sm">
+          <h2
+            className="mt-3 font-display text-display-xs font-semibold tracking-display-tight sm:text-display-sm"
+            style={{ color: "var(--accent-strong)" }}
+          >
             A tool, not a toy.
           </h2>
-          <p className="mt-4 text-lg leading-relaxed text-canvas-600">
+          <p className="surface-muted mt-4 text-lg leading-relaxed">
             Most golf apps measure yardage. Dispersion models the
             probability that you'll land where you want. Every feature
             in the app exists to make that recommendation sharper.
@@ -101,15 +104,19 @@ export function FeatureGrid() {
           {FEATURES.map((f) => (
             <div key={f.title} className="space-y-3">
               <span
-                className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-fairway/10 text-fairway"
+                className="inline-flex h-12 w-12 items-center justify-center rounded-2xl"
+                style={{ background: "var(--accent-tint)", color: "var(--accent)" }}
                 aria-hidden="true"
               >
                 {f.glyph}
               </span>
-              <h3 className="font-display text-xl font-semibold text-pine">
+              <h3
+                className="font-display text-xl font-semibold"
+                style={{ color: "var(--accent-strong)" }}
+              >
                 {f.title}
               </h3>
-              <p className="text-canvas-600 leading-relaxed">{f.body}</p>
+              <p className="surface-muted leading-relaxed">{f.body}</p>
             </div>
           ))}
         </div>

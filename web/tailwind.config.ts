@@ -6,6 +6,9 @@ import type { Config } from "tailwindcss";
 // reads. The "neutrals" are warmer than pure gray to keep the agronomic feel.
 
 const config: Config = {
+  // next-themes adds a `class="dark"` (or "light") to <html>; Tailwind's
+  // class-based dark mode picks it up so every `dark:` variant flows.
+  darkMode: ["class"],
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",

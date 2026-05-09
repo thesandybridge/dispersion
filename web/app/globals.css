@@ -6,6 +6,39 @@
   :root {
     --font-display: "Fraunces", "Times New Roman", serif;
     --font-sans: "Inter", system-ui, sans-serif;
+
+    /* Light theme — warm marketing canvas */
+    --bg: #fbfaf6;
+    --bg-elevated: #f4f2eb;
+    --bg-section: #ffffff;
+    --fg: #2d2a22;
+    --fg-muted: #6a6555;
+    --fg-soft: #4a4639;
+    --border: #e8e4dc;
+    --border-strong: #cfcabc;
+    --accent: #2c8a5e;     /* fairway */
+    --accent-strong: #0b3d2e; /* pine */
+    --accent-soft: #62b375; /* bentgrass */
+    --accent-tint: rgba(98, 179, 117, 0.10);
+    --shadow-rgb: 11, 61, 46; /* pine */
+  }
+
+  :root.dark {
+    /* Dark theme — extends the iOS app's dark fairway palette so
+       cross-platform brand reads consistently */
+    --bg: #0e1a13;          /* ink */
+    --bg-elevated: #16201a;
+    --bg-section: #0b3d2e;  /* pine */
+    --fg: #f6f1e1;          /* cream */
+    --fg-muted: rgba(246, 241, 225, 0.55);
+    --fg-soft: rgba(246, 241, 225, 0.78);
+    --border: rgba(246, 241, 225, 0.10);
+    --border-strong: rgba(246, 241, 225, 0.18);
+    --accent: #62b375;      /* bentgrass — brighter against dark */
+    --accent-strong: #a9d18e;
+    --accent-soft: #62b375;
+    --accent-tint: rgba(98, 179, 117, 0.14);
+    --shadow-rgb: 0, 0, 0;
   }
 
   html {
@@ -16,17 +49,20 @@
   }
 
   body {
-    @apply bg-canvas-50 text-canvas-700 font-sans;
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: "ss01", "cv11";
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   ::selection {
-    @apply bg-bentgrass/30 text-pine;
+    background-color: var(--accent-tint);
+    color: var(--accent-strong);
   }
 }
 
 @layer components {
-  /* Editorial section frame — used between hero, features, demo, etc. */
   .section {
     @apply relative w-full overflow-hidden;
   }
@@ -36,25 +72,50 @@
   }
 
   .eyebrow {
-    @apply uppercase tracking-[0.18em] text-xs font-medium text-fairway/80;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--accent);
+    opacity: 0.85;
   }
 
   .text-balance {
     text-wrap: balance;
   }
+
+  /* Surface helpers — let consumers compose without remembering the var names */
+  .surface-bg     { background-color: var(--bg); }
+  .surface-elev   { background-color: var(--bg-elevated); }
+  .surface-fg     { color: var(--fg); }
+  .surface-muted  { color: var(--fg-muted); }
+  .surface-soft   { color: var(--fg-soft); }
+  .surface-border { border-color: var(--border); }
+  .accent-fg      { color: var(--accent); }
+  .accent-strong-fg { color: var(--accent-strong); }
+  .accent-bg      { background-color: var(--accent); }
+  .accent-strong-bg { background-color: var(--accent-strong); }
+  .accent-tint-bg { background-color: var(--accent-tint); }
 }
 
 @layer utilities {
   .gradient-mesh {
     background-image:
-      radial-gradient(at 20% 30%, theme(colors.bentgrass / 0.15), transparent 50%),
-      radial-gradient(at 80% 20%, theme(colors.sand / 0.25), transparent 50%),
-      radial-gradient(at 60% 80%, theme(colors.fairway / 0.12), transparent 55%);
+      radial-gradient(at 20% 30%, var(--accent-tint), transparent 50%),
+      radial-gradient(at 80% 20%, theme(colors.sand / 0.18), transparent 50%),
+      radial-gradient(at 60% 80%, var(--accent-tint), transparent 55%);
   }
 
   .gradient-hero {
     background:
-      radial-gradient(ellipse 90% 60% at 50% 0%, theme(colors.bentgrass / 0.18), transparent 70%),
-      linear-gradient(180deg, theme(colors.canvas.50), theme(colors.canvas.100));
+      radial-gradient(ellipse 90% 60% at 50% 0%, var(--accent-tint), transparent 70%),
+      linear-gradient(180deg, var(--bg), var(--bg-elevated));
+  }
+
+  /* Inverted hero — dark palette regardless of theme. Used for the
+     interactive demo section so the dispersion contours always pop. */
+  .surface-inverse {
+    background-color: #0b3d2e;
+    color: #f6f1e1;
   }
 }
