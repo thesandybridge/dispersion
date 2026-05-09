@@ -24,17 +24,13 @@ struct AddShotSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             // Carry
             fieldGroup(label: "Carry (\(unit.label))") {
-                TextField("", value: $carry, format: .number.precision(.fractionLength(0...1)))
-                    .keyboardType(.decimalPad)
-                    .monospacedDigit()
+                NumericField("", value: $carry, precision: 1)
             }
 
             // Lateral
             fieldGroup(label: "Lateral miss (\(unit.label))") {
                 HStack(spacing: 8) {
-                    TextField("", value: $lateral, format: .number.precision(.fractionLength(0...1)))
-                        .keyboardType(.decimalPad)
-                        .monospacedDigit()
+                    NumericField("", value: $lateral, precision: 1)
                     HStack(spacing: 0) {
                         sideBtn("L", selected: side == .left) { side = .left }
                         sideBtn("R", selected: side == .right) { side = .right }

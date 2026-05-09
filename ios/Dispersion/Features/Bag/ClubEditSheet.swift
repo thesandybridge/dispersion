@@ -55,21 +55,15 @@ public struct ClubEditSheet: View {
                 preview
 
                 sheetField("Carry distance (\(unit.label))", hint: "Average full-swing carry") {
-                    TextField("165", value: $carry, format: .number.precision(.fractionLength(0...1)))
-                        .keyboardType(.decimalPad)
-                        .monospacedDigit()
+                    NumericField("165", value: $carry, precision: 1)
                 }
 
                 HStack(spacing: 12) {
                     sheetField("σ long (\(unit.label))", hint: "Carry spread") {
-                        TextField("6", value: $carrySd, format: .number.precision(.fractionLength(0...1)))
-                            .keyboardType(.decimalPad)
-                            .monospacedDigit()
+                        NumericField("6", value: $carrySd, precision: 1)
                     }
                     sheetField("σ lateral (\(unit.label))", hint: "Left/right") {
-                        TextField("8", value: $lateralSd, format: .number.precision(.fractionLength(0...1)))
-                            .keyboardType(.decimalPad)
-                            .monospacedDigit()
+                        NumericField("8", value: $lateralSd, precision: 1)
                     }
                 }
 

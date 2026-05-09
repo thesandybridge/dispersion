@@ -1,25 +1,27 @@
-// Top-down stylized green for putt practice. The cup is at the center; the
-// active practice distance defines the outer "tee" ring. Tap anywhere on
-// the green to log where the ball ended up — landing inside the cup ring
-// is a make, otherwise the distance from the cup is captured as the lag
-// residual.
+// Linear putting lane visualization. Putting is a directional skill — you
+// stand at one end and aim down the line at the cup — so a top-down lane
+// reads more naturally than concentric rings ever did. The cup sits at
+// the top, the player sits at the bottom, distance ticks run up the
+// middle, and the user taps where the ball came to rest.
+//
+// Tapping inside the cup zone counts as a make. Tapping anywhere else
+// records the residual distance from the cup (used for lag stats).
 
 import SwiftUI
 
 public struct PuttingGreenField: View {
     @Environment(\.palette) private var palette
 
-    /// Current practice distance in feet — the radius of the dashed "tee
-    /// ring" so the user can see how big the putt they're attempting is
-    /// relative to the green.
+    /// Practice distance in feet — the distance from the player tee at the
+    /// bottom of the view to the cup at the top.
     public var practiceDistanceFeet: Double
 
-    /// Last logged putt position (feet from cup, +X right, +Y past). Drawn
-    /// as a glowing dot; nil means no landing yet.
+    /// Last logged ball position (feet from cup, +X right, +Y past cup).
     public var lastLandingFeet: CGPoint?
 
     /// Cup radius in feet — anything tapped within this distance counts
-    /// as made. 0.21 ft (≈ 2.5 inch radius) is regulation cup size.
+    /// as made. Forgiving multiplier applied at tap time so the cup is
+    /// finger-friendly without claiming everything as a make.
     public var cupRadiusFeet: Double = 0.21
 
     public var onLog: ((PuttingGreenField.Tap) -> Void)?
@@ -56,12 +58,17 @@ public struct PuttingGreenField: View {
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onEnded { value in
-                                    let xFeet = Double((value.location.x - geom.center.x) / geom.scale)
-                                    let yFeet = Double((geom.center.y - value.location.y) / geom.scale)
+                                    let xFeet = Double((value.location.x - geom.cup.x) / geom.scale)
+                                    let yFeet = Double((geom.cup.y - value.location.y) / geom.scale)
                                     let residual = sqrt(xFeet * xFeet + yFeet * yFeet)
-                                    let made = residual <= cupRadiusFeet * 8   // forgiving — exact cup is tiny
+                                    let made = residual <= cupRadiusFeet * 8
                                     Haptics.medium()
-                                    onLog?(Tap(made: made, residualFeet: residual, x: xFeet, y: yFeet))
+                                    onLog?(Tap(
+                                        made: made,
+                                        residualFeet: residual,
+                                        x: xFeet,
+                                        y: yFeet
+                                    ))
                                 }
                         )
                 }
@@ -72,148 +79,192 @@ public struct PuttingGreenField: View {
     // MARK: - Layout
 
     private struct Geom {
-        var center: CGPoint
-        var scale: CGFloat   // pixels per foot
+        var cup: CGPoint        // anchor point — cup center
+        var tee: CGPoint        // player tee at the bottom of the lane
+        var scale: CGFloat      // pixels per foot
+        var laneWidth: CGFloat
+        var size: CGSize
     }
 
     private func layout(in size: CGSize) -> Geom {
-        // Show the practice distance comfortably inside the visible area —
-        // the dashed tee ring sits at ~70% of the half-min-side. Doubled for
-        // padding so the dot has room when a miss goes long.
-        let halfShort = min(size.width, size.height) / 2
-        let pad: CGFloat = 28
-        let visibleRadiusFeet = max(practiceDistanceFeet * 1.4, 5)
-        let scale = (halfShort - pad) / CGFloat(visibleRadiusFeet)
-        return Geom(
-            center: CGPoint(x: size.width / 2, y: size.height / 2),
-            scale: scale
-        )
+        // Lane runs vertically. Reserve some headroom so the flag/cup don't
+        // crowd the top, and footer space for the tee.
+        let topPad: CGFloat = 56
+        let bottomPad: CGFloat = 64
+        let usableHeight = max(size.height - topPad - bottomPad, 100)
+        // Distance from cup (top) to tee (bottom) in feet, with a touch of
+        // slack past the practice distance so a long miss has room to land.
+        let visibleFeet = max(practiceDistanceFeet * 1.1, practiceDistanceFeet + 2)
+        let scale = usableHeight / CGFloat(visibleFeet)
+        let cup = CGPoint(x: size.width / 2, y: topPad)
+        let tee = CGPoint(x: size.width / 2, y: topPad + CGFloat(practiceDistanceFeet) * scale)
+        let laneWidth = min(size.width * 0.55, 220)
+        return Geom(cup: cup, tee: tee, scale: scale, laneWidth: laneWidth, size: size)
     }
 
     // MARK: - Draw
 
     private func drawScene(ctx: GraphicsContext, size: CGSize, geom: Geom) {
-        let center = geom.center
+        let bgRect = CGRect(origin: .zero, size: size)
 
-        // 1. Green oval — soft radial gradient, lighter at center, deeper at
-        // the edges. Sized to fill the canvas.
-        let greenRect = CGRect(origin: .zero, size: size).insetBy(dx: 8, dy: 8)
-        let greenPath = Path(ellipseIn: greenRect)
+        // 1. Green field — soft radial gradient bg.
         ctx.fill(
-            greenPath,
+            Path(bgRect),
             with: .radialGradient(
                 Gradient(colors: [
-                    DesignTokens.bentgrass.opacity(0.55),
-                    DesignTokens.fairwayShadow.opacity(0.42),
-                    DesignTokens.pine.opacity(0.50),
+                    DesignTokens.bentgrass.opacity(0.32),
+                    DesignTokens.fairwayShadow.opacity(0.22),
+                    DesignTokens.pine.opacity(0.30),
                 ]),
-                center: center,
+                center: CGPoint(x: size.width / 2, y: size.height * 0.55),
                 startRadius: 0,
-                endRadius: max(size.width, size.height) * 0.55
+                endRadius: max(size.width, size.height) * 0.7
             )
         )
-        // Subtle rim
+
+        // 2. Faint horizontal grain — gives the green texture without
+        // competing for attention. Lines run perpendicular to the putt line
+        // so they don't fight the eye's vertical reading direction.
+        let grainSpacing: CGFloat = 14
+        var y: CGFloat = 0
+        while y < size.height {
+            var p = Path()
+            p.move(to: CGPoint(x: 0, y: y))
+            p.addLine(to: CGPoint(x: size.width, y: y))
+            ctx.stroke(p, with: .color(.white.opacity(0.025)), lineWidth: 0.5)
+            y += grainSpacing
+        }
+
+        // 3. Putting lane — soft cream/tan rounded-rect stripe running from
+        // tee to slightly past the cup. Reads as a polished line on the green.
+        let laneRect = CGRect(
+            x: geom.cup.x - geom.laneWidth / 2,
+            y: geom.cup.y - 18,
+            width: geom.laneWidth,
+            height: (geom.tee.y - geom.cup.y) + 36
+        )
+        let lanePath = Path(roundedRect: laneRect, cornerRadius: geom.laneWidth * 0.45)
+        ctx.fill(
+            lanePath,
+            with: .linearGradient(
+                Gradient(colors: [
+                    DesignTokens.bentgrass.opacity(0.22),
+                    DesignTokens.bentgrass.opacity(0.10),
+                ]),
+                startPoint: CGPoint(x: laneRect.midX, y: laneRect.minY),
+                endPoint: CGPoint(x: laneRect.midX, y: laneRect.maxY)
+            )
+        )
         ctx.stroke(
-            greenPath,
-            with: .color(DesignTokens.bentgrass.opacity(0.55)),
+            lanePath,
+            with: .color(DesignTokens.bentgrass.opacity(0.42)),
             lineWidth: 1
         )
 
-        // 2. Faint grain lines — radial spokes, give the green texture
-        // without competing for attention.
-        let spokes = 18
-        for i in 0..<spokes {
-            let angle = (Double(i) / Double(spokes)) * .pi * 2
-            let start = CGPoint(
-                x: center.x + CGFloat(cos(angle)) * 30,
-                y: center.y + CGFloat(sin(angle)) * 30
-            )
-            let end = CGPoint(
-                x: center.x + CGFloat(cos(angle)) * (max(size.width, size.height) * 0.55),
-                y: center.y + CGFloat(sin(angle)) * (max(size.width, size.height) * 0.55)
-            )
-            var p = Path()
-            p.move(to: start)
-            p.addLine(to: end)
-            ctx.stroke(p, with: .color(.white.opacity(0.04)), lineWidth: 0.5)
-        }
-
-        // 3. Distance rings around the cup — every 5 ft up to the practice
-        // distance + 5. Subtle dashed circles in cream.
-        let ringStep: Double = practiceDistanceFeet >= 15 ? 5 : (practiceDistanceFeet >= 6 ? 3 : 1)
-        var d = ringStep
-        while d <= practiceDistanceFeet + ringStep {
-            let r = CGFloat(d) * geom.scale
-            let ring = Path(ellipseIn: CGRect(
-                x: center.x - r, y: center.y - r,
-                width: r * 2, height: r * 2
-            ))
-            ctx.stroke(
-                ring,
-                with: .color(.white.opacity(0.08)),
-                style: StrokeStyle(lineWidth: 0.7, dash: [3, 4])
-            )
-            ctx.draw(
-                Text("\(Int(d))ft")
-                    .font(DispersionType.mono(8, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.40)),
-                at: CGPoint(x: center.x + r + 3, y: center.y - 6),
-                anchor: .leading
-            )
-            d += ringStep
-        }
-
-        // 4. Practice-distance "tee ring" — solid accent at the chosen
-        // distance, makes it obvious how far the putt is.
-        let teeR = CGFloat(practiceDistanceFeet) * geom.scale
-        let teeRing = Path(ellipseIn: CGRect(
-            x: center.x - teeR, y: center.y - teeR,
-            width: teeR * 2, height: teeR * 2
-        ))
+        // 4. Putt line — dashed centerline from cup to tee. The visual
+        // promise: "send the ball straight down this line."
+        var line = Path()
+        line.move(to: geom.cup)
+        line.addLine(to: geom.tee)
         ctx.stroke(
-            teeRing,
-            with: .color(palette.flag.opacity(0.55)),
-            style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+            line,
+            with: .color(.white.opacity(0.20)),
+            style: StrokeStyle(lineWidth: 1, dash: [4, 5])
         )
 
-        // 5. Cup glyph — visible dark dot with a cream rim.
-        let cupR: CGFloat = 7
-        let cupOuter = Path(ellipseIn: CGRect(x: center.x - cupR, y: center.y - cupR, width: cupR * 2, height: cupR * 2))
-        ctx.fill(cupOuter, with: .color(.black.opacity(0.85)))
-        ctx.stroke(cupOuter, with: .color(.white.opacity(0.7)), lineWidth: 1.2)
-        // Flag stick — short pin coming out of the cup.
+        // 5. Distance ticks along the line. Step depends on practice
+        // distance — coarser for long putts so the lane doesn't get crowded.
+        let tickStep: Double = practiceDistanceFeet >= 20
+            ? 5
+            : (practiceDistanceFeet >= 10 ? 3 : 1)
+        var d = tickStep
+        while d <= practiceDistanceFeet - 0.1 {
+            let yPos = geom.cup.y + CGFloat(d) * geom.scale
+            // tick mark
+            var tick = Path()
+            tick.move(to: CGPoint(x: geom.cup.x - 14, y: yPos))
+            tick.addLine(to: CGPoint(x: geom.cup.x - 6, y: yPos))
+            tick.move(to: CGPoint(x: geom.cup.x + 6, y: yPos))
+            tick.addLine(to: CGPoint(x: geom.cup.x + 14, y: yPos))
+            ctx.stroke(tick, with: .color(.white.opacity(0.40)), lineWidth: 1)
+
+            ctx.draw(
+                Text("\(Int(d)) ft")
+                    .font(DispersionType.mono(9, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.55)),
+                at: CGPoint(x: geom.cup.x + 18, y: yPos),
+                anchor: .leading
+            )
+            d += tickStep
+        }
+
+        // 6. Cup glyph at the top — clean dark hole + flag pin rising above.
+        let cupR: CGFloat = 9
+        let cupRect = CGRect(x: geom.cup.x - cupR, y: geom.cup.y - cupR, width: cupR * 2, height: cupR * 2)
+        ctx.fill(Path(ellipseIn: cupRect), with: .color(.black.opacity(0.85)))
+        ctx.stroke(Path(ellipseIn: cupRect), with: .color(.white.opacity(0.7)), lineWidth: 1.2)
+        // Pin
         var pin = Path()
-        pin.move(to: CGPoint(x: center.x, y: center.y))
-        pin.addLine(to: CGPoint(x: center.x, y: center.y - 28))
-        ctx.stroke(pin, with: .color(.white.opacity(0.85)), lineWidth: 1.4)
+        pin.move(to: geom.cup)
+        pin.addLine(to: CGPoint(x: geom.cup.x, y: geom.cup.y - 38))
+        ctx.stroke(pin, with: .color(.white.opacity(0.92)), lineWidth: 1.6)
+        // Flag
         var flag = Path()
-        flag.move(to: CGPoint(x: center.x, y: center.y - 28))
-        flag.addLine(to: CGPoint(x: center.x + 12, y: center.y - 25))
-        flag.addLine(to: CGPoint(x: center.x, y: center.y - 22))
+        flag.move(to: CGPoint(x: geom.cup.x, y: geom.cup.y - 38))
+        flag.addLine(to: CGPoint(x: geom.cup.x + 14, y: geom.cup.y - 33))
+        flag.addLine(to: CGPoint(x: geom.cup.x, y: geom.cup.y - 28))
         flag.closeSubpath()
         ctx.fill(flag, with: .color(palette.flag))
 
-        // 6. Last landing point — glowing dot with a thin halo.
+        // 7. Distance label above the flag.
+        ctx.draw(
+            Text("\(Int(practiceDistanceFeet)) ft")
+                .font(DispersionType.mono(11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85)),
+            at: CGPoint(x: geom.cup.x, y: geom.cup.y - 50),
+            anchor: .center
+        )
+
+        // 8. Tee marker at the bottom — small ground tick + label.
+        let teeBarW: CGFloat = 32
+        var teeBar = Path()
+        teeBar.move(to: CGPoint(x: geom.tee.x - teeBarW / 2, y: geom.tee.y))
+        teeBar.addLine(to: CGPoint(x: geom.tee.x + teeBarW / 2, y: geom.tee.y))
+        ctx.stroke(teeBar, with: .color(.white.opacity(0.55)), lineWidth: 2)
+        ctx.draw(
+            Text("YOU")
+                .font(DispersionType.mono(9, weight: .semibold))
+                .tracking(2)
+                .foregroundStyle(.white.opacity(0.65)),
+            at: CGPoint(x: geom.tee.x, y: geom.tee.y + 16),
+            anchor: .center
+        )
+
+        // 9. Last landing point.
         if let landing = lastLandingFeet {
             let p = CGPoint(
-                x: center.x + CGFloat(landing.x) * geom.scale,
-                y: center.y - CGFloat(landing.y) * geom.scale
+                x: geom.cup.x + CGFloat(landing.x) * geom.scale,
+                y: geom.cup.y + CGFloat(-landing.y) * geom.scale
             )
-            let halo = Path(ellipseIn: CGRect(x: p.x - 11, y: p.y - 11, width: 22, height: 22))
+            // (note: landing.y > 0 means past the cup — moves UP the screen
+            //  from cup, which is decreasing y in screen coords. landing.y < 0
+            //  means short — moves DOWN. -landing.y handles both.)
+            let halo = Path(ellipseIn: CGRect(x: p.x - 12, y: p.y - 12, width: 24, height: 24))
             ctx.fill(halo, with: .color(palette.primary.opacity(0.30)))
-            let dot = Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10))
+            let dot = Path(ellipseIn: CGRect(x: p.x - 5.5, y: p.y - 5.5, width: 11, height: 11))
             ctx.fill(dot, with: .color(palette.primary))
-            ctx.stroke(dot, with: .color(.white.opacity(0.6)), lineWidth: 1)
+            ctx.stroke(dot, with: .color(.white.opacity(0.7)), lineWidth: 1)
         }
 
-        // 7. Helper hint when there's no landing yet.
+        // 10. Empty hint at the bottom.
         if lastLandingFeet == nil {
             ctx.draw(
                 Text("TAP WHERE IT STOPPED")
                     .font(DispersionType.mono(10, weight: .semibold))
                     .tracking(2.4)
                     .foregroundStyle(.white.opacity(0.45)),
-                at: CGPoint(x: center.x, y: size.height - 24)
+                at: CGPoint(x: size.width / 2, y: size.height - 28),
+                anchor: .center
             )
         }
     }

@@ -56,14 +56,10 @@ public struct PutterEditSheet: View {
 
             HStack(spacing: 12) {
                 sheetField("Length", hint: "Inches") {
-                    TextField("34", value: $lengthInches, format: .number.precision(.fractionLength(0...1)))
-                        .keyboardType(.decimalPad)
-                        .monospacedDigit()
+                    NumericField("34", value: $lengthInches, precision: 1)
                 }
                 sheetField("Loft", hint: "Degrees") {
-                    TextField("3", value: $loftDegrees, format: .number.precision(.fractionLength(0...1)))
-                        .keyboardType(.decimalPad)
-                        .monospacedDigit()
+                    NumericField("3", value: $loftDegrees, precision: 1)
                 }
             }
 
