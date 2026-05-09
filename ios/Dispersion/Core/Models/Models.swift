@@ -269,17 +269,23 @@ public struct ShotScenario: Hashable, Sendable {
     public var distanceToTargetYards: Double
     public var safeZoneWidthYards: Double
     public var safeZoneDepthYards: Double
+    /// Player's intended aim offset from the target's lateral center, in
+    /// yards. Positive = aiming right, negative = aiming left. Shifts the
+    /// dispersion cloud's mean while leaving the safe zone where it is.
+    public var aimLateralYards: Double
     public var penaltyZones: [PenaltyZone]
 
     public init(
         distanceToTargetYards: Double,
         safeZoneWidthYards: Double,
         safeZoneDepthYards: Double,
+        aimLateralYards: Double = 0,
         penaltyZones: [PenaltyZone] = []
     ) {
         self.distanceToTargetYards = distanceToTargetYards
         self.safeZoneWidthYards = safeZoneWidthYards
         self.safeZoneDepthYards = safeZoneDepthYards
+        self.aimLateralYards = aimLateralYards
         self.penaltyZones = penaltyZones
     }
 }

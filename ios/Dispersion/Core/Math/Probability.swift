@@ -40,7 +40,9 @@ public enum Probability {
         let latHi = scenario.safeZoneWidthYards / 2
 
         let meanLong = club.carryYards - scenario.distanceToTargetYards
-        let meanLat = 0.0
+        // The player's aim shifts the dispersion's lateral center.
+        // aim = +5 → mean is 5y right of target → cloud is biased right.
+        let meanLat = scenario.aimLateralYards
 
         let pLong = gaussianBand(mean: meanLong, sd: club.carrySd, lo: longLo, hi: longHi)
         let pLat = gaussianBand(mean: meanLat, sd: club.lateralSd, lo: latLo, hi: latHi)
@@ -68,7 +70,7 @@ public enum Probability {
             let latHi = zone.centerLateral + zone.widthYards / 2
 
             let meanLong = club.carryYards - scenario.distanceToTargetYards
-            let meanLat = 0.0
+            let meanLat = scenario.aimLateralYards
             let pLong = gaussianBand(mean: meanLong, sd: club.carrySd, lo: longLo, hi: longHi)
             let pLat = gaussianBand(mean: meanLat, sd: club.lateralSd, lo: latLo, hi: latHi)
             total += pLong * pLat

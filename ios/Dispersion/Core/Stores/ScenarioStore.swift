@@ -22,6 +22,9 @@ public final class ScenarioStore {
     public var lie: LieType = .fairway
     public var minProbability: Double = 0
     public var pinPosition: PinPosition = .middle
+    /// Lateral aim offset from target center (yards). Positive = aiming right.
+    /// Used by Probability.probabilityInZone to bias the dispersion mean.
+    public var aimLateralYards: Double = 0
 
     private let defaults = UserDefaults.standard
     private enum Keys {
@@ -33,6 +36,7 @@ public final class ScenarioStore {
         static let elev = "scenario.elevationFt"
         static let lie = "scenario.lie"
         static let minProb = "scenario.minProbability"
+        static let aimLat = "scenario.aimLateralYards"
     }
 
     public init() { load() }
@@ -47,6 +51,7 @@ public final class ScenarioStore {
         if let raw = defaults.string(forKey: Keys.lie),
            let parsed = LieType(rawValue: raw) { lie = parsed }
         if let v = numberValue(Keys.minProb) { minProbability = v }
+        if let v = numberValue(Keys.aimLat) { aimLateralYards = v }
     }
 
     private func numberValue(_ key: String) -> Double? {
@@ -92,6 +97,18 @@ public final class ScenarioStore {
             minProbability = max(0, min(v, 1))
             defaults.set(minProbability, forKey: Keys.minProb)
         }
+        if let v = patch.aimLateralYards {
+            // Clamp aim within ±1.5x the safe-zone width so the user can't
+            // pull the dispersion entirely off the target visualization.
+            let cap = max(20, width * 1.5)
+            aimLateralYards = max(-cap, min(v, cap))
+            defaults.set(aimLateralYards, forKey: Keys.aimLat)
+        }
+    }
+
+    public func resetAim() {
+        aimLateralYards = 0
+        defaults.removeObject(forKey: Keys.aimLat)
     }
 
     public func applyPreset(_ id: String) {
@@ -110,6 +127,7 @@ public final class ScenarioStore {
         public var elevationFt: Double?
         public var lie: LieType?
         public var minProbability: Double?
+        public var aimLateralYards: Double?
 
         public init(
             distance: Double? = nil,
@@ -119,7 +137,8 @@ public final class ScenarioStore {
             windMph: Double? = nil,
             elevationFt: Double? = nil,
             lie: LieType? = nil,
-            minProbability: Double? = nil
+            minProbability: Double? = nil,
+            aimLateralYards: Double? = nil
         ) {
             self.distance = distance
             self.width = width
@@ -129,6 +148,7 @@ public final class ScenarioStore {
             self.elevationFt = elevationFt
             self.lie = lie
             self.minProbability = minProbability
+            self.aimLateralYards = aimLateralYards
         }
 
         public static func clearPreset() -> Patch { Patch(preset: .some(nil)) }

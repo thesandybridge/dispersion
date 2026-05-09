@@ -61,7 +61,8 @@ public struct CalculatorScreen: View {
         let s = ShotScenario(
             distanceToTargetYards: playingDistance,
             safeZoneWidthYards: scenario.width,
-            safeZoneDepthYards: scenario.depth
+            safeZoneDepthYards: scenario.depth,
+            aimLateralYards: scenario.aimLateralYards
         )
         return Probability.rankClubs(adjustedClubs, scenario: s)
     }
@@ -118,7 +119,9 @@ public struct CalculatorScreen: View {
             )
             .ignoresSafeArea()
 
-            // Full-bleed dispersion — drag to change target distance
+            // Full-bleed dispersion — drag vertically to change distance,
+            // horizontally to bias lateral aim. Live P(zone) badge floats
+            // beside the pin on the green.
             if let club = viewedClub, let vr = viewedResult {
                 DispersionViz(
                     carry: vr.expectedCarry,
@@ -127,15 +130,26 @@ public struct CalculatorScreen: View {
                     distanceToTarget: scenario.distance,
                     zoneWidth: scenario.width,
                     zoneDepth: scenario.depth,
+                    aimLateralYards: scenario.aimLateralYards,
+                    pinPosition: scenario.pinPosition,
+                    liveProbability: vr.probabilityInZone,
                     contours: 7,
                     facets: 28,
-                    background: .clear
+                    background: .clear,
+                    onPinTap: cyclePinPosition
                 )
                 .ignoresSafeArea()
                 .overlay {
                     Color.clear
                         .contentShape(Rectangle())
                         .gesture(targetDragGesture)
+                        .onTapGesture(count: 2) {
+                            // Double-tap → reset aim if any.
+                            if scenario.aimLateralYards != 0 {
+                                scenario.update(.init(aimLateralYards: 0))
+                                Haptics.medium()
+                            }
+                        }
                 }
             }
 
@@ -181,7 +195,8 @@ public struct CalculatorScreen: View {
                             scenario: ShotScenario(
                                 distanceToTargetYards: playingDistance,
                                 safeZoneWidthYards: scenario.width,
-                                safeZoneDepthYards: scenario.depth
+                                safeZoneDepthYards: scenario.depth,
+                                aimLateralYards: scenario.aimLateralYards
                             )
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -236,7 +251,8 @@ public struct CalculatorScreen: View {
                     scenario: ShotScenario(
                         distanceToTargetYards: playingDistance,
                         safeZoneWidthYards: scenario.width,
-                        safeZoneDepthYards: scenario.depth
+                        safeZoneDepthYards: scenario.depth,
+                        aimLateralYards: scenario.aimLateralYards
                     )
                 )
             }
@@ -392,6 +408,15 @@ public struct CalculatorScreen: View {
 
     @State private var dragStartYards: Double = 0
 
+    /// Cycle through PinPosition cases — invoked when the user taps the
+    /// pin glyph rendered inside DispersionViz.
+    private func cyclePinPosition() {
+        let cases = PinPosition.allCases
+        guard let i = cases.firstIndex(of: scenario.pinPosition) else { return }
+        scenario.pinPosition = cases[(i + 1) % cases.count]
+        Haptics.light()
+    }
+
     private var distanceDisplay: some View {
         let display = Units.roundForUnit(
             Units.from(yards: scenario.distance, in: settings.unit),
@@ -428,21 +453,40 @@ public struct CalculatorScreen: View {
         return "↳ " + parts.joined(separator: ", ")
     }
 
+    @State private var dragStartAim: Double = 0
+    @State private var dragHasStarted: Bool = false
+
     private var targetDragGesture: some Gesture {
         DragGesture(minimumDistance: 8)
             .onChanged { value in
-                if dragStartYards == 0 { dragStartYards = scenario.distance }
-                let ptsPerYard: CGFloat = 5
-                let deltaYards = Double(-value.translation.height / ptsPerYard)
-                let newYards = (dragStartYards + deltaYards).rounded()
-                let clamped = max(20, min(400, newYards))
-                if clamped != scenario.distance {
+                if !dragHasStarted {
+                    dragStartYards = scenario.distance
+                    dragStartAim = scenario.aimLateralYards
+                    dragHasStarted = true
+                }
+
+                // Vertical drag → distance. Up = farther.
+                let ptsPerYardVert: CGFloat = 5
+                let deltaDist = Double(-value.translation.height / ptsPerYardVert)
+                let newDist = (dragStartYards + deltaDist).rounded()
+                let clampedDist = max(20, min(400, newDist))
+                if clampedDist != scenario.distance {
                     Haptics.light()
-                    scenario.update(.init(distance: clamped))
+                    scenario.update(.init(distance: clampedDist))
+                }
+
+                // Horizontal drag → lateral aim. Right = aim right.
+                let ptsPerYardHoriz: CGFloat = 6
+                let deltaAim = Double(value.translation.width / ptsPerYardHoriz)
+                let newAim = (dragStartAim + deltaAim).rounded()
+                if newAim != scenario.aimLateralYards {
+                    scenario.update(.init(aimLateralYards: newAim))
                 }
             }
             .onEnded { _ in
                 dragStartYards = 0
+                dragStartAim = 0
+                dragHasStarted = false
             }
     }
 
