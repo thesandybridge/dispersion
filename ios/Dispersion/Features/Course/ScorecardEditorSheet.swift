@@ -13,6 +13,7 @@ struct ScorecardEditorSheet: View {
 
     @State private var holes: [HoleInfo] = []
     @State private var teeNames: [String] = []
+    @State private var saveError: String?
 
     // Which tee's yardage column is shown (compact for phone)
     @State private var selectedTee: String = "White"
@@ -62,6 +63,10 @@ struct ScorecardEditorSheet: View {
                     holeRow(index: i)
                 }
             }
+        }
+
+        if let saveError {
+            DInlineError(saveError)
         }
 
         Button { save() } label: {
@@ -152,7 +157,16 @@ struct ScorecardEditorSheet: View {
 
     private func save() {
         let repo = CoursesRepo(context: modelContext)
-        for hole in holes { try? repo.upsertHoleInfo(hole) }
+        var failures = 0
+        for hole in holes {
+            do { try repo.upsertHoleInfo(hole) } catch { failures += 1 }
+        }
+        if failures > 0 {
+            saveError = "Couldn't save \(failures) hole\(failures == 1 ? "" : "s"). Try again."
+            Haptics.error()
+            return
+        }
+        saveError = nil
         Haptics.success()
         onSave()
     }

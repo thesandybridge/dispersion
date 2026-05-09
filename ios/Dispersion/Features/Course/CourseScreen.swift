@@ -17,6 +17,7 @@ public struct CourseScreen: View {
     @State private var showHistory = false
     @State private var importerOpen = false
     @State private var importStatus: String?
+    @State private var shareItem: ShareItem?
     @State private var dial = DialStore.shared
 
     public init() {}
@@ -75,6 +76,7 @@ public struct CourseScreen: View {
         .fileImporter(isPresented: $importerOpen, allowedContentTypes: [.json]) { result in
             importCourse(result)
         }
+        .shareSheet(item: $shareItem)
         .onAppear {
             coursePath = NavigationPath()
             dial.setActions([
@@ -86,59 +88,51 @@ public struct CourseScreen: View {
     }
 
     private var courseList: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                // Header
-                HStack(alignment: .center) {
-                    Text("Course")
-                        .font(DispersionType.display(32, weight: .regular))
-                        .tracking(-0.7)
-                        .foregroundStyle(DesignTokens.foreground)
-                    Spacer()
-                    HStack(spacing: 8) {
-                        Button { importerOpen = true } label: {
-                            Image(systemName: "square.and.arrow.down")
-                                .font(.system(size: 13, weight: .medium))
-                                .padding(10)
-                                .background(Circle().fill(DesignTokens.surface))
-                                .foregroundStyle(DesignTokens.foreground)
-                        }
-                        .buttonStyle(.plain)
+        List {
+            Section {
+                headerBar
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 12, trailing: 20))
 
-                        Button { searchOpen = true } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 14, weight: .semibold))
-                                .padding(10)
-                                .background(Circle().fill(accent))
-                                .foregroundStyle(DesignTokens.primaryForeground)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-                .padding(.bottom, 12)
-
-                if let status = importStatus {
+            if let status = importStatus {
+                Section {
                     Text(status)
                         .font(DispersionType.ui(12))
                         .foregroundStyle(DesignTokens.primary)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
                 }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
+            }
 
-                if courses.isEmpty {
+            if courses.isEmpty {
+                Section {
                     emptyState
-                } else {
-                    VStack(spacing: 6) {
-                        ForEach(courses) { course in
-                            courseRow(course)
-                        }
-                    }
-                    .padding(.horizontal, 16)
                 }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            } else {
+                Section {
+                    ForEach(courses) { course in
+                        courseRow(course)
+                            .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    try? CoursesRepo(context: modelContext).deleteCourse(id: course.id)
+                                    Haptics.medium()
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                    }
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
 
-                // Round history link
+            Section {
                 Button { showHistory = true; Haptics.light() } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
@@ -157,13 +151,45 @@ public struct CourseScreen: View {
                     .foregroundStyle(DesignTokens.foreground)
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 100, trailing: 16))
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(DesignTokens.background)
+    }
 
-                Spacer().frame(height: 100)
+    private var headerBar: some View {
+        HStack(alignment: .center) {
+            Text("Course")
+                .font(DispersionType.display(32, weight: .regular))
+                .tracking(-0.7)
+                .foregroundStyle(DesignTokens.foreground)
+            Spacer()
+            HStack(spacing: 8) {
+                Button { importerOpen = true; Haptics.light() } label: {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.system(size: 13, weight: .medium))
+                        .padding(10)
+                        .background(Circle().fill(DesignTokens.surface))
+                        .foregroundStyle(DesignTokens.foreground)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Import course from file")
+
+                Button { searchOpen = true; Haptics.light() } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                        .padding(10)
+                        .background(Circle().fill(accent))
+                        .foregroundStyle(DesignTokens.primaryForeground)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add course")
             }
         }
-        .background(DesignTokens.background)
     }
 
     // MARK: - Empty state
@@ -179,7 +205,7 @@ public struct CourseScreen: View {
                 .foregroundStyle(DesignTokens.mutedForeground)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
-            Button { searchOpen = true } label: {
+            Button { searchOpen = true; Haptics.light() } label: {
                 Text("Add a course")
             }
             .buttonStyle(.dispersion(.primary))
@@ -218,6 +244,7 @@ public struct CourseScreen: View {
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Edit \(course.name)")
 
                 Button { shareCourse(course); Haptics.light() } label: {
                     Image(systemName: "square.and.arrow.up")
@@ -226,6 +253,7 @@ public struct CourseScreen: View {
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Share \(course.name)")
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11))
@@ -236,14 +264,6 @@ public struct CourseScreen: View {
             .background(ThemedCardFill(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                try? CoursesRepo(context: modelContext).deleteCourse(id: course.id)
-                Haptics.medium()
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
     }
 
     // MARK: - Round row
@@ -263,12 +283,12 @@ public struct CourseScreen: View {
             .lowercased()
             .appending(".dispersion.json")
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        try? data.write(to: url)
-
-        let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let root = scene.windows.first?.rootViewController {
-            root.present(av, animated: true)
+        do {
+            try data.write(to: url)
+            shareItem = ShareItem(items: [url])
+        } catch {
+            importStatus = "Couldn't prepare share: \(error.localizedDescription)"
+            Haptics.error()
         }
     }
 

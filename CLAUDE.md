@@ -17,11 +17,12 @@ Set a development team, hit Cmd+R. Cmd+U runs the test suite (Swift `Testing` fr
 
 ## Tech stack
 
-- Swift 5.10, iOS 17+, iPad-capable
+- Swift 5.10, iOS 18+, iPad-capable
 - Pure SwiftUI (no UIKit bridges, no third-party deps)
 - SwiftData for persistence
 - `@Observable` (Observation framework) for stores
 - Canvas + Path for visualizations
+- RealityKit + RealityView for 3D bag tag
 - CoreHaptics via `UIImpactFeedbackGenerator`
 - XcodeGen for project file (re-run after adding/renaming files)
 - Swift `Testing` framework for tests

@@ -13,7 +13,9 @@ struct CourseSearchSheet: View {
     @State private var searchText = ""
     @State private var results: [MKMapItem] = []
     @State private var searching = false
+    @State private var hasSearched = false
     @State private var error: String?
+    @State private var searchTask: Task<Void, Never>?
     @StateObject private var location = LocationCapture()
 
     var body: some View {
@@ -56,17 +58,39 @@ struct CourseSearchSheet: View {
         }
 
         if searching {
-            HStack {
+            HStack(spacing: 10) {
                 ProgressView().scaleEffect(0.7)
                 Text("Searching...").font(DispersionType.mono(11))
                     .foregroundStyle(DesignTokens.mutedForeground)
+                Spacer()
+                Button("Cancel") { cancelSearch() }
+                    .font(DispersionType.mono(11, weight: .medium))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+                    .buttonStyle(.plain)
             }
+            .padding(.vertical, 6)
         }
 
         if let error {
-            Text(error)
-                .font(DispersionType.ui(12))
-                .foregroundStyle(DesignTokens.destructive)
+            DInlineError(error)
+        }
+
+        if !searching && hasSearched && results.isEmpty && error == nil {
+            VStack(spacing: 8) {
+                Spacer().frame(height: 12)
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 22))
+                    .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
+                Text("No courses found")
+                    .font(DispersionType.ui(14, weight: .medium))
+                    .foregroundStyle(DesignTokens.foreground)
+                Text("Try a different name, or create one manually below.")
+                    .font(DispersionType.ui(12))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+                    .multilineTextAlignment(.center)
+                Spacer().frame(height: 4)
+            }
+            .frame(maxWidth: .infinity)
         }
 
         ScrollView {
@@ -134,45 +158,68 @@ struct CourseSearchSheet: View {
     private func search() {
         let query = searchText.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else { return }
-        searching = true
-        error = nil
-        Task {
-            do {
-                let request = MKLocalSearch.Request()
-                request.naturalLanguageQuery = "\(query) golf course"
-                if let loc = location.lastCoord {
-                    request.region = MKCoordinateRegion(
-                        center: CLLocationCoordinate2D(latitude: loc.lat, longitude: loc.lng),
-                        latitudinalMeters: 100_000, longitudinalMeters: 100_000
-                    )
-                }
-                let response = try await MKLocalSearch(request: request).start()
-                results = response.mapItems
-                searching = false
-            } catch {
-                self.error = error.localizedDescription
-                searching = false
-            }
-        }
+        runSearch(query: "\(query) golf course", region: regionAroundUser(radiusMeters: 100_000))
     }
 
     private func searchNearby(coord: Coord) {
+        let region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: coord.lat, longitude: coord.lng),
+            latitudinalMeters: 30_000, longitudinalMeters: 30_000
+        )
+        runSearch(query: "golf course", region: region)
+    }
+
+    private func regionAroundUser(radiusMeters: Double) -> MKCoordinateRegion? {
+        guard let loc = location.lastCoord else { return nil }
+        return MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: loc.lat, longitude: loc.lng),
+            latitudinalMeters: radiusMeters, longitudinalMeters: radiusMeters
+        )
+    }
+
+    private func cancelSearch() {
+        searchTask?.cancel()
+        searchTask = nil
+        searching = false
+    }
+
+    private func runSearch(query: String, region: MKCoordinateRegion?) {
+        searchTask?.cancel()
         searching = true
         error = nil
-        Task {
+        results = []
+        hasSearched = false
+        searchTask = Task {
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = query
+            if let region { request.region = region }
+            let search = MKLocalSearch(request: request)
+
+            // Race the search against a 12s timeout.
+            let timeoutTask = Task {
+                try? await Task.sleep(for: .seconds(12))
+                if !Task.isCancelled { search.cancel() }
+            }
+            defer { timeoutTask.cancel() }
+
             do {
-                let request = MKLocalSearch.Request()
-                request.naturalLanguageQuery = "golf course"
-                request.region = MKCoordinateRegion(
-                    center: CLLocationCoordinate2D(latitude: coord.lat, longitude: coord.lng),
-                    latitudinalMeters: 30_000, longitudinalMeters: 30_000
-                )
-                let response = try await MKLocalSearch(request: request).start()
+                let response = try await search.start()
+                guard !Task.isCancelled else { return }
                 results = response.mapItems
                 searching = false
-            } catch {
-                self.error = error.localizedDescription
+                hasSearched = true
+            } catch is CancellationError {
                 searching = false
+            } catch {
+                guard !Task.isCancelled else { return }
+                let nsError = error as NSError
+                if nsError.domain == MKErrorDomain && nsError.code == MKError.unknown.rawValue {
+                    self.error = "Search timed out. Check your connection and try again."
+                } else {
+                    self.error = "Search failed. Try a different name."
+                }
+                searching = false
+                hasSearched = true
             }
         }
     }

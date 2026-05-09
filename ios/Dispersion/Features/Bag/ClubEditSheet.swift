@@ -17,6 +17,7 @@ public struct ClubEditSheet: View {
     @State private var carrySd: Double = 6
     @State private var lateralSd: Double = 8
     @State private var deleteConfirm: Bool = false
+    @State private var saveError: String?
 
     public init(initial: Club?, onClose: @escaping () -> Void) {
         self.initial = initial
@@ -79,6 +80,10 @@ public struct ClubEditSheet: View {
 
             // Actions
             VStack(spacing: 10) {
+                if let saveError {
+                    DInlineError(saveError)
+                }
+
                 Button { save() } label: {
                     Text(isEditing ? "Save changes" : "Add club")
                         .frame(maxWidth: .infinity)
@@ -197,9 +202,13 @@ public struct ClubEditSheet: View {
                     name: trimmed, carryYards: yC, carrySd: yCS, lateralSd: yLS
                 ))
             }
+            saveError = nil
             Haptics.success()
             onClose()
-        } catch {}
+        } catch {
+            saveError = "Couldn't save: \(error.localizedDescription)"
+            Haptics.error()
+        }
     }
 
     private func delete() {
@@ -207,9 +216,11 @@ public struct ClubEditSheet: View {
         do {
             try ClubsRepo(context: modelContext).delete(id: id)
             Haptics.medium()
+            onClose()
         } catch {
+            saveError = "Couldn't delete: \(error.localizedDescription)"
             Haptics.error()
         }
-        onClose()
     }
+
 }

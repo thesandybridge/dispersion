@@ -9,25 +9,22 @@ public struct BagScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.themeAccent) private var accent
     @Query(sort: \ClubModel.carryYards, order: .reverse) private var clubModels: [ClubModel]
-    @Query private var allShotModels: [ShotModel]
 
     @State private var settings = SettingsStore.shared
     @State private var dial = DialStore.shared
 
     @State private var editingClub: Club?
     @State private var creatingNewClub: Bool = false
-    @State private var subTab: BagSubTab = .bag
+    @State private var showingTag: Bool = false
     @State private var gappingExpanded = false
     @State private var navPath = NavigationPath()
-
-    enum BagSubTab { case bag, tag }
+    @State private var stats: BagStats = .empty
 
     public init() {}
 
     private var clubs: [Club] { clubModels.map { $0.toValue() } }
     private var regularClubs: [Club] { clubs.filter { ClubCategoryRegistry.categorize(name: $0.name, carryYards: $0.carryYards) != .putter } }
     private var putter: Club? { clubs.first { ClubCategoryRegistry.categorize(name: $0.name, carryYards: $0.carryYards) == .putter } }
-    private var shots: [Shot] { allShotModels.map { $0.toValue() } }
     private var unit: DistanceUnit { settings.unit }
 
     private var isWide: Bool { sizeClass == .regular }
@@ -57,109 +54,125 @@ public struct BagScreen: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(DesignTokens.popover)
         }
+        .fullScreenCover(isPresented: $showingTag) {
+            BagTagView(onClose: { showingTag = false })
+        }
         .onAppear {
             registerDialActions()
-            subTab = .bag
             navPath = NavigationPath()
+            refreshStats()
         }
+        .onChange(of: clubModels.count) { _, _ in refreshStats() }
+        .onChange(of: editingClub) { _, new in
+            // Refresh after the edit sheet closes
+            if new == nil { refreshStats() }
+        }
+        .onChange(of: creatingNewClub) { _, new in
+            if !new { refreshStats() }
+        }
+    }
+
+    private func refreshStats() {
+        stats = BagStats.load(context: modelContext, clubs: clubs)
     }
 
     // MARK: - List column
 
-    @ViewBuilder
     private var bagListColumn: some View {
-        switch subTab {
-        case .bag:
-            List {
+        List {
+            Section {
+                headerBar
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .listRowSeparator(.hidden)
+
+            if regularClubs.isEmpty && putter == nil {
                 Section {
-                    headerBar
+                    emptyState
                 }
                 .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                .listRowSeparator(.hidden)
+            } else {
+                Section {
+                    heroCard
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 .listRowSeparator(.hidden)
 
-                if regularClubs.isEmpty && putter == nil {
-                    Section {
-                        emptyState
+                Section {
+                    ForEach(regularClubs, id: \.id) { club in
+                        clubRow(club)
+                            .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
                     }
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                } else {
-                    Section {
-                        heroCard
-                    }
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                    .listRowSeparator(.hidden)
-
-                    Section {
-                        ForEach(regularClubs, id: \.id) { club in
-                            clubRow(club)
-                                .listRowInsets(EdgeInsets(top: 3, leading: 16, bottom: 3, trailing: 16))
-                        }
-                        .onDelete { indexSet in
-                            do {
-                                for i in indexSet {
-                                    let club = regularClubs[i]
-                                    try ClubsRepo(context: modelContext).delete(id: club.id)
-                                }
-                                Haptics.medium()
-                            } catch {
-                                Haptics.error()
+                    .onDelete { indexSet in
+                        do {
+                            for i in indexSet {
+                                let club = regularClubs[i]
+                                try ClubsRepo(context: modelContext).delete(id: club.id)
                             }
+                            Haptics.medium()
+                        } catch {
+                            Haptics.error()
                         }
                     }
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
+                Section {
+                    putterSection
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                .listRowSeparator(.hidden)
+
+                if regularClubs.count >= 2 {
                     Section {
-                        putterSection
-                    }
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                    .listRowSeparator(.hidden)
-
-                    if regularClubs.count >= 2 {
-                        Section {
-                            gappingSection
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                        .listRowSeparator(.hidden)
-                    }
-
-                    Section {
-                        bagStatsSection
+                        gappingSection
                     }
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                     .listRowSeparator(.hidden)
                 }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(DesignTokens.background)
 
-        case .tag:
-            VStack(spacing: 0) {
-                headerBar.padding(.horizontal, 16).padding(.top, 12)
-                BagTagView()
+                Section {
+                    bagStatsSection
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                .listRowSeparator(.hidden)
             }
-            .background(DesignTokens.background)
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(DesignTokens.background)
     }
 
     // MARK: - Header
 
+    /// Single-row header — same shape as the Course tab. Title on the left,
+    /// circular action icons on the right (open bag tag, add club).
     private var headerBar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center) {
-                Text("My Bag")
-                    .font(DispersionType.display(32, weight: .regular))
-                    .tracking(-0.7)
-                    .foregroundStyle(DesignTokens.foreground)
-                Spacer()
-                Button { creatingNewClub = true } label: {
+        HStack(alignment: .center) {
+            Text("Bag")
+                .font(DispersionType.display(32, weight: .regular))
+                .tracking(-0.7)
+                .foregroundStyle(DesignTokens.foreground)
+            Spacer()
+            HStack(spacing: 8) {
+                Button { showingTag = true; Haptics.light() } label: {
+                    Image(systemName: "tag")
+                        .font(.system(size: 13, weight: .medium))
+                        .padding(10)
+                        .background(Circle().fill(DesignTokens.surface))
+                        .foregroundStyle(DesignTokens.foreground)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open bag tag")
+
+                Button { creatingNewClub = true; Haptics.light() } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .semibold))
                         .padding(10)
@@ -167,26 +180,11 @@ public struct BagScreen: View {
                         .foregroundStyle(DesignTokens.primaryForeground)
                 }
                 .buttonStyle(.plain)
-                .opacity(subTab == .bag ? 1 : 0)
-                .allowsHitTesting(subTab == .bag)
-            }
-            HStack(spacing: 4) {
-                subTabButton("Bag", tab: .bag)
-                subTabButton("Tag", tab: .tag)
+                .accessibilityLabel("Add club")
             }
         }
-    }
-
-    private func subTabButton(_ label: String, tab: BagSubTab) -> some View {
-        Button { subTab = tab; Haptics.light() } label: {
-            Text(label)
-                .font(DispersionType.ui(13, weight: .medium))
-                .foregroundStyle(subTab == tab ? DesignTokens.primaryForeground : DesignTokens.mutedForeground)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(subTab == tab ? accent : DesignTokens.surface))
-        }
-        .buttonStyle(.plain)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
     }
 
     // MARK: - Hero card
@@ -304,7 +302,7 @@ public struct BagScreen: View {
                             Text(p.name)
                                 .font(DispersionType.ui(15, weight: .medium))
                                 .foregroundStyle(DesignTokens.foreground)
-                            let shotCount = shots.filter { $0.clubId == p.id }.count
+                            let shotCount = stats.shotsByClub[p.id] ?? 0
                             Text("\(shotCount) shots logged")
                                 .font(DispersionType.mono(10))
                                 .foregroundStyle(DesignTokens.mutedForeground)
@@ -354,45 +352,33 @@ public struct BagScreen: View {
 
     @ViewBuilder
     private var bagStatsSection: some View {
-        let allFilteredShots = shots.filter { abs($0.longDelta) < 100 && abs($0.latDelta) < 100 }
-        let sg = StrokesGained.aggregate(allFilteredShots)
-        let last30 = Calendar.current.date(byAdding: .day, value: -30, to: .now) ?? .now
-        let recent = allFilteredShots.filter { $0.timestamp >= last30 }
-
-        if sg.shotCount >= 5 || !recent.isEmpty {
+        if stats.totalShots >= 5 || stats.recentShotCount > 0 {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Performance").eyebrow()
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                    if sg.shotCount >= 2 {
+                    if stats.totalShots >= AppConfig.minShotsForSGAggregate {
                         bagStatCard("Strokes gained",
-                                    value: String(format: "%+.2f", sg.avgSG),
-                                    sub: "per shot · \(sg.shotCount) total",
-                                    color: sg.avgSG >= 0 ? DesignTokens.primary : DesignTokens.pPoor)
+                                    value: String(format: "%+.2f", stats.avgSG),
+                                    sub: "per shot · \(stats.totalShots) total",
+                                    color: stats.avgSG >= 0 ? DesignTokens.primary : DesignTokens.pPoor)
                     }
 
                     bagStatCard("Total shots",
-                                value: "\(allFilteredShots.count)",
-                                sub: "\(recent.count) last 30 days",
+                                value: "\(stats.totalShots)",
+                                sub: "\(stats.recentShotCount) last \(AppConfig.recentActivityDays) days",
                                 color: DesignTokens.foreground)
 
-                    // Per-club breakdown: best SG club
-                    let clubSGs = regularClubs.compactMap { club -> (Club, Double)? in
-                        let clubShots = allFilteredShots.filter { $0.clubId == club.id }
-                        let csg = StrokesGained.aggregate(clubShots)
-                        guard csg.shotCount >= 3 else { return nil }
-                        return (club, csg.avgSG)
-                    }
-                    if let best = clubSGs.max(by: { $0.1 < $1.1 }) {
+                    if let best = stats.bestClubName, let bestSG = stats.bestClubSG {
                         bagStatCard("Best club",
-                                    value: best.0.name,
-                                    sub: String(format: "%+.2f SG/shot", best.1),
+                                    value: best,
+                                    sub: String(format: "%+.2f SG/shot", bestSG),
                                     color: DesignTokens.primary)
                     }
-                    if let worst = clubSGs.min(by: { $0.1 < $1.1 }) {
+                    if let worst = stats.worstClubName, let worstSG = stats.worstClubSG {
                         bagStatCard("Needs work",
-                                    value: worst.0.name,
-                                    sub: String(format: "%+.2f SG/shot", worst.1),
+                                    value: worst,
+                                    sub: String(format: "%+.2f SG/shot", worstSG),
                                     color: DesignTokens.pPoor)
                     }
                 }

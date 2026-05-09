@@ -180,6 +180,7 @@ public struct Shot: Identifiable, Hashable, Sendable {
     public var latDelta: Double
     public var outcomes: Set<ShotOutcomeTag>
     public var timestamp: Date
+    public var swingType: SwingType
 
     public init(
         id: String,
@@ -189,7 +190,8 @@ public struct Shot: Identifiable, Hashable, Sendable {
         longDelta: Double,
         latDelta: Double,
         outcomes: Set<ShotOutcomeTag> = [],
-        timestamp: Date = .now
+        timestamp: Date = .now,
+        swingType: SwingType = .full
     ) {
         self.id = id
         self.sessionId = sessionId
@@ -199,6 +201,7 @@ public struct Shot: Identifiable, Hashable, Sendable {
         self.latDelta = latDelta
         self.outcomes = outcomes
         self.timestamp = timestamp
+        self.swingType = swingType
     }
 }
 

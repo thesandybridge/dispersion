@@ -7,6 +7,7 @@ import SwiftUI
 struct SessionDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ClubModel.carryYards, order: .reverse) private var clubModels: [ClubModel]
+    @State private var settings = SettingsStore.shared
 
     var sessionId: String
     var onBack: () -> Void
@@ -14,13 +15,10 @@ struct SessionDetailView: View {
     @State private var deleteSessionConfirm = false
     @State private var pendingShotDelete: String?
 
-    private var session: Session? {
-        try? SessionsRepo(context: modelContext).get(id: sessionId)
-    }
-
-    private var shots: [Shot] {
-        ((try? ShotsRepo(context: modelContext).listBySession(sessionId)) ?? []).reversed()
-    }
+    // Cached on appear / session change so we don't re-fetch each render.
+    @State private var session: Session?
+    @State private var shots: [Shot] = []
+    @State private var insights: [SessionClubInsight] = []
 
     private var clubMap: [String: Club] {
         Dictionary(uniqueKeysWithValues: clubModels.map { ($0.id, $0.toValue()) })
@@ -32,6 +30,15 @@ struct SessionDetailView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+
+            if !insights.isEmpty {
+                Section {
+                    SessionInsightsCard(insights: insights, unit: settings.unit)
+                }
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
+            }
 
             if shots.isEmpty {
                 Section { emptyState }
@@ -47,7 +54,12 @@ struct SessionDetailView: View {
                             try? ShotsRepo(context: modelContext).delete(id: shots[i].id)
                         }
                         Haptics.medium()
+                        loadSession()
                     }
+                } header: {
+                    Text("Shots")
+                        .eyebrow()
+                        .textCase(nil)
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
@@ -56,6 +68,8 @@ struct SessionDetailView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .onAppear { loadSession() }
+        .onChange(of: sessionId) { _, _ in loadSession() }
         .alert("Delete \(session?.label ?? "this session")?", isPresented: $deleteSessionConfirm) {
             Button("Delete session", role: .destructive) { deleteSession() }
             Button("Cancel", role: .cancel) {}
@@ -190,6 +204,42 @@ struct SessionDetailView: View {
         guard let id = pendingShotDelete else { return }
         try? ShotsRepo(context: modelContext).delete(id: id)
         pendingShotDelete = nil
+        loadSession()
+    }
+
+    private func loadSession() {
+        let sessionsRepo = SessionsRepo(context: modelContext)
+        let shotsRepo = ShotsRepo(context: modelContext)
+        session = try? sessionsRepo.get(id: sessionId)
+
+        let raw = (try? shotsRepo.listBySession(sessionId)) ?? []
+        shots = raw.reversed()
+
+        // Load prior session shots per club, for delta-vs-previous calculation.
+        let allSessions = (try? sessionsRepo.list()) ?? []
+        let priorSessions = allSessions
+            .filter { $0.kind == session?.kind && $0.id != sessionId }
+            .filter { ($0.createdAt) < (session?.createdAt ?? .now) }
+            .sorted { $0.createdAt > $1.createdAt }
+        var priorByClub: [String: [Shot]] = [:]
+        let clubsInThisSession = Set(raw.map(\.clubId))
+        for prior in priorSessions {
+            // Only walk back until we have prior shots for every club used here.
+            let priorShots = (try? shotsRepo.listBySession(prior.id)) ?? []
+            for s in priorShots where clubsInThisSession.contains(s.clubId) {
+                if priorByClub[s.clubId]?.isEmpty ?? true {
+                    priorByClub[s.clubId, default: []].append(contentsOf: priorShots.filter { $0.clubId == s.clubId })
+                }
+            }
+            if clubsInThisSession.allSatisfy({ priorByClub[$0] != nil }) { break }
+        }
+
+        let clubsById = Dictionary(uniqueKeysWithValues: clubModels.map { ($0.id, $0.toValue()) })
+        insights = SessionInsightsEngine.compute(
+            sessionShots: raw,
+            clubsById: clubsById,
+            priorShotsByClub: priorByClub
+        )
     }
 
     // MARK: formatting

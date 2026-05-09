@@ -47,7 +47,7 @@ public enum ShotStatsEngine {
 
         sessionResults.sort { $0.date < $1.date }
 
-        let sigmaSeries = Array(sessionResults.suffix(8).map(\.carrySd))
+        let sigmaSeries = Array(sessionResults.suffix(AppConfig.sigmaTrendSessions).map(\.carrySd))
         let sessionPoints = sessionResults.map {
             SessionPoint(date: $0.date, carrySd: $0.carrySd, n: $0.n)
         }

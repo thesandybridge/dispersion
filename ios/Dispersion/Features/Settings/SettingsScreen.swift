@@ -180,7 +180,7 @@ public struct SettingsScreen: View {
             SettingsRow(label: "Accent color", helper: "Applied across the app") {
                 HStack(spacing: 8) {
                     ForEach(ProfileAccent.allCases, id: \.self) { a in
-                        Button { settings.setThemeAccent(a) } label: {
+                        Button { settings.setThemeAccent(a); Haptics.light() } label: {
                             Circle()
                                 .fill(a.color)
                                 .frame(width: 26, height: 26)
@@ -192,6 +192,7 @@ public struct SettingsScreen: View {
                                 }
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("\(a.rawValue) accent")
                     }
                 }
             }

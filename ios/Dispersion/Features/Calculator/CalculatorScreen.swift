@@ -166,9 +166,25 @@ public struct CalculatorScreen: View {
                 // Conditions badges (if any)
                 VStack(alignment: .leading, spacing: 8) {
                     conditionsRow
-                    if !isViewingRecommended, let club = viewedClub, let result = viewedResult {
+                    if !isViewingRecommended,
+                       let club = viewedClub,
+                       let result = viewedResult,
+                       let recClub = recommendedClub,
+                       let recResult = recommended {
                         viewingBanner(club: club, prob: result.probabilityInZone)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
+                        WhyClubExplainer(
+                            recommended: recResult,
+                            recommendedClub: recClub,
+                            viewing: result,
+                            viewingClub: club,
+                            scenario: ShotScenario(
+                                distanceToTargetYards: playingDistance,
+                                safeZoneWidthYards: scenario.width,
+                                safeZoneDepthYards: scenario.depth
+                            )
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -271,54 +287,107 @@ public struct CalculatorScreen: View {
 
             distanceDisplay
 
-            // Pin position toggle
-            HStack(spacing: 4) {
-                ForEach(PinPosition.allCases, id: \.self) { pin in
-                    Button {
-                        scenario.pinPosition = pin
-                        Haptics.light()
-                    } label: {
-                        Text(pin.label)
-                            .font(DispersionType.mono(10, weight: .medium))
-                            .foregroundStyle(scenario.pinPosition == pin
-                                             ? DesignTokens.background : DesignTokens.mutedForeground)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule().fill(scenario.pinPosition == pin
-                                               ? accent : Color.white.opacity(0.06))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            HStack(spacing: 10) {
-                Text("Distance to target").eyebrow()
+            // Pin position + zone preset, side by side as floating capsules
+            HStack(spacing: 8) {
+                pinPositionPill
                 Spacer()
-                Button { zoneOpen = true } label: {
-                    let presetName = Presets.all.first(where: { $0.id == scenario.presetId })?.label ?? "Custom"
-                    let w = Int(Units.from(yards: scenario.width, in: settings.unit))
-                    let d = Int(Units.from(yards: scenario.depth, in: settings.unit))
-                    HStack(spacing: 4) {
-                        Text(presetName)
-                            .font(DispersionType.ui(11, weight: .medium))
-                        Text("\(w)w x \(d)d")
-                            .font(DispersionType.mono(9))
-                            .foregroundStyle(DesignTokens.mutedForeground)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(Color.white.opacity(0.06))
-                            .overlay(Capsule().strokeBorder(DesignTokens.border, lineWidth: 1))
-                    )
-                }
-                .buttonStyle(.plain)
+                zonePresetPill
             }
+            .environment(\.colorScheme, .dark)
+            .padding(.top, 4)
         }
         .padding(.top, 8)
+    }
+
+    // MARK: - Pin position pill (drag-select)
+
+    private static let pinChipMinWidth: CGFloat = 38
+    private static let pinChipSpacing: CGFloat = 4
+    private static let pinClusterHPad: CGFloat = 6
+
+    private var pinPositionPill: some View {
+        HStack(spacing: Self.pinChipSpacing) {
+            ForEach(PinPosition.allCases, id: \.self) { pin in
+                pinChip(pin)
+            }
+        }
+        .padding(.horizontal, Self.pinClusterHPad)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(DesignTokens.popover.opacity(0.92)))
+        .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+        .contentShape(Capsule())
+        .gesture(pinDragGesture)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pin position")
+        .accessibilityValue(scenario.pinPosition.label)
+        .accessibilityAdjustableAction { direction in
+            let cases = PinPosition.allCases
+            guard let i = cases.firstIndex(of: scenario.pinPosition) else { return }
+            switch direction {
+            case .increment:
+                if i + 1 < cases.count {
+                    scenario.pinPosition = cases[i + 1]
+                    Haptics.light()
+                }
+            case .decrement:
+                if i > 0 {
+                    scenario.pinPosition = cases[i - 1]
+                    Haptics.light()
+                }
+            @unknown default: break
+            }
+        }
+    }
+
+    private func pinChip(_ pin: PinPosition) -> some View {
+        let isActive = scenario.pinPosition == pin
+        return Text(pin.label)
+            .font(DispersionType.mono(10, weight: .medium))
+            .foregroundStyle(isActive ? DesignTokens.primaryForeground : .white)
+            .frame(minWidth: Self.pinChipMinWidth)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(isActive ? accent : Color.clear))
+    }
+
+    private var pinDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let cases = PinPosition.allCases
+                let stepWidth = Self.pinChipMinWidth + Self.pinChipSpacing + 16
+                let firstCenter = Self.pinClusterHPad + Self.pinChipMinWidth / 2 + 8
+                let raw = Int(((value.location.x - firstCenter) / stepWidth).rounded())
+                let clamped = max(0, min(cases.count - 1, raw))
+                let candidate = cases[clamped]
+                if scenario.pinPosition != candidate {
+                    scenario.pinPosition = candidate
+                    Haptics.light()
+                }
+            }
+    }
+
+    // MARK: - Zone preset pill
+
+    private var zonePresetPill: some View {
+        Button { zoneOpen = true; Haptics.light() } label: {
+            let presetName = Presets.all.first(where: { $0.id == scenario.presetId })?.label ?? "Custom"
+            let w = Int(Units.from(yards: scenario.width, in: settings.unit))
+            let d = Int(Units.from(yards: scenario.depth, in: settings.unit))
+            HStack(spacing: 6) {
+                Image(systemName: "scope")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                Text(presetName)
+                    .font(DispersionType.ui(11, weight: .medium))
+                Text("\(w)×\(d)")
+                    .font(DispersionType.mono(9))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .floatingPillStyle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Zone — \(scenario.width.formatted()) by \(scenario.depth.formatted()). Tap to adjust.")
     }
 
     @State private var dragStartYards: Double = 0
@@ -377,68 +446,99 @@ public struct CalculatorScreen: View {
             }
     }
 
+    /// Condition chips — wind, elevation, lie, probability threshold. Each
+    /// renders as its own floating pill to match the rest of the app. Hidden
+    /// entirely when nothing is set, since the radial dial offers a Reset
+    /// action for the conditions screen.
     private var conditionsRow: some View {
-        var items: [(key: String, label: String, icon: String, tone: DBadgeVariant)] = []
-        if scenario.windMph != 0 {
-            items.append((
-                "wind",
-                scenario.windMph > 0
-                    ? "+\(Int(scenario.windMph)) tail"
-                    : "\(Int(abs(scenario.windMph))) head",
-                "wind",
-                .outline
-            ))
-        }
-        if scenario.elevationFt != 0 {
-            items.append((
-                "elev",
-                scenario.elevationFt > 0
-                    ? "+\(Int(scenario.elevationFt))ft"
-                    : "\(Int(abs(scenario.elevationFt)))ft↓",
-                "mountain.2",
-                .outline
-            ))
-        }
-        if scenario.lie != .fairway && scenario.lie != .tee {
-            items.append(("lie", scenario.lie.label, "leaf", .outline))
-        }
-        if scenario.minProbability > 0 {
-            let pct = Int((scenario.minProbability * 100).rounded())
-            items.append((
-                "thresh",
-                noneQualify ? "≥\(pct)% · none qualify" : "≥\(pct)%",
-                "percent",
-                noneQualify ? .destructive : .outline
-            ))
-        }
-
+        let items = activeConditionItems
         return Group {
             if items.isEmpty {
                 EmptyView()
             } else {
-                Button { zoneOpen = true } label: {
-                    FlowLayout(spacing: 6, runSpacing: 6) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
                         ForEach(items, id: \.key) { item in
-                            DBadge(variant: item.tone) {
-                                if !item.icon.isEmpty {
-                                    Image(systemName: item.icon).font(.system(size: 9))
-                                }
-                                Text(item.label)
-                            }
+                            conditionChip(label: item.label, icon: item.icon, isAlert: item.alert)
                         }
                     }
-                    .padding(10)
-                    .background(
-                        ThemedCardFill(cornerRadius: 16, opacity: 0.8)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(DesignTokens.border, lineWidth: 1)
-                            )
-                    )
                 }
-                .buttonStyle(.plain)
+                .scrollClipDisabled()  // let shadows overflow the scrollview
+                .environment(\.colorScheme, .dark)
             }
         }
+    }
+
+    private struct ConditionItem {
+        let key: String
+        let label: String
+        let icon: String
+        let alert: Bool
+    }
+
+    private var activeConditionItems: [ConditionItem] {
+        var items: [ConditionItem] = []
+        if scenario.windMph != 0 {
+            items.append(.init(
+                key: "wind",
+                label: scenario.windMph > 0
+                    ? "+\(Int(scenario.windMph)) tail"
+                    : "\(Int(abs(scenario.windMph))) head",
+                icon: "wind",
+                alert: false
+            ))
+        }
+        if scenario.elevationFt != 0 {
+            items.append(.init(
+                key: "elev",
+                label: scenario.elevationFt > 0
+                    ? "+\(Int(scenario.elevationFt))ft"
+                    : "\(Int(abs(scenario.elevationFt)))ft↓",
+                icon: "mountain.2",
+                alert: false
+            ))
+        }
+        if scenario.lie != .fairway && scenario.lie != .tee {
+            items.append(.init(key: "lie", label: scenario.lie.label, icon: "leaf", alert: false))
+        }
+        if scenario.minProbability > 0 {
+            let pct = Int((scenario.minProbability * 100).rounded())
+            items.append(.init(
+                key: "thresh",
+                label: noneQualify ? "≥\(pct)% · none qualify" : "≥\(pct)%",
+                icon: "percent",
+                alert: noneQualify
+            ))
+        }
+        return items
+    }
+
+    private func conditionChip(label: String, icon: String, isAlert: Bool) -> some View {
+        Button { zoneOpen = true; Haptics.light() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(isAlert ? DesignTokens.destructive : .white.opacity(0.7))
+                Text(label)
+                    .font(DispersionType.mono(10, weight: .medium))
+                    .foregroundStyle(isAlert ? DesignTokens.destructive : .white)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(DesignTokens.popover.opacity(0.92))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(
+                                isAlert ? DesignTokens.destructive.opacity(0.45) : .white.opacity(0.08),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
     }
 
     private func viewingBanner(club: Club, prob: Double) -> some View {
@@ -581,38 +681,49 @@ public struct CalculatorScreen: View {
         let lbl = ProbLabelRegistry.of(result.probabilityInZone)
         let active = viewClubId == result.id
         return Button { viewClubId = active ? nil : result.id; Haptics.light() } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 4) {
-                    Text(club.name)
-                        .font(DispersionType.ui(13, weight: .medium))
-                        .lineLimit(1)
-                    if result.swingType != .full {
-                        Text(result.swingType.label)
-                            .font(DispersionType.mono(9, weight: .medium))
+            HStack(spacing: 8) {
+                // Probability dot — same color as the probability label
+                Circle().fill(lbl.color).frame(width: 6, height: 6)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text(club.name)
+                            .font(DispersionType.ui(13, weight: .medium))
+                            .lineLimit(1)
+                            .foregroundStyle(.white)
+                        if result.swingType != .full {
+                            Text(result.swingType.label)
+                                .font(DispersionType.mono(9, weight: .medium))
+                                .foregroundStyle(lbl.color)
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        Text("\(Int(result.expectedCarry))y")
+                            .font(DispersionType.mono(10))
+                            .foregroundStyle(.white.opacity(0.55))
+                        Text("\(Int(result.probabilityInZone * 100))%")
+                            .font(DispersionType.mono(11, weight: .medium))
                             .foregroundStyle(lbl.color)
                     }
                 }
-                HStack(spacing: 6) {
-                    Text("\(Int(result.expectedCarry))y")
-                        .font(DispersionType.mono(10))
-                        .foregroundStyle(DesignTokens.mutedForeground)
-                    Text("\(Int(result.probabilityInZone * 100))%")
-                        .font(DispersionType.mono(11, weight: .medium))
-                        .foregroundStyle(lbl.color)
-                }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(active ? accent.opacity(0.15) : Color.white.opacity(0.06))
+                Capsule()
+                    .fill(active ? accent.opacity(0.18) : DesignTokens.popover.opacity(0.92))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(active ? accent.opacity(0.4) : DesignTokens.border, lineWidth: 1)
+                        Capsule().strokeBorder(
+                            active ? accent.opacity(0.45) : .white.opacity(0.08),
+                            lineWidth: 1
+                        )
                     )
             )
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
         }
         .buttonStyle(.plain)
+        .environment(\.colorScheme, .dark)
+        .accessibilityLabel("\(club.name) at \(Int(result.probabilityInZone * 100)) percent")
     }
 
     // MARK: logging

@@ -27,7 +27,7 @@ struct RoundHistoryView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     // Header
                     HStack {
-                        Button { onBack() } label: {
+                        Button { Haptics.light(); onBack() } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "chevron.left").font(.system(size: 12))
                                 Text("Back")
@@ -48,13 +48,19 @@ struct RoundHistoryView: View {
                     }
 
                     if rounds.isEmpty {
-                        VStack(spacing: 8) {
-                            Spacer().frame(height: 40)
+                        VStack(spacing: 12) {
+                            Spacer().frame(height: 60)
+                            Image(systemName: "flag.2.crossed")
+                                .font(.system(size: 36, weight: .light))
+                                .foregroundStyle(accent.opacity(0.5))
                             Text("No rounds yet")
-                                .font(DispersionType.display(20, weight: .regular))
-                            Text("Finish a round on a course to see your history.")
+                                .font(DispersionType.display(22, weight: .regular))
+                                .foregroundStyle(DesignTokens.foreground)
+                            Text("Finish a round on a course to see your history, trends, and strokes-gained breakdown here.")
                                 .font(DispersionType.ui(13))
                                 .foregroundStyle(DesignTokens.mutedForeground)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
                         }
                         .frame(maxWidth: .infinity)
                     } else {
@@ -76,7 +82,8 @@ struct RoundHistoryView: View {
                 .padding(.horizontal, 20)
             }
         }
-                .onAppear { loadRounds() }
+        .swipeToDismiss { onBack() }
+        .onAppear { loadRounds() }
     }
 
     // MARK: - Trends

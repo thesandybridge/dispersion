@@ -38,6 +38,7 @@ struct CoursePlayView: View {
     @State private var cachedHolePolygons: [CoursePolygon] = []
     @State private var cachedHoleInfos: [Int: HoleInfo] = [:]
     @State private var cachedClubOptions: [ClubOption] = []
+    @State private var shareItem: ShareItem?
 
     private var course: Course? { cachedCourse }
     private var holePolygons: [CoursePolygon] { cachedHolePolygons }
@@ -114,8 +115,12 @@ struct CoursePlayView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            topBar
             mapSection
+                .overlay(alignment: .top) {
+                    topBarOverlay
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                }
             bottomPanel
         }
         .onAppear {
@@ -176,148 +181,205 @@ struct CoursePlayView: View {
         .fullScreenCover(isPresented: $showRoundSummary) {
             roundCompletionScreen
                         }
+        .shareSheet(item: $shareItem)
     }
 
-    // MARK: - Top bar
+    // MARK: - Floating top overlay
+    //
+    // Row 1 keeps the top-right corner clear so the system MapCompass has
+    // airspace. Score chip moves to row 2 leading edge alongside tee/pin chips.
 
-    private var topBar: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Button { showEndRound = true } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left").font(.system(size: 12))
-                        Text("Exit")
-                    }
-                    .font(DispersionType.mono(12))
-                    .foregroundStyle(DesignTokens.mutedForeground)
-                }
-                .buttonStyle(.plain)
+    private var topBarOverlay: some View {
+        VStack(spacing: 8) {
+            // Row 1 — Exit (L) · Hole nav (C) · (R clear for compass)
+            HStack(spacing: 8) {
+                exitPill
                 Spacer()
-                if tracker.holesPlayed > 0 {
-                    Button { showScorecard = true } label: {
-                        let tp = tracker.toPar
-                        HStack(spacing: 6) {
-                            Image(systemName: "list.number")
-                                .font(.system(size: 11))
-                                .foregroundStyle(DesignTokens.mutedForeground)
-                            Text("\(tracker.totalScore)")
-                                .font(DispersionType.display(18, weight: .regular))
-                                .monospacedDigit()
-                            Text(tp == 0 ? "E" : (tp > 0 ? "+\(tp)" : "\(tp)"))
-                                .font(DispersionType.mono(11, weight: .medium))
-                                .foregroundStyle(tp < 0 ? DesignTokens.primary
-                                                 : tp == 0 ? DesignTokens.foreground
-                                                 : DesignTokens.pPoor)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
+                holeNavPill
                 Spacer()
-            }
-            .padding(.horizontal, 16)
-
-            // Hole info + tee selector
-            HStack(spacing: 10) {
-                Button { showHolePicker = true; Haptics.light() } label: {
-                    HStack(spacing: 4) {
-                        Text("Hole \(tracker.currentHole)")
-                            .font(DispersionType.display(22, weight: .regular))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(DesignTokens.mutedForeground)
-                    }
-                }
-                .buttonStyle(.plain)
-                Text("Par \(holePar)")
-                    .font(DispersionType.mono(12, weight: .medium))
-                    .foregroundStyle(DesignTokens.mutedForeground)
-                if holeHandicap > 0 {
-                    Text("HCP \(holeHandicap)")
-                        .font(DispersionType.mono(10))
-                        .foregroundStyle(DesignTokens.mutedForeground.opacity(0.6))
-                }
-                Spacer()
-                // Hole nav
-                if tracker.currentHole > tracker.startHole {
-                    Button { prevHole() } label: {
-                        Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(DesignTokens.surface))
-                    }
-                    .buttonStyle(.plain)
-                }
-                if tracker.currentHole < tracker.lastHole {
-                    Button { nextHole() } label: {
-                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(DesignTokens.surface))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16)
-
-            // Tee + pin selectors
-            let tees = cachedHoleInfos.values.flatMap(\.teeBoxes).map(\.name)
-            let uniqueTees = Array(Set(tees)).sorted {
-                let order = ["Blue": 0, "White": 1, "Red": 2, "Gold": 3]
-                return (order[$0] ?? 4) < (order[$1] ?? 4)
-            }
-            if uniqueTees.count > 1 || PinZone.allCases.contains(where: { cachedHoleInfos[tracker.currentHole]?.pin($0) != nil }) {
-                HStack(spacing: 6) {
-                    if uniqueTees.count > 1 {
-                        ForEach(uniqueTees, id: \.self) { name in
-                            Button {
-                                activeTee = name
-                                Haptics.light()
-                            } label: {
-                                let color = TeeBox.defaultColors.first { $0.name == name }?.color ?? "white"
-                                HStack(spacing: 4) {
-                                    Circle().fill(teeDisplayColor(color)).frame(width: 6, height: 6)
-                                    if holeYardage > 0 {
-                                        Text("\(holeYardage)y")
-                                            .font(DispersionType.mono(10, weight: .medium))
-                                    } else {
-                                        Text(name)
-                                            .font(DispersionType.mono(10, weight: .medium))
-                                    }
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Capsule().fill(activeTee == name ? accent : DesignTokens.surface))
-                                .foregroundStyle(activeTee == name ? DesignTokens.primaryForeground : DesignTokens.foreground)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    Spacer()
-
-                    // Pin zone selector
-                    ForEach(PinZone.allCases, id: \.self) { zone in
-                        let hasCoord = cachedHoleInfos[tracker.currentHole]?.pin(zone) != nil
-                        if hasCoord {
-                            Button {
-                                activePinZone = zone
-                                Haptics.light()
-                            } label: {
-                                Text(zone.label.prefix(1).uppercased())
-                                    .font(DispersionType.mono(10, weight: .bold))
-                                    .frame(width: 24, height: 24)
-                                    .background(Circle().fill(activePinZone == zone ? accent : DesignTokens.surface))
-                                    .foregroundStyle(activePinZone == zone ? DesignTokens.primaryForeground : DesignTokens.foreground)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
+                // Phantom spacer matched to exitPill width keeps holeNavPill
+                // visually centered. Compass renders in this clear region.
+                exitPill.opacity(0).accessibilityHidden(true)
             }
 
-            Spacer().frame(height: 4)
+            // Row 2 — score · tee chips · pin chips
+            secondaryRow
         }
-        .padding(.top, 4)
-        .background(DesignTokens.background)
+        .environment(\.colorScheme, .dark)
+    }
+
+    @ViewBuilder
+    private var secondaryRow: some View {
+        let teeNames = cachedHoleInfos.values.flatMap(\.teeBoxes).map(\.name)
+        let uniqueTees = Array(Set(teeNames)).sorted {
+            let order = ["Blue": 0, "White": 1, "Red": 2, "Gold": 3]
+            return (order[$0] ?? 4) < (order[$1] ?? 4)
+        }
+        let availablePinZones = PinZone.allCases.filter {
+            cachedHoleInfos[tracker.currentHole]?.pin($0) != nil
+        }
+        let hasContent = tracker.holesPlayed > 0 || uniqueTees.count > 1 || !availablePinZones.isEmpty
+
+        if hasContent {
+            HStack(spacing: 6) {
+                if tracker.holesPlayed > 0 {
+                    scorePill
+                }
+                if uniqueTees.count > 1 {
+                    HStack(spacing: 4) {
+                        ForEach(uniqueTees, id: \.self) { name in
+                            teeChip(name)
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(DesignTokens.popover.opacity(0.92)))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                }
+                Spacer()
+                if !availablePinZones.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(availablePinZones, id: \.self) { zone in
+                            pinChip(zone)
+                        }
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(DesignTokens.popover.opacity(0.92)))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                }
+            }
+        }
+    }
+
+    private var exitPill: some View {
+        Button { showEndRound = true; Haptics.light() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
+                Text("Exit").font(DispersionType.mono(11, weight: .medium))
+            }
+            .floatingPillStyle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Exit round")
+    }
+
+    @ViewBuilder
+    private var scorePill: some View {
+        if tracker.holesPlayed > 0 {
+            Button { showScorecard = true; Haptics.light() } label: {
+                let tp = tracker.toPar
+                HStack(spacing: 6) {
+                    Image(systemName: "list.number").font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.6))
+                    Text("\(tracker.totalScore)")
+                        .font(DispersionType.display(15, weight: .regular))
+                        .monospacedDigit()
+                    Text(tp == 0 ? "E" : (tp > 0 ? "+\(tp)" : "\(tp)"))
+                        .font(DispersionType.mono(10, weight: .medium))
+                        .foregroundStyle(tp < 0 ? DesignTokens.primary
+                                         : tp == 0 ? .white
+                                         : DesignTokens.pPoor)
+                }
+                .floatingPillStyle()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open scorecard")
+        } else {
+            Color.clear.frame(width: 1)
+        }
+    }
+
+    private var holeNavPill: some View {
+        HStack(spacing: 0) {
+            if tracker.currentHole > tracker.startHole {
+                Button { prevHole() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 32, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Previous hole")
+            }
+
+            Button { showHolePicker = true; Haptics.light() } label: {
+                HStack(spacing: 4) {
+                    Text("Hole \(tracker.currentHole)")
+                        .font(DispersionType.ui(13, weight: .semibold))
+                    Text("· Par \(holePar)")
+                        .font(DispersionType.mono(11))
+                        .foregroundStyle(.white.opacity(0.6))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 36)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hole \(tracker.currentHole). Tap to jump to another hole.")
+
+            if tracker.currentHole < tracker.lastHole {
+                Button { nextHole() } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 32, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Next hole")
+            }
+        }
+        .foregroundStyle(.white)
+        .background(
+            Capsule()
+                .fill(DesignTokens.popover.opacity(0.92))
+                .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        )
+        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+    }
+
+    private func teeChip(_ name: String) -> some View {
+        let color = TeeBox.defaultColors.first { $0.name == name }?.color ?? "white"
+        let isActive = activeTee == name
+        return Button {
+            activeTee = name
+            Haptics.light()
+        } label: {
+            HStack(spacing: 4) {
+                Circle().fill(teeDisplayColor(color)).frame(width: 6, height: 6)
+                if holeYardage > 0 {
+                    Text("\(holeYardage)y").font(DispersionType.mono(10, weight: .medium))
+                } else {
+                    Text(name).font(DispersionType.mono(10, weight: .medium))
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(isActive ? accent : Color.white.opacity(0.08)))
+            .foregroundStyle(isActive ? DesignTokens.primaryForeground : .white)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func pinChip(_ zone: PinZone) -> some View {
+        let isActive = activePinZone == zone
+        return Button {
+            activePinZone = zone
+            Haptics.light()
+        } label: {
+            Text(zone.label.prefix(1).uppercased())
+                .font(DispersionType.mono(10, weight: .bold))
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(isActive ? accent : Color.white.opacity(0.08)))
+                .foregroundStyle(isActive ? DesignTokens.primaryForeground : .white)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(zone.label) pin position")
     }
 
     private func teeDisplayColor(_ color: String) -> Color {
@@ -1140,12 +1202,7 @@ struct CoursePlayView: View {
 
         Tracked with Dispersion
         """
-        let av = UIActivityViewController(activityItems: [text], applicationActivities: nil)
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let root = scene.windows.first?.rootViewController?.presentedViewController
-                   ?? scene.windows.first?.rootViewController {
-            root.present(av, animated: true)
-        }
+        shareItem = ShareItem(items: [text])
     }
 
     private func finishRound() {

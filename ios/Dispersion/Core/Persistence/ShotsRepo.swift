@@ -61,11 +61,26 @@ public struct ShotsRepo {
             longDelta: shot.longDelta,
             latDelta: shot.latDelta,
             outcomeRaw: Outcomes.encode(shot.outcomes),
-            timestamp: shot.timestamp
+            timestamp: shot.timestamp,
+            swingTypeRaw: shot.swingType.rawValue
         )
         context.insert(model)
         try context.save()
         return shot
+    }
+
+    /// Patch an existing shot's outcomes and/or swing type. Pass nil to leave
+    /// a field untouched.
+    public func update(
+        id: String,
+        outcomes: Set<ShotOutcomeTag>? = nil,
+        swingType: SwingType? = nil
+    ) throws {
+        let d = FetchDescriptor<ShotModel>(predicate: #Predicate { $0.id == id })
+        guard let model = try context.fetch(d).first else { return }
+        if let outcomes { model.outcomeRaw = Outcomes.encode(outcomes) }
+        if let swingType { model.swingTypeRaw = swingType.rawValue }
+        try context.save()
     }
 
     public func delete(id: String) throws {

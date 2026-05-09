@@ -82,6 +82,9 @@ public final class ShotModel {
     /// CSV-encoded outcome tag set, see `Outcomes.encode`.
     public var outcomeRaw: String
     public var timestamp: Date
+    /// SwingType raw value. Defaults to "full" so existing rows migrate cleanly
+    /// (SwiftData lightweight migration assigns the default to legacy rows).
+    public var swingTypeRaw: String = SwingType.full.rawValue
 
     public init(
         id: String,
@@ -91,7 +94,8 @@ public final class ShotModel {
         longDelta: Double,
         latDelta: Double,
         outcomeRaw: String,
-        timestamp: Date
+        timestamp: Date,
+        swingTypeRaw: String = SwingType.full.rawValue
     ) {
         self.id = id
         self.sessionId = sessionId
@@ -101,6 +105,7 @@ public final class ShotModel {
         self.latDelta = latDelta
         self.outcomeRaw = outcomeRaw
         self.timestamp = timestamp
+        self.swingTypeRaw = swingTypeRaw
     }
 
     public func toValue() -> Shot {
@@ -112,7 +117,8 @@ public final class ShotModel {
             longDelta: longDelta,
             latDelta: latDelta,
             outcomes: Outcomes.decode(outcomeRaw),
-            timestamp: timestamp
+            timestamp: timestamp,
+            swingType: SwingType(rawValue: swingTypeRaw) ?? .full
         )
     }
 }

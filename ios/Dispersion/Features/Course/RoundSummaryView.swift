@@ -26,7 +26,7 @@ struct RoundSummaryView: View {
 
     private var shots: [Shot] {
         let raw = (try? ShotsRepo(context: modelContext).listBySession(sessionId)) ?? []
-        return raw.filter { abs($0.longDelta) < 100 && abs($0.latDelta) < 100 }
+        return AppConfig.validShots(raw)
     }
 
     private var played: [HoleScore] { scores.filter { $0.score > 0 } }

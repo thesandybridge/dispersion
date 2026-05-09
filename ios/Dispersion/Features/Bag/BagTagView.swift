@@ -1,7 +1,9 @@
-// 3D bag tag — SceneKit rendered metal tag with punched hole.
-// Drag to spin. Material selector: Silver, Black, Gold, Rose Gold.
+// 3D bag tag — RealityKit (iOS 18+) rebuild of the formerly SceneKit-based
+// view. The tag is a thin metallic slab with textured front + back faces
+// rendered via SwiftUI's ImageRenderer. Drag to spin around the Y axis;
+// material picker switches the metal finish.
 
-import SceneKit
+import RealityKit
 import SwiftData
 import SwiftUI
 
@@ -9,176 +11,343 @@ struct BagTagView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ClubModel.carryYards, order: .reverse) private var clubModels: [ClubModel]
 
+    /// Optional close handler. When set (i.e., BagTagView is presented as a
+    /// full-screen modal), a small "Done" pill appears in the top-leading
+    /// corner so the user can dismiss without resorting to a swipe gesture.
+    var onClose: (() -> Void)?
+
     @State private var profile = ProfileStore.shared
     @State private var editing = false
-    @State private var scene: SCNScene?
+    @State private var shareItem: ShareItem?
+
+    // Rotation state — value types are safe in @State; SwiftUI re-runs
+    // RealityView's update: closure when these change.
+    @State private var baseRotationY: Float = 0
+    @State private var dragRotationY: Float = 0
+    // Bumped each time materials/textures need rebuilding (avoids needing
+    // @State references to entity instances, which RealityView dislikes).
+    @State private var textureRevision: Int = 0
+
+    // Named entities — we look these up in the update: closure rather than
+    // holding @State references, which weren't reliable across view rebuilds.
+    private static let rootName = "tagRoot"
+    private static let frontEntityName = "tagFront"
+    private static let backEntityName = "tagBack"
+    private static let sideEntityName = "tagSide"
 
     private var accent: Color { profile.accent.color }
     private var clubs: [Club] { clubModels.map { $0.toValue() } }
 
+    // Tag geometry. With camera at z=1.2 and FOV 30°, visible height is
+    // ~2 * 1.2 * tan(15°) ≈ 0.643m, so a tag of 0.50m height fills ~78%
+    // of the vertical viewport. We deliberately leave margin so the tag
+    // doesn't kiss the safe-area edges when the user spins it.
+    private static let tagWidth: Float = 0.32
+    private static let tagHeight: Float = 0.50
+    /// True extruded thickness of the tag — visible as a metallic edge when
+    /// the user spins it. ~5mm reads as a real bag tag.
+    private static let tagThickness: Float = 0.005
+    /// Outer rounded-corner radius applied to the rounded-rectangle profile.
+    /// Bumped from 0.02 so the curves read clearly at the new tag size.
+    private static let cornerRadius: Float = 0.04
+
     var body: some View {
         VStack(spacing: 0) {
-            if let scene {
-                SceneView(
-                    scene: scene,
-                    options: [.allowsCameraControl, .autoenablesDefaultLighting]
-                )
-                .background(Color.clear)
+            tag3D
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-
-            // Material picker
-            HStack(spacing: 10) {
-                ForEach(ProfileMaterial.allCases, id: \.self) { mat in
-                    Button {
-                        profile.setProfile(material: mat)
-                        buildScene()
-                        Haptics.light()
-                    } label: {
-                        Circle().fill(mat.preview)
-                            .frame(width: 26, height: 26)
-                            .overlay {
-                                if profile.material == mat {
-                                    Circle().strokeBorder(.white, lineWidth: 2).frame(width: 22, height: 22)
-                                }
+                .overlay(alignment: .topLeading) {
+                    if let onClose {
+                        Button { onClose(); Haptics.light() } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text("Done")
+                                    .font(DispersionType.mono(11, weight: .medium))
                             }
-                            .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                            .floatingPillStyle()
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .environment(\.colorScheme, .dark)
+                        .accessibilityLabel("Close bag tag")
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-            .padding(.vertical, 10)
 
-            HStack(spacing: 12) {
-                Button { shareTag() } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.and.arrow.up").font(.system(size: 12))
-                        Text("Share")
-                    }
-                }
-                .buttonStyle(.dispersion(.outline))
-
-                Button { editing = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "pencil").font(.system(size: 12))
-                        Text("Edit")
-                    }
-                }
-                .buttonStyle(.dispersion(.primary))
-            }
-            .padding(.bottom, 12)
+            bottomToolbar
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
         }
         .background(DesignTokens.background.ignoresSafeArea())
-        .onAppear { buildScene() }
-        .onChange(of: profile.name) { _, _ in buildScene() }
-        .onChange(of: profile.accent) { _, _ in buildScene() }
-        .onChange(of: profile.homeCourse) { _, _ in buildScene() }
-        .onChange(of: profile.motto) { _, _ in buildScene() }
-        .onChange(of: profile.font) { _, _ in buildScene() }
-        .onChange(of: profile.contact) { _, _ in buildScene() }
-        .onChange(of: profile.material) { _, _ in buildScene() }
+        .onChange(of: profile.name) { _, _ in refreshTextures() }
+        .onChange(of: profile.accent) { _, _ in refreshTextures() }
+        .onChange(of: profile.homeCourse) { _, _ in refreshTextures() }
+        .onChange(of: profile.motto) { _, _ in refreshTextures() }
+        .onChange(of: profile.font) { _, _ in refreshTextures() }
+        .onChange(of: profile.contact) { _, _ in refreshTextures() }
+        .onChange(of: profile.material) { _, _ in
+            applyMaterials()
+            refreshTextures()
+        }
         .dispersionSheet(isPresented: $editing, detents: [.large]) {
             tagEditContent
         }
+        .shareSheet(item: $shareItem)
     }
 
-    // MARK: - Build 3D scene
+    // MARK: - Bottom toolbar (floating capsule, course-view aesthetic)
+
+    private var bottomToolbar: some View {
+        HStack(spacing: 10) {
+            materialClusterPill
+
+            Spacer(minLength: 0)
+
+            // Edit + Share — paired action pills
+            Button { editing = true; Haptics.light() } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "pencil").font(.system(size: 11, weight: .medium))
+                    Text("Edit").font(DispersionType.mono(11, weight: .medium))
+                }
+                .floatingPillStyle()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Edit tag")
+
+            Button { shareTag() } label: {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(width: 16, height: 16)
+                    .floatingPillStyle()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Share tag")
+        }
+        .environment(\.colorScheme, .dark)
+    }
+
+    // MARK: - Material picker (drag-to-select)
+
+    /// Visual constants for the material chip cluster. Kept as private static
+    /// so both the layout and the drag-to-index math reference the same numbers.
+    private static let chipDiameter: CGFloat = 22
+    private static let chipSpacing: CGFloat = 8
+    private static let chipClusterHPad: CGFloat = 10
+
+    private var materialClusterPill: some View {
+        HStack(spacing: Self.chipSpacing) {
+            ForEach(ProfileMaterial.allCases, id: \.self) { mat in
+                materialChip(mat)
+            }
+        }
+        .padding(.horizontal, Self.chipClusterHPad)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(DesignTokens.popover.opacity(0.92)))
+        .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+        // Drag gesture covers the whole pill: a tap fires .onChanged once
+        // with zero translation; a drag continuously updates which chip is
+        // under the finger, with a haptic on each crossing.
+        .contentShape(Capsule())
+        .gesture(materialDragGesture)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Tag finish")
+        .accessibilityValue("\(profile.material)")
+        .accessibilityAdjustableAction { direction in
+            let cases = ProfileMaterial.allCases
+            guard let i = cases.firstIndex(of: profile.material) else { return }
+            switch direction {
+            case .increment:
+                if i + 1 < cases.count {
+                    profile.setProfile(material: cases[i + 1])
+                    Haptics.light()
+                }
+            case .decrement:
+                if i > 0 {
+                    profile.setProfile(material: cases[i - 1])
+                    Haptics.light()
+                }
+            @unknown default: break
+            }
+        }
+    }
+
+    private var materialDragGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let cases = ProfileMaterial.allCases
+                let stepWidth = Self.chipDiameter + Self.chipSpacing
+                let firstCenter = Self.chipClusterHPad + Self.chipDiameter / 2
+                let rawIndex = Int(
+                    ((value.location.x - firstCenter) / stepWidth).rounded()
+                )
+                let clamped = max(0, min(cases.count - 1, rawIndex))
+                let candidate = cases[clamped]
+                if profile.material != candidate {
+                    profile.setProfile(material: candidate)
+                    Haptics.light()
+                }
+            }
+    }
+
+    private func materialChip(_ mat: ProfileMaterial) -> some View {
+        let isActive = profile.material == mat
+        return Circle()
+            .fill(mat.preview)
+            .frame(width: Self.chipDiameter, height: Self.chipDiameter)
+            .overlay {
+                if isActive {
+                    Circle()
+                        .strokeBorder(.white, lineWidth: 2)
+                        .frame(width: Self.chipDiameter - 3, height: Self.chipDiameter - 3)
+                } else {
+                    Circle().strokeBorder(.white.opacity(0.15), lineWidth: 1)
+                }
+            }
+            .scaleEffect(isActive ? 1.1 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isActive)
+    }
+
+    // MARK: - 3D scene
+
+    private var tag3D: some View {
+        RealityView { content in
+            let anchor = AnchorEntity(world: [0, 0, 0])
+            content.add(anchor)
+
+            // Spinning geometry lives on `root`; lights + camera live on
+            // `anchor` so rotating root actually changes what's visible.
+            let root = Entity()
+            root.name = Self.rootName
+            anchor.addChild(root)
+
+            // Three separate ModelEntities: front cap, back cap, side wall.
+            // Each owns its own MeshResource + single material so RealityKit
+            // can't merge or reorder slots — fronts and backs render with
+            // their own textures, the side stays brushed metal.
+            if let r = BagTagMesh.make(
+                width: Self.tagWidth,
+                height: Self.tagHeight,
+                depth: Self.tagThickness,
+                cornerRadius: Self.cornerRadius
+            ) {
+                let front = ModelEntity(mesh: r.front, materials: [textureMaterial(image: nil)])
+                front.name = Self.frontEntityName
+                root.addChild(front)
+
+                let back = ModelEntity(mesh: r.back, materials: [textureMaterial(image: nil)])
+                back.name = Self.backEntityName
+                root.addChild(back)
+
+                let side = ModelEntity(mesh: r.side, materials: [sideMaterial()])
+                side.name = Self.sideEntityName
+                root.addChild(side)
+            }
+
+            // Lighting — sibling to root so spinning the tag doesn't move them.
+            let key = DirectionalLight()
+            key.light.intensity = 2_500
+            key.light.color = .white
+            key.shadow = nil
+            key.orientation = simd_quatf(angle: -0.3, axis: [1, 0, 0])
+                * simd_quatf(angle: 0.4, axis: [0, 1, 0])
+            anchor.addChild(key)
+
+            let fill = DirectionalLight()
+            fill.light.intensity = 1_200
+            fill.light.color = .white
+            fill.orientation = simd_quatf(angle: 0.2, axis: [1, 0, 0])
+                * simd_quatf(angle: -0.5, axis: [0, 1, 0])
+            anchor.addChild(fill)
+
+            // Camera — placed so the tag fills ~78% of the visible height.
+            let camera = PerspectiveCamera()
+            camera.camera.fieldOfViewInDegrees = 30
+            camera.position = [0, 0, 1.2]
+            anchor.addChild(camera)
+
+            applyTexturesNow(content: content)
+        } update: { content in
+            // Drive rotation from SwiftUI state.
+            if let root = content.findRootEntity(named: Self.rootName) {
+                root.orientation = simd_quatf(
+                    angle: baseRotationY + dragRotationY,
+                    axis: [0, 1, 0]
+                )
+            }
+            // Refresh textures when revision changes (profile edit, material switch).
+            _ = textureRevision
+            applyTexturesNow(content: content)
+        }
+        .simultaneousGesture(dragGesture)
+    }
 
     @MainActor
-    private func buildScene() {
-        let scn = SCNScene()
-        scn.background.contents = UIColor(DesignTokens.background)
-
-        let tagW: CGFloat = 3.0
-        let tagH: CGFloat = 4.8
-        let tagD: CGFloat = 0.08
-        let cornerR: CGFloat = 0.18
-        let holeR: CGFloat = 0.18
-        let holeY: CGFloat = tagH / 2 - 0.35
-
-        let path = UIBezierPath(roundedRect: CGRect(x: -tagW/2, y: -tagH/2, width: tagW, height: tagH), cornerRadius: cornerR)
-        let holePath = UIBezierPath(ovalIn: CGRect(x: -holeR, y: holeY - holeR, width: holeR * 2, height: holeR * 2))
-        path.append(holePath.reversing())
-        path.flatness = 0.01
-
-        let shape = SCNShape(path: path, extrusionDepth: tagD)
-
-        // Front material
-        let frontMat = SCNMaterial()
-        frontMat.lightingModel = .physicallyBased
-        frontMat.metalness.contents = 0.8
-        frontMat.roughness.contents = 0.35
-        frontMat.diffuse.contents = renderFrontTexture()
-
-        // Edge material
-        let edgeMat = SCNMaterial()
-        edgeMat.lightingModel = .physicallyBased
-        edgeMat.metalness.contents = 0.95
-        edgeMat.roughness.contents = 0.1
-        edgeMat.diffuse.contents = profile.material.edgeColor
-
-        // Back material
-        let backMat = SCNMaterial()
-        backMat.lightingModel = .physicallyBased
-        backMat.metalness.contents = 0.8
-        backMat.roughness.contents = 0.35
-        backMat.diffuse.contents = renderBackTexture()
-
-        // SCNShape materials: [front cap, back cap, extruded side]
-        shape.materials = [frontMat, backMat, edgeMat]
-
-        let tagNode = SCNNode(geometry: shape)
-        scn.rootNode.addChildNode(tagNode)
-
-        // Camera
-        let cam = SCNCamera()
-        cam.fieldOfView = 32
-        let camNode = SCNNode()
-        camNode.camera = cam
-        camNode.position = SCNVector3(0, 0, 10)
-        scn.rootNode.addChildNode(camNode)
-
-        // Bright, well-balanced lighting
-        let key = SCNLight()
-        key.type = .directional
-        key.intensity = 1400
-        key.color = UIColor(white: 1.0, alpha: 1)
-        let keyNode = SCNNode()
-        keyNode.light = key
-        keyNode.eulerAngles = SCNVector3(-0.3, 0.5, 0)
-        scn.rootNode.addChildNode(keyNode)
-
-        let fill = SCNLight()
-        fill.type = .directional
-        fill.intensity = 800
-        fill.color = UIColor(white: 0.95, alpha: 1)
-        let fillNode = SCNNode()
-        fillNode.light = fill
-        fillNode.eulerAngles = SCNVector3(0.2, -0.6, 0)
-        scn.rootNode.addChildNode(fillNode)
-
-        let back = SCNLight()
-        back.type = .directional
-        back.intensity = 500
-        let backNode = SCNNode()
-        backNode.light = back
-        backNode.eulerAngles = SCNVector3(0.4, Float.pi, 0)
-        scn.rootNode.addChildNode(backNode)
-
-        let ambient = SCNLight()
-        ambient.type = .ambient
-        ambient.intensity = 500
-        ambient.color = UIColor(white: 0.8, alpha: 1)
-        let ambNode = SCNNode()
-        ambNode.light = ambient
-        scn.rootNode.addChildNode(ambNode)
-
-        scene = scn
+    private func applyTexturesNow(content: RealityViewCameraContent) {
+        if let img = renderFrontTexture(),
+           let entity = content.findRootEntity(named: Self.frontEntityName) as? ModelEntity {
+            entity.model?.materials = [textureMaterial(image: img)]
+        }
+        if let img = renderBackTexture(),
+           let entity = content.findRootEntity(named: Self.backEntityName) as? ModelEntity {
+            entity.model?.materials = [textureMaterial(image: img)]
+        }
+        if let entity = content.findRootEntity(named: Self.sideEntityName) as? ModelEntity {
+            entity.model?.materials = [sideMaterial()]
+        }
     }
 
-    // MARK: - Textures
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                // Convert horizontal drag (in points) to radians. ~360° per
+                // 600pt feels natural on phone.
+                dragRotationY = Float(value.translation.width) / 600 * 2 * .pi
+            }
+            .onEnded { _ in
+                baseRotationY += dragRotationY
+                dragRotationY = 0
+            }
+    }
+
+    // MARK: - Materials
+
+    private func textureMaterial(image: UIImage?) -> PhysicallyBasedMaterial {
+        var mat = PhysicallyBasedMaterial()
+        if let cg = image?.cgImage,
+           let resource = try? TextureResource(image: cg, options: .init(semantic: .color)) {
+            mat.baseColor = .init(texture: .init(resource))
+        } else {
+            mat.baseColor = .init(tint: profile.material.uiKitEdge)
+        }
+        // Brushed-metal feel: still metallic but with high roughness to kill
+        // mirror-like specular. Reads as classy machined metal, not chrome.
+        mat.metallic = 0.85
+        mat.roughness = 0.62
+        return mat
+    }
+
+    /// Material for the rounded side wall — pure brushed metal, no texture.
+    /// A touch tighter roughness than the front so the edge catches a hint of
+    /// light during a spin without going chrome.
+    private func sideMaterial() -> PhysicallyBasedMaterial {
+        var mat = PhysicallyBasedMaterial()
+        mat.baseColor = .init(tint: profile.material.uiKitEdge)
+        mat.metallic = 0.92
+        mat.roughness = 0.5
+        return mat
+    }
+
+
+    /// Triggers RealityView's update: closure to re-render textures.
+    private func refreshTextures() {
+        textureRevision &+= 1
+    }
+
+    private func applyMaterials() { refreshTextures() }
+
+    // MARK: - Texture generation (SwiftUI ImageRenderer, unchanged from before)
 
     @MainActor
     private func renderFrontTexture() -> UIImage? {
@@ -204,18 +373,46 @@ struct BagTagView: View {
         return renderer.uiImage
     }
 
-    // MARK: - Front face
+    // MARK: - Texture content
 
+    /// Faked grommet hole — drawn into the face textures since RealityKit
+    /// can't easily punch a real hole through the mesh. Inner dark fill
+    /// reads as a hole; thin metallic ring reads as the eyelet.
+    private var grommetOverlay: some View {
+        VStack {
+            ZStack {
+                Circle()
+                    .fill(Color.black.opacity(0.92))
+                    .frame(width: 26, height: 26)
+                Circle()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.55),
+                                Color.white.opacity(0.15),
+                                Color.white.opacity(0.4)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+                    .frame(width: 26, height: 26)
+            }
+            .padding(.top, 14)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // Front face content (unchanged from SceneKit version — still rendered via SwiftUI)
     private var frontFaceContent: some View {
         let initials = computeInitials(profile.name)
 
         return ZStack {
-            // Topo contour lines — flows across lower-right
-            topoLines
-                .opacity(0.07)
+            grommetOverlay
 
             VStack(alignment: .leading, spacing: 0) {
-                // Header
                 HStack {
                     Text("DISPERSION")
                         .font(.system(size: 7, weight: .semibold, design: .monospaced))
@@ -236,7 +433,6 @@ struct BagTagView: View {
 
                 Spacer().frame(height: 36)
 
-                // Name
                 Text(profile.name.isEmpty ? "YOUR NAME" : profile.name.uppercased())
                     .font(profile.font.font(size: 24, weight: .thin))
                     .tracking(4)
@@ -279,11 +475,9 @@ struct BagTagView: View {
         }
     }
 
-    // MARK: - Back face
-
     private var backFaceContent: some View {
         ZStack {
-            topoLines.opacity(0.06)
+            grommetOverlay
 
             VStack(spacing: 0) {
                 Spacer().frame(height: 60)
@@ -311,7 +505,6 @@ struct BagTagView: View {
 
                 Spacer()
 
-                // QR
                 RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
                     .frame(width: 56, height: 56)
@@ -333,11 +526,6 @@ struct BagTagView: View {
         }
     }
 
-    // MARK: - Abstract topo lines
-
-    // Placeholder — topo etching to be designed later
-    private var topoLines: some View { Color.clear }
-
     private func computeInitials(_ name: String) -> String {
         (name.isEmpty ? "—" : name)
             .split(separator: " ").prefix(2)
@@ -349,12 +537,11 @@ struct BagTagView: View {
 
     @MainActor
     private func shareTag() {
-        guard let image = renderFrontTexture() else { return }
-        let av = UIActivityViewController(activityItems: [image], applicationActivities: nil)
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let root = scene.windows.first?.rootViewController {
-            root.present(av, animated: true)
+        guard let image = renderFrontTexture() else {
+            Haptics.error()
+            return
         }
+        shareItem = ShareItem(items: [image])
     }
 
     // MARK: - Edit sheet
@@ -433,13 +620,25 @@ struct BagTagView: View {
     }
 }
 
-private extension UIColor {
-    convenience init(hex: String) {
-        let h = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: h).scanHexInt64(&int)
-        self.init(red: CGFloat((int >> 16) & 0xFF) / 255,
-                  green: CGFloat((int >> 8) & 0xFF) / 255,
-                  blue: CGFloat(int & 0xFF) / 255, alpha: 1)
+// MARK: - ProfileMaterial → UIColor
+
+private extension ProfileMaterial {
+    /// Alias — `edgeColor` already returns a UIColor; this property keeps
+    /// callsites readable.
+    var uiKitEdge: UIColor { edgeColor }
+}
+
+// MARK: - RealityViewCameraContent helper
+
+private extension RealityViewCameraContent {
+    /// Walk every top-level entity's subtree until we find one with the
+    /// given name. Replaces the @State entity-reference pattern that didn't
+    /// survive RealityView rebuilds.
+    func findRootEntity(named name: String) -> Entity? {
+        for entity in entities {
+            if entity.name == name { return entity }
+            if let found = entity.findEntity(named: name) { return found }
+        }
+        return nil
     }
 }

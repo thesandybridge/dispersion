@@ -19,11 +19,16 @@ struct DispersionApp: App {
             modelContainer = try ModelContainer(for: schema, configurations: [config])
             _dbFailed = State(initialValue: false)
         } catch {
-            // Fall back to in-memory so the app can launch without crashing
-            print("⚠️ Failed to open database: \(error). Using in-memory store.")
+            print("⚠️ Failed to open database: \(error). Falling back to in-memory store.")
             let memConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            modelContainer = try! ModelContainer(for: schema, configurations: [memConfig])
-            _dbFailed = State(initialValue: true)
+            do {
+                modelContainer = try ModelContainer(for: schema, configurations: [memConfig])
+                _dbFailed = State(initialValue: true)
+            } catch {
+                // Truly catastrophic — even an in-memory container won't open.
+                // No way to render UI without a container, so abort with a clear log.
+                fatalError("Dispersion couldn't start: SwiftData refused both persistent and in-memory stores. Underlying error: \(error)")
+            }
         }
     }
 

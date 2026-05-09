@@ -18,26 +18,16 @@ struct ClubDetailView: View {
     @State private var selectedStrikeId: String?
     @State private var deleteStrikeConfirm = false
 
+    // Cached on appear / club change so we don't re-fetch per render.
+    @State private var allShots: [Shot] = []
+    @State private var taps: [ShotXY] = []
+    @State private var stats: DispersionStats = .empty
+    @State private var faceStrikes: [FaceStrike] = []
+
     private var unit: DistanceUnit { settings.unit }
     private var isPutter: Bool {
         ClubCategoryRegistry.categorize(name: club.name, carryYards: club.carryYards) == .putter
     }
-
-    // All valid shots (for total count, outcomes, etc)
-    private var allShots: [Shot] {
-        let raw = (try? ShotsRepo(context: modelContext).listByClub(club.id, limit: 500)) ?? []
-        return raw.filter { abs($0.longDelta) < 100 && abs($0.latDelta) < 100 }
-    }
-
-    // Recent 20 shots with landing data — DECADE recommends this window for dispersion
-    private var taps: [ShotXY] {
-        allShots
-            .filter { !($0.longDelta == 0 && $0.latDelta == 0) }
-            .prefix(20)
-            .map { ShotXY(lat: $0.latDelta, long: $0.longDelta) }
-    }
-
-    private var stats: DispersionStats { Sigma.dispersionFromShots(taps) }
     private var haveStats: Bool { taps.count >= 2 }
 
     var body: some View {
@@ -64,6 +54,27 @@ struct ClubDetailView: View {
         } message: {
             Text("σ↕ \(String(format: "%.1f", stats.carrySd)) · σ↔ \(String(format: "%.1f", stats.lateralSd)) from \(taps.count) shots")
         }
+        .onAppear { loadData() }
+        .onChange(of: club.id) { _, _ in loadData() }
+    }
+
+    private func loadData() {
+        let raw = (try? ShotsRepo(context: modelContext).listByClub(club.id, limit: 500)) ?? []
+        let valid = AppConfig.validShots(raw)
+        allShots = valid
+
+        let recent = valid
+            .filter { !($0.longDelta == 0 && $0.latDelta == 0) }
+            .prefix(AppConfig.recentShotsForDispersion)
+            .map { ShotXY(lat: $0.latDelta, long: $0.longDelta) }
+        taps = Array(recent)
+        stats = Sigma.dispersionFromShots(taps)
+
+        refreshFaceStrikes()
+    }
+
+    private func refreshFaceStrikes() {
+        faceStrikes = (try? FaceStrikesRepo(context: modelContext).listByClub(club.id)) ?? []
     }
 
     // MARK: - Header
@@ -360,12 +371,11 @@ struct ClubDetailView: View {
 
     @ViewBuilder
     private var faceSection: some View {
-        let strikes = (try? FaceStrikesRepo(context: modelContext).listByClub(club.id)) ?? []
-        let displayStrikes = strikes.map { FacePoint(id: $0.id, x: $0.x, y: $0.y) }
+        let displayStrikes = faceStrikes.map { FacePoint(id: $0.id, x: $0.x, y: $0.y) }
             + (pendingStrike.map { [$0] } ?? [])
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Face strikes · \(strikes.count)").eyebrow()
+            Text("Face strikes · \(faceStrikes.count)").eyebrow()
             ClubFaceViz(
                 strikes: displayStrikes,
                 selectedId: pendingStrike?.id ?? selectedStrikeId,
@@ -413,6 +423,7 @@ struct ClubDetailView: View {
                 if let id = selectedStrikeId {
                     try? FaceStrikesRepo(context: modelContext).delete(id: id)
                     selectedStrikeId = nil
+                    refreshFaceStrikes()
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -425,17 +436,22 @@ struct ClubDetailView: View {
             FaceStrike(id: p.id, clubId: club.id, x: p.x, y: p.y)
         )
         pendingStrike = nil
+        refreshFaceStrikes()
     }
 
     // MARK: - Actions
 
     private func applyMeasured() {
-        try? ClubsRepo(context: modelContext).update(id: club.id, patch: .init(
-            carryYards: club.carryYards + stats.longBias,
-            carrySd: stats.carrySd,
-            lateralSd: stats.lateralSd
-        ))
-        Haptics.success()
+        do {
+            try ClubsRepo(context: modelContext).update(id: club.id, patch: .init(
+                carryYards: club.carryYards + stats.longBias,
+                carrySd: stats.carrySd,
+                lateralSd: stats.lateralSd
+            ))
+            Haptics.success()
+        } catch {
+            Haptics.error()
+        }
     }
 
     // MARK: - Helpers

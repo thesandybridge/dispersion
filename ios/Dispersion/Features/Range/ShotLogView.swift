@@ -10,25 +10,12 @@ struct ShotLogView: View {
 
     var onOpenSession: (String) -> Void
 
+    @State private var sessions: [Session] = []
+    @State private var totalShots: Int = 0
+    @State private var last30DayShots: Int = 0
+    @State private var clubSummaries: [(Club, ClubShotSummary)] = []
+
     private var clubs: [Club] { clubModels.map { $0.toValue() } }
-
-    private var sessions: [Session] {
-        let all = (try? SessionsRepo(context: modelContext).list()) ?? []
-        // Filter out empty sessions
-        return all.filter { s in
-            let count = (try? ShotsRepo(context: modelContext).listBySession(s.id))?.count ?? 0
-            return count > 0
-        }
-    }
-
-    private var totalShots: Int {
-        (try? ShotsRepo(context: modelContext).countAll()) ?? 0
-    }
-
-    private var last30DayShots: Int {
-        let since = Calendar.current.date(byAdding: .day, value: -30, to: .now) ?? .now
-        return (try? ShotsRepo(context: modelContext).count(since: since)) ?? 0
-    }
 
     var body: some View {
         List {
@@ -49,7 +36,7 @@ struct ShotLogView: View {
                             .font(DispersionType.display(24, weight: .regular))
                             .monospacedDigit()
                             .foregroundStyle(accent)
-                        Text("last 30 days")
+                        Text("last \(AppConfig.recentActivityDays) days")
                             .font(DispersionType.mono(10))
                             .foregroundStyle(DesignTokens.mutedForeground)
                     }
@@ -61,16 +48,11 @@ struct ShotLogView: View {
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
 
             // Per-club cards
-            let summaries = clubs.compactMap { club -> (Club, ClubShotSummary)? in
-                let shots = (try? ShotsRepo(context: modelContext).listByClub(club.id, limit: 200)) ?? []
-                guard !shots.isEmpty else { return nil }
-                return (club, summarize(shots))
-            }
-            if !summaries.isEmpty {
+            if !clubSummaries.isEmpty {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(summaries, id: \.0.id) { club, summary in
+                            ForEach(clubSummaries, id: \.0.id) { club, summary in
                                 clubCard(club: club, summary: summary)
                             }
                         }
@@ -109,6 +91,7 @@ struct ShotLogView: View {
                             try? SessionsRepo(context: modelContext).delete(id: s.id)
                         }
                         Haptics.medium()
+                        refreshData()
                     }
                 } header: {
                     Text("Sessions")
@@ -121,6 +104,30 @@ struct ShotLogView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .onAppear { refreshData() }
+        .onChange(of: clubModels.count) { _, _ in refreshData() }
+    }
+
+    private func refreshData() {
+        let sessionsRepo = SessionsRepo(context: modelContext)
+        let shotsRepo = ShotsRepo(context: modelContext)
+
+        let allSessions = (try? sessionsRepo.list()) ?? []
+        sessions = allSessions.filter { s in
+            ((try? shotsRepo.listBySession(s.id))?.count ?? 0) > 0
+        }
+
+        totalShots = (try? shotsRepo.countAll()) ?? 0
+        let cutoff = Calendar.current.date(
+            byAdding: .day, value: -AppConfig.recentActivityDays, to: .now
+        ) ?? .now
+        last30DayShots = (try? shotsRepo.count(since: cutoff)) ?? 0
+
+        clubSummaries = clubs.compactMap { club -> (Club, ClubShotSummary)? in
+            let shots = (try? shotsRepo.listByClub(club.id, limit: 200)) ?? []
+            guard !shots.isEmpty else { return nil }
+            return (club, summarize(shots))
+        }
     }
 
     // MARK: - Club card

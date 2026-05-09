@@ -187,6 +187,57 @@ public extension View {
     }
 }
 
+// MARK: Edge-swipe-to-dismiss for fullScreenCovers (no NavigationController)
+
+private struct EdgeSwipeDismiss: ViewModifier {
+    var onDismiss: () -> Void
+    @State private var dragOffset: CGFloat = 0
+    @State private var canDrag = false
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: dragOffset)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                    .onChanged { value in
+                        // Only honor drags that start at the very left edge.
+                        if !canDrag {
+                            canDrag = value.startLocation.x < 24
+                        }
+                        guard canDrag else { return }
+                        dragOffset = max(0, value.translation.width)
+                    }
+                    .onEnded { value in
+                        guard canDrag else { return }
+                        canDrag = false
+                        let shouldDismiss = value.translation.width > 80
+                            || value.predictedEndTranslation.width > 200
+                        if shouldDismiss {
+                            withAnimation(.easeOut(duration: 0.22)) {
+                                dragOffset = UIScreen.main.bounds.width
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                                onDismiss()
+                                dragOffset = 0
+                            }
+                        } else {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                dragOffset = 0
+                            }
+                        }
+                    }
+            )
+    }
+}
+
+public extension View {
+    /// Edge-pan-to-dismiss for screens not in a NavigationStack (e.g. fullScreenCover).
+    /// Mirrors the standard iOS swipe-from-left-edge gesture.
+    func swipeToDismiss(_ onDismiss: @escaping () -> Void) -> some View {
+        modifier(EdgeSwipeDismiss(onDismiss: onDismiss))
+    }
+}
+
 // MARK: Hex helper
 
 func hex(_ s: String) -> Color {

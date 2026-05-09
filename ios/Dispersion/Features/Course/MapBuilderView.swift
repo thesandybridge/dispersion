@@ -53,15 +53,17 @@ struct MapBuilderView: View {
     private var holeInfo: HoleInfo? { holeInfos[currentHole] }
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            ZStack {
-                mapContent
-                traceOverlay
-                crosshairOverlay
-                bottomToolbar
-                mapControls
+        ZStack {
+            mapContent
+            traceOverlay
+            crosshairOverlay
+            VStack(spacing: 0) {
+                topBarOverlay
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                Spacer()
             }
+            bottomToolbar
         }
         .background(DesignTokens.backgroundDeep.ignoresSafeArea())
                 .onAppear {
@@ -85,84 +87,164 @@ struct MapBuilderView: View {
         }
     }
 
-    // MARK: - Top bar
+    // MARK: - Floating top overlay
 
-    private var topBar: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Button { onDone() } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark").font(.system(size: 12))
-                        Text("Done")
-                    }
-                    .font(DispersionType.mono(12))
-                    .foregroundStyle(accent)
-                }
-                .buttonStyle(.plain)
+    private var topBarOverlay: some View {
+        VStack(spacing: 8) {
+            // Row 1 — Done (L) · Hole nav (C) · Card (R)
+            HStack(spacing: 8) {
+                donePill
                 Spacer()
-                Text(course.name)
-                    .font(DispersionType.ui(13, weight: .medium))
-                    .lineLimit(1)
+                holeNavPill
                 Spacer()
-                Button { showScorecard = true } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "list.number").font(.system(size: 11))
-                        Text("Card")
-                    }
-                    .font(DispersionType.mono(12))
-                    .foregroundStyle(DesignTokens.mutedForeground)
-                }
-                .buttonStyle(.plain)
+                cardPill
             }
-            .padding(.horizontal, 16)
 
-            HStack(spacing: 10) {
-                Button { showHolePicker = true; Haptics.light() } label: {
-                    HStack(spacing: 4) {
-                        Text("Hole \(currentHole)")
-                            .font(DispersionType.display(22, weight: .regular))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(DesignTokens.mutedForeground)
-                    }
-                }
-                .buttonStyle(.plain)
-                if let info = holeInfo, info.par > 0 {
-                    Text("Par \(info.par)")
-                        .font(DispersionType.mono(12, weight: .medium))
-                        .foregroundStyle(DesignTokens.mutedForeground)
-                }
-                Spacer()
-                if currentHole > 1 {
-                    Button { prevHole() } label: {
-                        Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(DesignTokens.surface))
-                    }
-                    .buttonStyle(.plain)
-                }
-                if currentHole < course.holeCount {
-                    Button { nextHole() } label: {
-                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(DesignTokens.surface))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 16)
-
-            // Step indicator
-            HStack(spacing: 12) {
+            // Row 2 — step pills (Tees / Pins / Draw)
+            HStack(spacing: 6) {
                 stepPill("Tees", active: step == .placeTee, done: !(holeInfo?.teeBoxes.isEmpty ?? true))
                 stepPill("Pins", active: step == .placePin, done: holeInfo?.defaultPinCoord != nil)
                 stepPill("Draw", active: step == .draw, done: !holePolygons.isEmpty)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 4)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(DesignTokens.popover.opacity(0.92)))
+            .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
         }
-        .padding(.top, 4)
-        .background(DesignTokens.background)
+        .environment(\.colorScheme, .dark)
+    }
+
+    // MARK: - Contextual map tools (sit just above the bottom toolbar card)
+
+    private var contextualMapTools: some View {
+        HStack(spacing: 8) {
+            if step == .draw {
+                Button {
+                    quickEdit.toggle()
+                    currentPoints = []
+                    Haptics.light()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: quickEdit ? "wand.and.stars" : "pencil.tip")
+                            .font(.system(size: 11))
+                        Text(quickEdit ? "Auto" : "Manual")
+                            .font(DispersionType.mono(10, weight: .medium))
+                    }
+                    .foregroundStyle(quickEdit ? accent : .white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(DesignTokens.popover.opacity(0.92)))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Spacer()
+
+            Button {
+                is3D.toggle()
+                if is3D { flyToHole3D() } else { flyToHoleOverhead() }
+                Haptics.light()
+            } label: {
+                Image(systemName: is3D ? "view.2d" : "view.3d").font(.system(size: 14))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(DesignTokens.popover.opacity(0.92)))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(is3D ? "Switch to 2D view" : "Switch to 3D view")
+        }
+        .environment(\.colorScheme, .dark)
+    }
+
+    private var donePill: some View {
+        Button { onDone(); Haptics.light() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold))
+                Text("Done").font(DispersionType.mono(11, weight: .medium))
+            }
+            .foregroundStyle(accent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(DesignTokens.popover.opacity(0.92))
+                    .overlay(Capsule().strokeBorder(accent.opacity(0.4), lineWidth: 1))
+            )
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Save and exit course builder")
+    }
+
+    private var cardPill: some View {
+        Button { showScorecard = true; Haptics.light() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "list.number").font(.system(size: 11))
+                Text("Card").font(DispersionType.mono(11, weight: .medium))
+            }
+            .floatingPillStyle()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Edit scorecard")
+    }
+
+    private var holeNavPill: some View {
+        HStack(spacing: 0) {
+            if currentHole > 1 {
+                Button { prevHole() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 32, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Previous hole")
+            }
+
+            Button { showHolePicker = true; Haptics.light() } label: {
+                HStack(spacing: 4) {
+                    Text("Hole \(currentHole)")
+                        .font(DispersionType.ui(13, weight: .semibold))
+                    if let info = holeInfo, info.par > 0 {
+                        Text("· Par \(info.par)")
+                            .font(DispersionType.mono(11))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 36)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hole \(currentHole). Tap to jump to another hole.")
+
+            if currentHole < course.holeCount {
+                Button { nextHole() } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 32, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Next hole")
+            }
+        }
+        .foregroundStyle(.white)
+        .background(
+            Capsule()
+                .fill(DesignTokens.popover.opacity(0.92))
+                .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        )
+        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
     }
 
     private func stepPill(_ label: String, active: Bool, done: Bool) -> some View {
@@ -177,8 +259,8 @@ struct MapBuilderView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Capsule().fill(active ? accent : DesignTokens.surface))
-        .foregroundStyle(active ? DesignTokens.primaryForeground : DesignTokens.foreground)
+        .background(Capsule().fill(active ? accent : Color.white.opacity(0.08)))
+        .foregroundStyle(active ? DesignTokens.primaryForeground : .white)
         .onTapGesture {
             switch label {
             case "Tees": step = .placeTee
@@ -390,58 +472,14 @@ struct MapBuilderView: View {
         }
     }
 
-    // MARK: - Map controls (top overlay)
-
-    private var mapControls: some View {
-        VStack {
-            HStack(spacing: 8) {
-                if step == .draw {
-                    Button {
-                        quickEdit.toggle()
-                        currentPoints = []
-                        Haptics.light()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: quickEdit ? "wand.and.stars" : "pencil.tip")
-                                .font(.system(size: 11))
-                            Text(quickEdit ? "Auto" : "Manual")
-                                .font(DispersionType.mono(10, weight: .medium))
-                        }
-                        .foregroundStyle(quickEdit ? accent : .white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(DesignTokens.popover).environment(\.colorScheme, .dark))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                Spacer()
-
-                Button {
-                    is3D.toggle()
-                    if is3D { flyToHole3D() } else { flyToHoleOverhead() }
-                    Haptics.light()
-                } label: {
-                    Image(systemName: is3D ? "view.2d" : "view.3d").font(.system(size: 14))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(DesignTokens.popover).environment(\.colorScheme, .dark))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-
-            Spacer()
-        }
-    }
-
     // MARK: - Bottom toolbar
 
     private var bottomToolbar: some View {
-        VStack {
+        VStack(spacing: 8) {
             Spacer()
+            contextualMapTools
+                .padding(.horizontal, 16)
+
             VStack(spacing: 8) {
                 switch step {
                 case .placeTee: teeToolbar
