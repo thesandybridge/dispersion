@@ -9,7 +9,7 @@ public struct RangeScreen: View {
     @State private var tab: RangeTab = .live
     @State private var historyPath = NavigationPath()
 
-    enum RangeTab { case live, history }
+    enum RangeTab { case live, putt, history }
 
     public init() {}
 
@@ -20,6 +20,8 @@ public struct RangeScreen: View {
                 switch tab {
                 case .live:
                     LiveRangeView()
+                case .putt:
+                    PutterRangeView()
                 case .history:
                     NavigationStack(path: $historyPath) {
                         ShotLogView { id in
@@ -50,12 +52,12 @@ public struct RangeScreen: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    if tab == .live {
+                    if tab == .live || tab == .putt {
                         Circle().fill(DesignTokens.primary).frame(width: 6, height: 6)
                     }
-                    Text(tab == .live ? "Range mode" : "Shot log").eyebrow()
+                    Text(headerEyebrow).eyebrow()
                 }
-                Text(tab == .live ? "Practice" : "History")
+                Text(headerTitle)
                     .font(DispersionType.display(28, weight: .regular))
                     .tracking(-0.56)
                     .foregroundStyle(DesignTokens.foreground)
@@ -69,15 +71,33 @@ public struct RangeScreen: View {
         .overlay(alignment: .bottom) { DSeparator() }
     }
 
+    private var headerEyebrow: String {
+        switch tab {
+        case .live: return "Range mode"
+        case .putt: return "Putting practice"
+        case .history: return "Shot log"
+        }
+    }
+
+    private var headerTitle: String {
+        switch tab {
+        case .live: return "Practice"
+        case .putt: return "Putting"
+        case .history: return "History"
+        }
+    }
+
     // MARK: - Tab pill (drag-select)
 
-    private static let tabChipMinWidth: CGFloat = 56
+    private static let tabChipMinWidth: CGFloat = 52
     private static let tabChipSpacing: CGFloat = 4
     private static let tabClusterHPad: CGFloat = 4
+    private static let tabOrder: [RangeTab] = [.live, .putt, .history]
 
     private var tabPill: some View {
         HStack(spacing: Self.tabChipSpacing) {
             tabChip("Live", tab: .live)
+            tabChip("Putt", tab: .putt)
             tabChip("History", tab: .history)
         }
         .padding(.horizontal, Self.tabClusterHPad)
@@ -89,13 +109,14 @@ public struct RangeScreen: View {
         .gesture(tabDragGesture)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Range mode")
-        .accessibilityValue(tab == .live ? "Live" : "History")
+        .accessibilityValue(headerTitle)
         .accessibilityAdjustableAction { direction in
+            guard let idx = Self.tabOrder.firstIndex(of: tab) else { return }
             switch direction {
             case .increment:
-                if tab == .live { switchTab(.history) }
+                if idx + 1 < Self.tabOrder.count { switchTab(Self.tabOrder[idx + 1]) }
             case .decrement:
-                if tab == .history { switchTab(.live) }
+                if idx > 0 { switchTab(Self.tabOrder[idx - 1]) }
             @unknown default: break
             }
         }
@@ -117,7 +138,8 @@ public struct RangeScreen: View {
                 let stepWidth = Self.tabChipMinWidth + Self.tabChipSpacing
                 let firstCenter = Self.tabClusterHPad + Self.tabChipMinWidth / 2
                 let raw = Int(((value.location.x - firstCenter) / stepWidth).rounded())
-                let target: RangeTab = raw >= 1 ? .history : .live
+                let clamped = max(0, min(Self.tabOrder.count - 1, raw))
+                let target = Self.tabOrder[clamped]
                 if tab != target { switchTab(target) }
             }
     }

@@ -9,12 +9,15 @@ public struct BagScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.themeAccent) private var accent
     @Query(sort: \ClubModel.carryYards, order: .reverse) private var clubModels: [ClubModel]
+    @Query(sort: \PutterModel.createdAt, order: .forward) private var putterModels: [PutterModel]
 
     @State private var settings = SettingsStore.shared
     @State private var dial = DialStore.shared
 
     @State private var editingClub: Club?
+    @State private var editingPutter: Putter?
     @State private var creatingNewClub: Bool = false
+    @State private var creatingNewPutter: Bool = false
     @State private var showingTag: Bool = false
     @State private var gappingExpanded = false
     @State private var navPath = NavigationPath()
@@ -23,8 +26,15 @@ public struct BagScreen: View {
     public init() {}
 
     private var clubs: [Club] { clubModels.map { $0.toValue() } }
-    private var regularClubs: [Club] { clubs.filter { ClubCategoryRegistry.categorize(name: $0.name, carryYards: $0.carryYards) != .putter } }
-    private var putter: Club? { clubs.first { ClubCategoryRegistry.categorize(name: $0.name, carryYards: $0.carryYards) == .putter } }
+    /// All ClubModels are now non-putter (the one-time wipe in DispersionApp
+    /// removes any legacy putter Club). Filter is kept as belt-and-braces in
+    /// case a user inadvertently names a club "Putter".
+    private var regularClubs: [Club] {
+        clubs.filter {
+            ClubCategoryRegistry.categorize(name: $0.name, carryYards: $0.carryYards) != .putter
+        }
+    }
+    private var putter: Putter? { putterModels.first?.toValue() }
     private var unit: DistanceUnit { settings.unit }
 
     private var isWide: Bool { sizeClass == .regular }
@@ -41,6 +51,14 @@ public struct BagScreen: View {
                     )
                     .toolbar(.hidden, for: .navigationBar)
                 }
+                .navigationDestination(for: Putter.self) { p in
+                    PutterDetailView(
+                        putter: p,
+                        onBack: { navPath.removeLast() },
+                        onEdit: { editingPutter = p }
+                    )
+                    .toolbar(.hidden, for: .navigationBar)
+                }
         }
                 .sheet(item: $editingClub) { c in
             ClubEditSheet(initial: c, onClose: { editingClub = nil })
@@ -48,8 +66,20 @@ public struct BagScreen: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(DesignTokens.popover)
         }
+        .sheet(item: $editingPutter) { p in
+            PutterEditSheet(initial: p, onClose: { editingPutter = nil })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(DesignTokens.popover)
+        }
         .sheet(isPresented: $creatingNewClub) {
             ClubEditSheet(initial: nil, onClose: { creatingNewClub = false })
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(DesignTokens.popover)
+        }
+        .sheet(isPresented: $creatingNewPutter) {
+            PutterEditSheet(initial: nil, onClose: { creatingNewPutter = false })
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(DesignTokens.popover)
@@ -295,29 +325,41 @@ public struct BagScreen: View {
                     Haptics.light()
                 } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: "circle.bottomhalf.filled")
-                            .font(.system(size: 16))
-                            .foregroundStyle(accent)
+                        // Same accent strip idiom as the regular club rows.
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(LinearGradient(
+                                colors: [accent, accent.opacity(0.55)],
+                                startPoint: .top, endPoint: .bottom
+                            ))
+                            .frame(width: 3, height: 36)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(p.name)
                                 .font(DispersionType.ui(15, weight: .medium))
                                 .foregroundStyle(DesignTokens.foreground)
-                            let shotCount = stats.shotsByClub[p.id] ?? 0
-                            Text("\(shotCount) shots logged")
-                                .font(DispersionType.mono(10))
-                                .foregroundStyle(DesignTokens.mutedForeground)
+                            HStack(spacing: 6) {
+                                Text("\(Int(p.lengthInches))″ · \(p.headType.label)")
+                                    .font(DispersionType.mono(10))
+                                    .foregroundStyle(DesignTokens.mutedForeground)
+                                let count = (try? PuttsRepo(context: modelContext).count(putterId: p.id)) ?? 0
+                                if count > 0 {
+                                    Text("· \(count) putts")
+                                        .font(DispersionType.mono(10))
+                                        .foregroundStyle(DesignTokens.mutedForeground)
+                                }
+                            }
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(size: 11))
                             .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
                     }
-                    .padding(14)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
                     .background(ThemedCardFill(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
             } else {
-                Button { creatingNewClub = true } label: {
+                Button { creatingNewPutter = true } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "plus.circle")
                             .font(.system(size: 14))
