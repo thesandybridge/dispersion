@@ -34,7 +34,7 @@ export default function PrivacyPage() {
       }
       lede="Dispersion was built local-first by design. There are no accounts to sign up for, no servers to send data to, and no analytics to opt out of. This page describes what that means in practice."
     >
-      <article className="container-prose pb-20">
+      <article className="container-prose pt-16 pb-20 sm:pt-20">
         <div className="prose prose-lg max-w-3xl space-y-12">
           {/* Summary card */}
           <div className="rounded-2xl surface-elev p-6">
@@ -208,16 +208,10 @@ export default function PrivacyPage() {
               Questions
             </h2>
             <p className="surface-soft mt-4 leading-relaxed">
-              The app is open-source — read the code if you want to verify
-              any of the above for yourself:{" "}
-              <Link
-                href="https://github.com/thesandybridge/dispersion"
-                className="border-b transition hover:text-[color:var(--accent)]"
-                style={{ ...accentStrong, borderColor: "var(--accent)" }}
-              >
-                github.com/thesandybridge/dispersion
-              </Link>
-              .
+              If anything here is unclear or you'd like more detail about
+              what the app does or doesn't do, the documentation in-app
+              under Settings → About spells it out further. This page is
+              the source of truth for how Dispersion treats your data.
             </p>
             <p className="surface-muted mt-8 font-mono text-xs uppercase tracking-widest">
               Last updated: {LAST_UPDATED}

@@ -38,12 +38,6 @@ export function Footer() {
             <Link href="/range" className="transition hover:text-[color:var(--accent-strong)]">Range</Link>
             <Link href="/course-builder" className="transition hover:text-[color:var(--accent-strong)]">Course builder</Link>
             <Link href="/privacy" className="transition hover:text-[color:var(--accent-strong)]">Privacy</Link>
-            <Link
-              href="https://github.com/thesandybridge/dispersion"
-              className="transition hover:text-[color:var(--accent-strong)]"
-            >
-              Source
-            </Link>
           </nav>
           <ThemeToggle />
         </div>

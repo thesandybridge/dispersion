@@ -19,30 +19,80 @@ export const metadata: Metadata = {
 
 const accentStrong = { color: "var(--accent-strong)" };
 
-// ─── Illustrative visuals ─────────────────────────────────────────────
+// ─── Editorial visual frame ───────────────────────────────────────────
+
+function VisualFrame({ children, label, dark = false }: { children: React.ReactNode; label?: string; dark?: boolean }) {
+  return (
+    <div
+      className="overflow-hidden rounded-3xl"
+      style={{
+        background: dark
+          ? "linear-gradient(180deg, #0d4634 0%, #082819 100%)"
+          : "var(--bg-elevated)",
+        boxShadow:
+          "0 0 0 1px var(--border), 0 32px 64px -32px rgba(11, 61, 46, 0.20), 0 8px 16px -8px rgba(0,0,0,0.06)",
+      }}
+    >
+      {label && (
+        <div
+          className="flex items-center justify-between border-b px-5 py-3 font-mono text-[10px] uppercase tracking-[0.2em]"
+          style={{
+            borderColor: dark ? "rgba(246,241,225,0.10)" : "var(--border)",
+            color: dark ? "rgba(246,241,225,0.55)" : "var(--fg-muted)",
+          }}
+        >
+          <span>{label}</span>
+          <span className="flex gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "currentColor", opacity: 0.4 }} />
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "currentColor", opacity: 0.4 }} />
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "currentColor", opacity: 0.4 }} />
+          </span>
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+// ─── Visuals ─────────────────────────────────────────────────────────
 
 function RadarVisual() {
   return (
-    <div
-      className="relative aspect-square w-full overflow-hidden rounded-3xl shadow-2xl ring-1"
-      style={{
-        background: "#0b3d2e",
-        boxShadow: "0 24px 48px -16px rgba(0,0,0,0.35)",
-      }}
-    >
-      <DispersionCanvas
-        carry={158}
-        carrySd={6}
-        lateralSd={9}
-        distanceToTarget={158}
-        zoneWidth={25}
-        zoneDepth={25}
-        zoneKind="green"
-      />
-      <div className="absolute right-4 top-4 rounded-full bg-black/55 px-4 py-2 backdrop-blur" style={{ boxShadow: "0 0 0 1px #62b37566" }}>
-        <span className="font-mono text-xs text-[#a9d18e]">σ↕ 6.0  σ↔ 9.0  · n=14</span>
+    <VisualFrame label="Range · radar" dark>
+      <div className="relative aspect-square w-full">
+        <DispersionCanvas
+          carry={158}
+          carrySd={6}
+          lateralSd={9}
+          distanceToTarget={158}
+          zoneWidth={25}
+          zoneDepth={25}
+          zoneKind="green"
+        />
       </div>
-    </div>
+      <div
+        className="grid grid-cols-3 divide-x px-1"
+        style={{
+          background: "rgba(0,0,0,0.30)",
+          color: "#e8efe5",
+        }}
+      >
+        {[
+          { label: "σ↕", value: "6.0" },
+          { label: "σ↔", value: "9.0" },
+          { label: "n", value: "14" },
+        ].map((s) => (
+          <div key={s.label} className="px-4 py-3 text-center" style={{ borderColor: "rgba(246,241,225,0.08)" }}>
+            <div className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: "rgba(246,241,225,0.55)" }}>
+              {s.label}
+            </div>
+            <div className="mt-0.5 font-display text-xl font-semibold tabular-nums" style={{ color: "#a9d18e" }}>
+              {s.value}
+            </div>
+          </div>
+        ))}
+      </div>
+    </VisualFrame>
   );
 }
 
@@ -50,96 +100,78 @@ function CalibrationVisual() {
   const filled = 14;
   const total = 30;
   return (
-    <div
-      className="rounded-3xl surface-elev p-8 shadow-lg"
-      style={{ boxShadow: "0 0 0 1px var(--border), 0 12px 24px -8px rgba(0,0,0,0.1)" }}
-    >
-      <div className="font-mono text-xs uppercase tracking-widest surface-muted">
-        Calibration confidence
-      </div>
-      <div className="mt-3 flex items-baseline gap-2">
-        <span
-          className="font-display text-5xl font-semibold tabular-nums"
-          style={accentStrong}
-        >
-          14
-        </span>
-        <span className="surface-muted text-base">of 30 shots</span>
-      </div>
-      <div className="mt-1 text-sm" style={{ color: "var(--accent)" }}>
-        Good — reliable enough to save.
-      </div>
-      <div className="mt-5 flex flex-wrap gap-1.5">
-        {Array.from({ length: total }).map((_, i) => (
+    <VisualFrame label="Calibration · 7 Iron">
+      <div className="p-6 sm:p-8">
+        <div className="flex items-baseline justify-between">
+          <div>
+            <span
+              className="font-display text-6xl font-semibold tabular-nums"
+              style={accentStrong}
+            >
+              14
+            </span>
+            <span className="surface-muted ml-2 text-base">/ 30</span>
+          </div>
           <span
-            key={i}
-            className="h-2.5 w-2.5 rounded-full"
-            style={{
-              background:
-                i < filled ? "var(--accent)" : "var(--border-strong)",
-            }}
-          />
-        ))}
-      </div>
+            className="rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em]"
+            style={{ background: "var(--accent-tint)", color: "var(--accent)" }}
+          >
+            Good
+          </span>
+        </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3">
-        <div className="rounded-xl surface-bg p-3">
-          <div className="font-mono text-[10px] uppercase tracking-widest surface-muted">Stored</div>
-          <div className="mt-1 font-mono text-sm" style={accentStrong}>σ↕ 6.5  σ↔ 9.5</div>
+        <div
+          className="mt-5 grid grid-cols-[repeat(30,minmax(0,1fr))] gap-1"
+          aria-hidden
+        >
+          {Array.from({ length: total }).map((_, i) => (
+            <span
+              key={i}
+              className="h-2 rounded-full"
+              style={{
+                background:
+                  i < filled ? "var(--accent)" : "var(--border)",
+              }}
+            />
+          ))}
         </div>
-        <div className="rounded-xl surface-bg p-3 ring-1" style={{ boxShadow: "0 0 0 1px var(--accent)" }}>
-          <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: "var(--accent)" }}>Measured</div>
-          <div className="mt-1 font-mono text-sm" style={accentStrong}>σ↕ 5.9 ↓0.6  σ↔ 8.7 ↓0.8</div>
+
+        <div
+          className="mt-6 flex flex-col gap-2 border-t pt-5"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div className="flex items-baseline justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] surface-muted">
+              Stored
+            </span>
+            <span className="font-mono text-sm" style={accentStrong}>
+              σ↕ 6.5 &nbsp; σ↔ 9.5
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span
+              className="font-mono text-[10px] uppercase tracking-[0.2em]"
+              style={{ color: "var(--accent)" }}
+            >
+              Measured
+            </span>
+            <span className="font-mono text-sm" style={accentStrong}>
+              σ↕ 5.9 <span style={{ color: "var(--accent)" }}>↓0.6</span>
+              &nbsp; σ↔ 8.7 <span style={{ color: "var(--accent)" }}>↓0.8</span>
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </VisualFrame>
   );
 }
 
 function InsightsVisual() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <PBBanner />
       <SessionStripCard />
-      <div className="rounded-2xl surface-elev p-5">
-        <div className="flex items-baseline justify-between">
-          <span
-            className="font-display text-xl font-semibold"
-            style={accentStrong}
-          >
-            7 Iron · 14 shots
-          </span>
-          <span className="rounded-full px-2 py-0.5 font-mono text-[11px]" style={{ background: "var(--accent-tint)", color: "var(--accent)" }}>
-            leans L 4y
-          </span>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div>
-            <div className="flex items-baseline gap-1">
-              <span className="font-display text-3xl font-semibold tabular-nums" style={accentStrong}>
-                5.9
-              </span>
-              <span className="font-mono text-xs surface-muted">σ↕</span>
-            </div>
-            <div className="mt-1 flex gap-2 font-mono text-[10px]" style={{ color: "var(--accent)" }}>
-              <span>↓0.6 vs stored</span>
-              <span className="surface-muted">↓0.8 vs prev</span>
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1">
-              <span className="font-display text-3xl font-semibold tabular-nums" style={accentStrong}>
-                8.7
-              </span>
-              <span className="font-mono text-xs surface-muted">σ↔</span>
-            </div>
-            <div className="mt-1 flex gap-2 font-mono text-[10px]" style={{ color: "var(--accent)" }}>
-              <span>↓0.8 vs stored</span>
-              <span className="surface-muted">↓1.1 vs prev</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ClubDeltaCard />
     </div>
   );
 }
@@ -147,23 +179,23 @@ function InsightsVisual() {
 function PBBanner() {
   return (
     <div
-      className="flex items-center gap-3 rounded-2xl px-4 py-3"
+      className="flex items-center gap-3 rounded-2xl px-5 py-4"
       style={{
         background: "var(--accent-tint)",
-        border: "1px solid var(--accent)",
+        boxShadow: "0 0 0 1px var(--accent)",
       }}
     >
-      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" style={{ color: "var(--accent)" }}>
+      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 flex-shrink-0" style={{ color: "var(--accent)" }}>
         <path
           d="M12 2l2.4 5 5.6.8-4 4 1 5.6L12 14.8 6.9 17.4l1-5.6-4-4 5.6-.8L12 2z"
           fill="currentColor"
         />
       </svg>
-      <div>
-        <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: "var(--accent)" }}>
+      <div className="flex-1">
+        <div className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--accent)" }}>
           Personal best
         </div>
-        <div className="text-sm" style={accentStrong}>
+        <div className="mt-0.5 text-sm font-medium" style={accentStrong}>
           Tightest σ↕ this session
         </div>
       </div>
@@ -173,26 +205,79 @@ function PBBanner() {
 
 function SessionStripCard() {
   return (
-    <div className="rounded-2xl surface-elev px-4 py-3 ring-1" style={{ boxShadow: "0 0 0 1px var(--border)" }}>
-      <div className="grid grid-cols-3 gap-4 text-center">
+    <div
+      className="rounded-2xl px-2 py-1"
+      style={{
+        background: "var(--bg-elevated)",
+        boxShadow: "0 0 0 1px var(--border)",
+      }}
+    >
+      <div className="grid grid-cols-3 divide-x" style={{ color: "var(--border)" }}>
         {[
           { label: "shots", value: "14", delta: null },
           { label: "σ↕", value: "5.9", delta: "↓0.6" },
           { label: "σ↔", value: "8.7", delta: "↓0.8" },
         ].map((c) => (
-          <div key={c.label}>
-            <div
-              className="font-display text-2xl font-semibold tabular-nums"
-              style={accentStrong}
-            >
+          <div key={c.label} className="px-4 py-3 text-center">
+            <div className="font-display text-2xl font-semibold tabular-nums" style={accentStrong}>
               {c.value}
             </div>
-            <div className="flex items-center justify-center gap-1.5 font-mono text-[10px] surface-muted">
+            <div className="mt-0.5 flex items-center justify-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.15em] surface-muted">
               <span>{c.label}</span>
               {c.delta && <span style={{ color: "var(--accent)" }}>{c.delta}</span>}
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ClubDeltaCard() {
+  return (
+    <div
+      className="rounded-2xl p-5"
+      style={{
+        background: "var(--bg-elevated)",
+        boxShadow: "0 0 0 1px var(--border)",
+      }}
+    >
+      <div className="flex items-baseline justify-between">
+        <span className="font-display text-lg font-semibold" style={accentStrong}>
+          7 Iron
+        </span>
+        <span
+          className="rounded-full px-2.5 py-0.5 font-mono text-[10px]"
+          style={{ background: "var(--accent-tint)", color: "var(--accent)" }}
+        >
+          leans L 4y
+        </span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-6">
+        <div>
+          <div className="flex items-baseline gap-1">
+            <span className="font-display text-3xl font-semibold tabular-nums" style={accentStrong}>
+              5.9
+            </span>
+            <span className="font-mono text-xs surface-muted">σ↕</span>
+          </div>
+          <div className="mt-1 flex flex-col font-mono text-[10px]" style={{ color: "var(--accent)" }}>
+            <span>↓0.6 vs stored</span>
+            <span className="surface-muted">↓0.8 vs prev</span>
+          </div>
+        </div>
+        <div>
+          <div className="flex items-baseline gap-1">
+            <span className="font-display text-3xl font-semibold tabular-nums" style={accentStrong}>
+              8.7
+            </span>
+            <span className="font-mono text-xs surface-muted">σ↔</span>
+          </div>
+          <div className="mt-1 flex flex-col font-mono text-[10px]" style={{ color: "var(--accent)" }}>
+            <span>↓0.8 vs stored</span>
+            <span className="surface-muted">↓1.1 vs prev</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -214,7 +299,7 @@ export default function RangePage() {
       }
       lede="Range mode is where the recommendations earn their accuracy. Pick a club, set a target, log shots — and the σ values for that club update live, shot by shot, until you've got a sample big enough to trust."
     >
-      <section className="container-prose pb-20">
+      <section className="container-prose pt-16 pb-20 sm:pt-24">
         <FeatureWalkthroughList
           steps={[
             {

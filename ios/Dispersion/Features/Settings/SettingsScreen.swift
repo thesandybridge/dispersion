@@ -35,6 +35,7 @@ public struct SettingsScreen: View {
                         helpGroup
                         unitsGroup
                         themeGroup
+                        iconGroup
                         paletteGroup
                         if settings.paletteMode == .custom {
                             customPaletteGroup
@@ -211,6 +212,64 @@ public struct SettingsScreen: View {
                 }
             }
         }
+    }
+
+    // MARK: App icon
+
+    @State private var iconStore = AppIconStore.shared
+
+    private var iconGroup: some View {
+        SettingsGroup(label: "App icon", systemImage: "app.gift", accent: DesignTokens.bentgrass) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Pick the look on your home screen. iOS 18 dark and tint modes adapt automatically.")
+                    .font(DispersionType.ui(12))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(AppIcon.all) { icon in
+                            iconTile(icon)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 14)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func iconTile(_ icon: AppIcon) -> some View {
+        let selected = iconStore.current.id == icon.id
+        Button {
+            Haptics.light()
+            Task { await iconStore.setIcon(icon) }
+        } label: {
+            VStack(spacing: 6) {
+                Image(icon.previewAsset)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(width: 64, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(
+                                selected ? DesignTokens.primary : Color.white.opacity(0.10),
+                                lineWidth: selected ? 2 : 1
+                            )
+                    )
+                Text(icon.displayName)
+                    .font(DispersionType.mono(10, weight: .medium))
+                    .foregroundStyle(selected ? DesignTokens.primary : DesignTokens.mutedForeground)
+            }
+            .frame(width: 76)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(icon.displayName) app icon\(selected ? ", selected" : "")")
     }
 
     // MARK: Lie multipliers

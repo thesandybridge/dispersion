@@ -15,3 +15,9 @@ Package.resolved
 
 # macOS
 .DS_Store
+
+# App-icon build artifacts (renders go straight into Assets.xcassets, the
+# previews/ dir is for visual sanity-check only).
+Dispersion/Resources/AppIconSource/previews/
+Dispersion/Resources/AppIconSource/.work.png
+Dispersion/Resources/AppIconSource/.vig.png

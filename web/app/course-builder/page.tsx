@@ -18,88 +18,145 @@ export const metadata: Metadata = {
 
 const accentStrong = { color: "var(--accent-strong)" };
 
-// ─── Stylized inline mockups ──────────────────────────────────────────
+// ─── Editorial visual frame ───────────────────────────────────────────
+
+function VisualFrame({ children, label }: { children: React.ReactNode; label: string }) {
+  return (
+    <div
+      className="overflow-hidden rounded-3xl"
+      style={{
+        background: "var(--bg-elevated)",
+        boxShadow:
+          "0 0 0 1px var(--border), 0 32px 64px -32px rgba(11, 61, 46, 0.20), 0 8px 16px -8px rgba(0,0,0,0.06)",
+      }}
+    >
+      <div
+        className="flex items-center justify-between border-b px-5 py-3 font-mono text-[10px] uppercase tracking-[0.2em]"
+        style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
+      >
+        <span>{label}</span>
+        <span className="flex gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "currentColor", opacity: 0.4 }} />
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "currentColor", opacity: 0.4 }} />
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: "currentColor", opacity: 0.4 }} />
+        </span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Visuals ──────────────────────────────────────────────────────────
 
 function HoleMockup() {
   return (
-    <div
-      className="aspect-[4/3] w-full overflow-hidden rounded-3xl shadow-2xl ring-1"
-      style={{
-        background:
-          "radial-gradient(ellipse at 50% 100%, #1a3a26, #0e1a13 70%)",
-        boxShadow: "0 24px 48px -16px rgba(0,0,0,0.35)",
-      }}
-    >
-      <svg
-        viewBox="0 0 400 300"
-        className="h-full w-full"
-        aria-hidden="true"
-      >
-        {/* "satellite" subtle grid */}
-        <defs>
-          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
-          </pattern>
-          <radialGradient id="green" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#62b375" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="#2c8a5e" stopOpacity="0.30" />
-          </radialGradient>
-        </defs>
-        <rect width="400" height="300" fill="url(#grid)" />
-
-        {/* Fairway corridor */}
-        <path
-          d="M180 280 C 175 230, 150 180, 160 130 C 170 95, 200 70, 235 60"
-          stroke="#2c8a5e"
-          strokeWidth="50"
-          strokeLinecap="round"
-          fill="none"
-          opacity="0.45"
-        />
-        <path
-          d="M180 280 C 175 230, 150 180, 160 130 C 170 95, 200 70, 235 60"
-          stroke="#62b375"
-          strokeWidth="50"
-          strokeLinecap="round"
-          fill="none"
-          opacity="0.18"
-        />
-
-        {/* Bunkers */}
-        <ellipse cx="135" cy="180" rx="22" ry="14" fill="#f0e7b8" opacity="0.75" />
-        <ellipse cx="218" cy="80" rx="14" ry="9" fill="#f0e7b8" opacity="0.75" />
-
-        {/* Green polygon */}
-        <ellipse cx="245" cy="55" rx="32" ry="22" fill="url(#green)" stroke="#62b375" strokeWidth="1" />
-
-        {/* Tee box */}
-        <rect x="170" y="265" width="20" height="10" rx="2" fill="#0072b2" stroke="#f6f1e1" strokeWidth="1" opacity="0.85" />
-
-        {/* Pin (flag) */}
-        <line x1="245" y1="55" x2="245" y2="35" stroke="#f6f1e1" strokeWidth="1.4" />
-        <polygon points="245,35 257,38 245,42" fill="#e85d4d" />
-        <circle cx="245" cy="55" r="2.5" fill="#0e1a13" stroke="#f6f1e1" strokeWidth="0.8" />
-
-        {/* Distance arc */}
-        <path
-          d="M180 270 L 245 55"
-          stroke="#62b375"
-          strokeWidth="0.8"
-          strokeDasharray="3 3"
-          opacity="0.5"
-        />
-        <text
-          x="220"
-          y="170"
-          fill="#a9d18e"
-          fontFamily="ui-monospace, SFMono-Regular, monospace"
-          fontSize="10"
-          opacity="0.85"
+    <VisualFrame label="Course · Hole 7 · Par 4">
+      <div className="relative aspect-[4/3] w-full">
+        <svg
+          viewBox="0 0 400 300"
+          className="absolute inset-0 h-full w-full"
+          aria-hidden="true"
         >
-          312y
-        </text>
-      </svg>
-    </div>
+          <defs>
+            <pattern id="topo" width="14" height="14" patternUnits="userSpaceOnUse">
+              <circle cx="2" cy="2" r="0.5" fill="var(--fg-muted)" opacity="0.18" />
+            </pattern>
+            <linearGradient id="fairwayGrad" x1="0" y1="1" x2="0.4" y2="0">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.10" />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.32" />
+            </linearGradient>
+          </defs>
+
+          <rect width="400" height="300" fill="url(#topo)" />
+
+          {/* Fairway corridor — soft tint, no harsh outline */}
+          <path
+            d="M180 280 C 175 230, 150 180, 160 130 C 170 95, 200 70, 235 60"
+            stroke="url(#fairwayGrad)"
+            strokeWidth="58"
+            strokeLinecap="round"
+            fill="none"
+          />
+          <path
+            d="M180 280 C 175 230, 150 180, 160 130 C 170 95, 200 70, 235 60"
+            stroke="var(--accent)"
+            strokeWidth="58"
+            strokeLinecap="round"
+            fill="none"
+            opacity="0.06"
+          />
+
+          {/* Bunkers — subtle, theme-tinted */}
+          <ellipse cx="135" cy="180" rx="20" ry="11" fill="var(--fg-soft)" opacity="0.30" />
+          <ellipse cx="218" cy="80" rx="13" ry="8" fill="var(--fg-soft)" opacity="0.30" />
+
+          {/* Green */}
+          <ellipse
+            cx="245"
+            cy="55"
+            rx="32"
+            ry="22"
+            fill="var(--accent)"
+            opacity="0.28"
+          />
+          <ellipse
+            cx="245"
+            cy="55"
+            rx="32"
+            ry="22"
+            fill="none"
+            stroke="var(--accent-strong)"
+            strokeWidth="1"
+            strokeDasharray="2 2"
+            opacity="0.55"
+          />
+
+          {/* Tee box marker */}
+          <circle cx="180" cy="270" r="5" fill="var(--accent-strong)" />
+          <circle cx="180" cy="270" r="9" fill="none" stroke="var(--accent-strong)" strokeWidth="0.8" opacity="0.5" />
+
+          {/* Distance line */}
+          <path
+            d="M180 270 L 245 55"
+            stroke="var(--accent-strong)"
+            strokeWidth="0.8"
+            strokeDasharray="4 4"
+            opacity="0.45"
+          />
+
+          {/* Pin + flag */}
+          <line x1="245" y1="55" x2="245" y2="34" stroke="var(--accent-strong)" strokeWidth="1.2" />
+          <path d="M245 34 L 257 38 L 245 42 Z" fill="var(--accent-strong)" />
+          <circle cx="245" cy="55" r="2" fill="var(--bg-elevated)" stroke="var(--accent-strong)" strokeWidth="1" />
+        </svg>
+
+        {/* Yardage callout (typographic) */}
+        <div className="absolute right-5 top-5 text-right">
+          <div
+            className="font-mono text-[10px] uppercase tracking-[0.2em]"
+            style={{ color: "var(--fg-muted)" }}
+          >
+            Pin · middle
+          </div>
+          <div
+            className="mt-0.5 font-display text-2xl font-semibold tabular-nums"
+            style={accentStrong}
+          >
+            312<span className="text-base font-normal surface-muted">y</span>
+          </div>
+        </div>
+
+        {/* Tee marker label */}
+        <div className="absolute bottom-5 left-5">
+          <div
+            className="font-mono text-[10px] uppercase tracking-[0.2em]"
+            style={{ color: "var(--fg-muted)" }}
+          >
+            Tee · white
+          </div>
+        </div>
+      </div>
+    </VisualFrame>
   );
 }
 
@@ -111,18 +168,21 @@ function StepPills() {
   ];
   return (
     <div className="flex justify-center">
-      <div className="rounded-full p-1.5 ring-1" style={{ background: "rgba(0,0,0,0.55)", boxShadow: "0 0 0 1px rgba(246,241,225,0.08)" }}>
+      <div
+        className="rounded-full p-1.5"
+        style={{ background: "var(--bg-elevated)", boxShadow: "0 0 0 1px var(--border)" }}
+      >
         <div className="flex gap-1">
           {steps.map((s) => (
             <span
               key={s.label}
-              className="rounded-full px-3.5 py-1.5 font-mono text-[11px] font-medium"
+              className="rounded-full px-3.5 py-1.5 font-mono text-[11px] font-medium tracking-wide"
               style={
                 s.active
-                  ? { background: "var(--accent)", color: "#0b3d2e" }
+                  ? { background: "var(--accent-strong)", color: "var(--bg)" }
                   : s.done
-                    ? { background: "rgba(246,241,225,0.10)", color: "#a9d18e" }
-                    : { color: "rgba(246,241,225,0.55)" }
+                    ? { color: "var(--accent)" }
+                    : { color: "var(--fg-muted)" }
               }
             >
               {s.done && !s.active ? "✓ " : ""}
@@ -137,60 +197,95 @@ function StepPills() {
 
 function AutoManualToggleVisual() {
   return (
-    <div
-      className="aspect-[4/3] w-full overflow-hidden rounded-3xl shadow-2xl"
-      style={{
-        background:
-          "radial-gradient(ellipse at 30% 70%, #1a3a26, #0e1a13 70%)",
-        boxShadow: "0 24px 48px -16px rgba(0,0,0,0.35)",
-      }}
-    >
-      <div className="flex h-full flex-col p-6">
-        <div className="flex items-center justify-between">
-          <span className="rounded-full bg-black/55 px-3 py-1.5 text-[11px] font-medium" style={{ color: "var(--accent)", boxShadow: "0 0 0 1px rgba(246,241,225,0.08)" }}>
-            <span className="inline-flex items-center gap-1">
+    <VisualFrame label="Course · draw mode">
+      <div className="flex h-full flex-col">
+        {/* Mode toggle row */}
+        <div
+          className="flex items-center justify-between border-b px-5 py-3"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div
+            className="flex rounded-full p-1"
+            style={{ background: "var(--bg)", boxShadow: "0 0 0 1px var(--border)" }}
+          >
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[10px] font-medium uppercase tracking-wider"
+              style={{ background: "var(--accent-strong)", color: "var(--bg)" }}
+            >
               <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor" className="h-3 w-3">
                 <path d="M5 16l4-8 6 14 4-12" strokeLinecap="round" />
               </svg>
-              Auto fill
+              Auto
             </span>
-          </span>
-          <span className="rounded-full bg-black/40 px-3 py-1.5 font-mono text-[11px]" style={{ color: "rgba(246,241,225,0.55)" }}>
-            ✏︎ Manual
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-wider"
+              style={{ color: "var(--fg-muted)" }}
+            >
+              ✏︎ Manual
+            </span>
+          </div>
+          <span
+            className="font-mono text-[10px] uppercase tracking-[0.2em]"
+            style={{ color: "var(--fg-muted)" }}
+          >
+            Fairway · 1
           </span>
         </div>
 
-        <div className="relative mt-auto">
-          <svg viewBox="0 0 400 200" className="h-full w-full">
-            {/* Drawn polygon — vertices visible */}
+        {/* Polygon canvas */}
+        <div className="relative aspect-[4/2.5] w-full">
+          <svg viewBox="0 0 400 250" className="absolute inset-0 h-full w-full">
+            <defs>
+              <pattern id="dots" width="14" height="14" patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="2" r="0.5" fill="var(--fg-muted)" opacity="0.18" />
+              </pattern>
+            </defs>
+            <rect width="400" height="250" fill="url(#dots)" />
+
+            {/* Drawn polygon */}
             <polygon
-              points="80,160 170,90 280,75 350,140 290,180 160,185"
-              fill="rgba(98, 179, 117, 0.30)"
-              stroke="#62b375"
-              strokeWidth="1.6"
+              points="80,180 170,90 280,75 350,140 290,210 160,205"
+              fill="var(--accent)"
+              fillOpacity="0.18"
+              stroke="var(--accent-strong)"
+              strokeWidth="1.5"
             />
+
             {/* Vertex handles */}
             {[
-              [80, 160], [170, 90], [280, 75], [350, 140], [290, 180], [160, 185],
-            ].map(([x, y], i) => (
-              <circle
-                key={i}
-                cx={x}
-                cy={y}
-                r={i === 1 ? 8 : 5}
-                fill={i === 1 ? "#f6f1e1" : "#62b375"}
-                stroke={i === 1 ? "#62b375" : "#f6f1e1"}
-                strokeWidth={i === 1 ? 2 : 1}
-              />
-            ))}
-            {/* Crosshair */}
-            <line x1="200" y1="60" x2="200" y2="200" stroke="rgba(246,241,225,0.5)" strokeWidth="0.6" />
-            <line x1="100" y1="130" x2="350" y2="130" stroke="rgba(246,241,225,0.5)" strokeWidth="0.6" />
-            <circle cx="200" cy="130" r="6" fill="none" stroke="#f6f1e1" strokeWidth="1.2" />
+              [80, 180], [170, 90], [280, 75], [350, 140], [290, 210], [160, 205],
+            ].map(([x, y], i) => {
+              const active = i === 1;
+              return (
+                <g key={i}>
+                  {active && (
+                    <circle
+                      cx={x}
+                      cy={y}
+                      r={14}
+                      fill="var(--accent)"
+                      opacity="0.20"
+                    />
+                  )}
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={active ? 6 : 4}
+                    fill="var(--bg-elevated)"
+                    stroke="var(--accent-strong)"
+                    strokeWidth={active ? 2 : 1.5}
+                  />
+                </g>
+              );
+            })}
+
+            {/* Crosshair on a guide */}
+            <line x1="200" y1="40" x2="200" y2="230" stroke="var(--fg-muted)" strokeWidth="0.5" opacity="0.35" strokeDasharray="2 4" />
+            <line x1="40" y1="140" x2="370" y2="140" stroke="var(--fg-muted)" strokeWidth="0.5" opacity="0.35" strokeDasharray="2 4" />
           </svg>
         </div>
       </div>
-    </div>
+    </VisualFrame>
   );
 }
 
@@ -203,61 +298,66 @@ function ScorecardEditorVisual() {
     { hole: 5, par: 4, yards: 425, hcp: 5 },
   ];
   return (
-    <div className="rounded-3xl surface-elev p-6 shadow-lg">
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-xs uppercase tracking-widest surface-muted">
-          Scorecard editor
-        </span>
-        <div className="flex gap-1">
-          {["Blue", "White", "Red"].map((t, i) => (
-            <span
-              key={t}
-              className="rounded-full px-2 py-0.5 font-mono text-[10px]"
-              style={
-                i === 1
-                  ? { background: "var(--accent)", color: "var(--bg)" }
-                  : { background: "var(--border)", color: "var(--fg-muted)" }
-              }
-            >
-              {t}
-            </span>
-          ))}
+    <VisualFrame label="Course · scorecard">
+      <div className="p-6">
+        <div className="flex items-center justify-between">
+          <span className="font-display text-base font-semibold" style={accentStrong}>
+            Front nine
+          </span>
+          <div className="flex gap-1">
+            {["Blue", "White", "Red"].map((t, i) => (
+              <span
+                key={t}
+                className="rounded-full px-2.5 py-0.5 font-mono text-[10px]"
+                style={
+                  i === 1
+                    ? { background: "var(--accent-strong)", color: "var(--bg)" }
+                    : { background: "var(--bg)", color: "var(--fg-muted)", boxShadow: "0 0 0 1px var(--border)" }
+                }
+              >
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
-      <table className="mt-4 w-full border-collapse text-sm">
-        <thead>
-          <tr className="surface-muted text-left font-mono text-[10px] uppercase tracking-widest">
-            <th className="py-2 pr-2">Hole</th>
-            <th className="py-2">Par</th>
-            <th className="py-2">Yards</th>
-            <th className="py-2 text-right">HCP</th>
-          </tr>
-        </thead>
-        <tbody>
-          {holes.map((h) => (
+        <table className="mt-5 w-full border-collapse text-sm">
+          <thead>
             <tr
-              key={h.hole}
-              className="border-t"
-              style={{ borderColor: "var(--border)" }}
+              className="border-b text-left font-mono text-[10px] uppercase tracking-[0.15em]"
+              style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
             >
-              <td className="py-2 pr-2 font-mono text-base" style={accentStrong}>
-                {h.hole}
-              </td>
-              <td className="py-2">
-                <span
-                  className="grid h-6 w-6 place-items-center rounded-full font-mono text-xs"
-                  style={{ background: "var(--accent)", color: "var(--bg)" }}
-                >
-                  {h.par}
-                </span>
-              </td>
-              <td className="py-2 font-mono text-sm surface-soft">{h.yards}</td>
-              <td className="py-2 text-right font-mono text-sm surface-muted">{h.hcp}</td>
+              <th className="py-2 pr-2">Hole</th>
+              <th className="py-2">Par</th>
+              <th className="py-2">Yards</th>
+              <th className="py-2 text-right">HCP</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {holes.map((h) => (
+              <tr
+                key={h.hole}
+                className="border-b last:border-b-0"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <td className="py-2.5 pr-2 font-mono text-base" style={accentStrong}>
+                  {h.hole}
+                </td>
+                <td className="py-2.5">
+                  <span
+                    className="grid h-6 w-6 place-items-center rounded-full font-mono text-xs font-semibold"
+                    style={{ background: "var(--accent-tint)", color: "var(--accent)" }}
+                  >
+                    {h.par}
+                  </span>
+                </td>
+                <td className="py-2.5 font-mono text-sm surface-soft">{h.yards}</td>
+                <td className="py-2.5 text-right font-mono text-sm surface-muted">{h.hcp}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </VisualFrame>
   );
 }
 
@@ -277,7 +377,7 @@ export default function CourseBuilderPage() {
       }
       lede="Search for a course, drop your tee boxes, place pin positions, and trace the fairways, greens, bunkers, and water onto Apple's satellite imagery. The map you build is yours — exportable, shareable, and works completely offline once it's downloaded."
     >
-      <section className="container-prose pb-20">
+      <section className="container-prose pt-16 pb-20 sm:pt-24">
         <FeatureWalkthroughList
           steps={[
             {

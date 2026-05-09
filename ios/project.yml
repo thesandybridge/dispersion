@@ -45,11 +45,14 @@ targets:
       - path: Dispersion
         excludes:
           - "**/*.md"
+          - "Resources/AppIconSource/**"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.dispersion.Dispersion
         INFOPLIST_KEY_CFBundleDisplayName: Dispersion
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-Sand AppIcon-Sunset AppIcon-Slate
   DispersionTests:
     type: bundle.unit-test
     platform: iOS
