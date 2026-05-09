@@ -1,13 +1,13 @@
-// Range practice field. Concentric distance arcs radiate from the target
-// at regular yard intervals (uniform scale — 1 yard maps to the same number
-// of pixels in both axes), so tapped coordinates land where the user
-// expects.
+// Range practice field. The user taps where their shot landed; we map the
+// tap into a (lat, long) yardage delta from the target and append it to
+// the session.
 //
-// Visual language is borrowed from DispersionViz so practice and
-// calculation feel like siblings: a soft "green" target zone with a flag
-// pin, heat-mapped probability contours that fill in as the session
-// builds up, and warm/playful colors. The radar is still readable in
-// both light and dark mode via DesignTokens semantic colors.
+// Visual language: warm and unfussy, not a military radar HUD. A soft
+// bentgrass-tinted field, thin solid distance arcs at the major
+// intervals only, and a clean accent crosshair at the target — no flag,
+// no concentric dashed rings. Heat-mapped probability contours fill in
+// once we have enough shots so the surface earns its visual weight from
+// the session itself.
 
 import SwiftUI
 
@@ -124,111 +124,54 @@ public struct RangeRadarField: View {
 
     private func drawScene(ctx: GraphicsContext, size: CGSize, geom: Geom, displayShots: [ShotXY]) {
         let center = geom.center
-
-        // 1. Background gradient — pine in dark mode, soft cream in light mode.
         let bgRect = CGRect(origin: .zero, size: size)
-        ctx.fill(Path(bgRect), with: .radialGradient(
-            Gradient(colors: [DesignTokens.background, DesignTokens.backgroundDeep]),
-            center: center,
-            startRadius: 0,
-            endRadius: max(size.width, size.height) * 0.65
-        ))
 
-        // Subtle bentgrass wash so the radar reads as a "field" rather than a
-        // blank panel. Stronger than before — gives the surface identity.
+        // 1. Background — flat surface tint, no vignette. We rely on the
+        // semantic background token + a faint warm wash so the radar reads
+        // as a friendly practice surface rather than a deep dark cone.
+        ctx.fill(Path(bgRect), with: .color(DesignTokens.background))
         ctx.fill(
             Path(bgRect),
-            with: .radialGradient(
+            with: .linearGradient(
                 Gradient(colors: [
-                    DesignTokens.bentgrass.opacity(0.10),
-                    DesignTokens.bentgrass.opacity(0.0),
+                    DesignTokens.bentgrass.opacity(0.07),
+                    DesignTokens.bentgrass.opacity(0.03),
                 ]),
-                center: center,
-                startRadius: 0,
-                endRadius: max(size.width, size.height) * 0.55
+                startPoint: CGPoint(x: 0, y: 0),
+                endPoint: CGPoint(x: 0, y: size.height)
             )
         )
 
-        // 2. Distance arcs — concentric, dashed, in a bentgrass tint that
-        // stays subtle but warmer than plain border lines.
-        let step = arcStep(for: geom.span)
+        // 2. Distance arcs — *only* the major intervals, drawn as thin
+        // solid bentgrass lines at very low opacity. Drafting paper, not
+        // a sweeping radar.
+        let majorStep = arcStep(for: geom.span)
         let maxArc = geom.span * 1.5
-        var dist = step
+        var dist = majorStep
         while dist <= maxArc {
             let r = CGFloat(dist) * geom.scale
             let arcPath = Path(ellipseIn: CGRect(
                 x: center.x - r, y: center.y - r,
                 width: r * 2, height: r * 2
             ))
-            let isMainArc = dist.truncatingRemainder(dividingBy: step * 2) == 0 || step >= 10
             ctx.stroke(
                 arcPath,
-                with: .color(DesignTokens.bentgrass.opacity(isMainArc ? 0.22 : 0.10)),
-                style: StrokeStyle(lineWidth: 0.7, dash: [2, 3])
+                with: .color(DesignTokens.bentgrass.opacity(0.16)),
+                lineWidth: 0.7
             )
 
-            let showLabel = step < 10 ? dist.truncatingRemainder(dividingBy: 10) == 0 || dist == step : true
-            if showLabel {
-                ctx.draw(
-                    Text("\(Int(dist))y")
-                        .font(DispersionType.mono(8, weight: .regular))
-                        .foregroundStyle(DesignTokens.subtleForeground),
-                    at: CGPoint(x: center.x + r + 2, y: center.y - 6),
-                    anchor: .leading
-                )
-            }
-            dist += step
-        }
-
-        // 3. Centerline (dashed vertical) — sight line from player to target.
-        let centerline = Path { p in
-            p.move(to: CGPoint(x: center.x, y: 0))
-            p.addLine(to: CGPoint(x: center.x, y: size.height))
-        }
-        ctx.stroke(
-            centerline,
-            with: .color(DesignTokens.border),
-            style: StrokeStyle(lineWidth: 0.7, dash: [4, 5])
-        )
-
-        // 4. Target green — soft rounded-rect polygon with bentgrass gradient
-        // fill and accent border. Same idiom as DispersionViz.drawSafeZone.
-        // Default 25y across so a real green is depicted at the target.
-        let zoneSize = CGFloat(25) * geom.scale
-        let zoneRect = CGRect(
-            x: center.x - zoneSize / 2,
-            y: center.y - zoneSize / 2,
-            width: zoneSize,
-            height: zoneSize
-        )
-        let r = min(zoneRect.width, zoneRect.height) * 0.32
-        let zonePath = Path(roundedRect: zoneRect, cornerRadius: r)
-        ctx.fill(
-            zonePath,
-            with: .linearGradient(
-                Gradient(colors: [
-                    DesignTokens.bentgrass.opacity(0.22),
-                    DesignTokens.fairwayShadow.opacity(0.14),
-                ]),
-                startPoint: CGPoint(x: zoneRect.midX, y: zoneRect.minY),
-                endPoint: CGPoint(x: zoneRect.midX, y: zoneRect.maxY)
+            ctx.draw(
+                Text("\(Int(dist))y")
+                    .font(DispersionType.mono(8, weight: .regular))
+                    .foregroundStyle(DesignTokens.subtleForeground),
+                at: CGPoint(x: center.x + r + 2, y: center.y - 6),
+                anchor: .leading
             )
-        )
-        ctx.stroke(
-            zonePath,
-            with: .color(DesignTokens.bentgrass.opacity(0.70)),
-            style: StrokeStyle(lineWidth: 1.5)
-        )
-        let innerRect = zoneRect.insetBy(dx: zoneRect.width * 0.05, dy: zoneRect.height * 0.05)
-        let innerR = min(innerRect.width, innerRect.height) * 0.32
-        ctx.stroke(
-            Path(roundedRect: innerRect, cornerRadius: innerR),
-            with: .color(.white.opacity(0.10)),
-            style: StrokeStyle(lineWidth: 0.5)
-        )
+            dist += majorStep
+        }
 
-        // 5. Heat-mapped probability contours from measured σ — dim outer to
-        // bright inner, like DispersionViz. Builds in as the session grows.
+        // 3. Heat-mapped probability contours from measured σ — only once we
+        // have a meaningful sample. Builds in as the session grows.
         if measured.n >= 3, measured.carrySd > 0, measured.lateralSd > 0 {
             let biasCenter = CGPoint(
                 x: center.x + CGFloat(measured.latBias) * geom.scale,
@@ -246,12 +189,12 @@ public struct RangeRadarField: View {
                     height: ry * 2
                 ))
                 let t = Double(i) / Double(max(kSteps.count - 1, 1))
-                let alpha = 0.06 + t * 0.30
+                let alpha = 0.06 + t * 0.28
                 let color = ramp[min(i + 2, ramp.count - 1)].opacity(alpha)
                 ctx.fill(path, with: .color(color))
             }
 
-            // Bias arrow + mean dot — only when we have a meaningful bias.
+            // Bias arrow + mean dot, only if the bias is meaningful.
             let biasMagnitude = sqrt(measured.latBias * measured.latBias + measured.longBias * measured.longBias)
             if biasMagnitude > 1.5 {
                 var arrow = Path()
@@ -269,19 +212,35 @@ public struct RangeRadarField: View {
             }
         }
 
-        // 6. Flag pin at the target — same glyph as DispersionViz.drawPin.
-        drawPin(ctx: ctx, at: center)
+        // 4. Target crosshair — clean accent reticle, no pin, no flag. Just
+        // enough chrome to say "aim here." Cross arms are short so the dot
+        // reads first.
+        let crossLen: CGFloat = 14
+        let crossInner: CGFloat = 5
+        let accent = DesignTokens.primary
+        var cross = Path()
+        cross.move(to: CGPoint(x: center.x - crossLen, y: center.y))
+        cross.addLine(to: CGPoint(x: center.x - crossInner, y: center.y))
+        cross.move(to: CGPoint(x: center.x + crossInner, y: center.y))
+        cross.addLine(to: CGPoint(x: center.x + crossLen, y: center.y))
+        cross.move(to: CGPoint(x: center.x, y: center.y - crossLen))
+        cross.addLine(to: CGPoint(x: center.x, y: center.y - crossInner))
+        cross.move(to: CGPoint(x: center.x, y: center.y + crossInner))
+        cross.addLine(to: CGPoint(x: center.x, y: center.y + crossLen))
+        ctx.stroke(cross, with: .color(accent.opacity(0.85)), lineWidth: 1.4)
+        let centerDot = Path(ellipseIn: CGRect(x: center.x - 3, y: center.y - 3, width: 6, height: 6))
+        ctx.fill(centerDot, with: .color(accent))
 
-        // 7. Target yardage label, anchored to the right edge.
+        // 5. Target yardage label, anchored to the right edge.
         ctx.draw(
             Text("\(Int(targetYards))y")
                 .font(DispersionType.mono(10, weight: .medium))
-                .foregroundStyle(DesignTokens.flag),
+                .foregroundStyle(accent),
             at: CGPoint(x: size.width - 10, y: center.y - 10),
             anchor: .trailing
         )
 
-        // 8. Compass labels — adapt to light/dark via subtleForeground.
+        // 6. Compass labels — adapt to light/dark via subtleForeground.
         let compassFont = Font.system(size: 8, design: .monospaced).weight(.medium)
         let compassColor = DesignTokens.subtleForeground
         ctx.draw(Text("LONG").font(compassFont).foregroundStyle(compassColor),
@@ -293,7 +252,7 @@ public struct RangeRadarField: View {
         ctx.draw(Text("R").font(compassFont).foregroundStyle(compassColor),
                  at: CGPoint(x: size.width - 12, y: center.y), anchor: .center)
 
-        // 9. Logged shot dots. Latest shot pops with a bentgrass halo + brand
+        // 7. Logged shot dots. Latest shot pops with an accent halo + brand
         // accent fill; older shots use foreground so they stay visible in
         // light mode (cream-on-cream would vanish).
         for (i, shot) in displayShots.enumerated() {
@@ -320,51 +279,22 @@ public struct RangeRadarField: View {
             }
         }
 
-        // 10. Empty hint — playful prompt, not a debug label.
+        // 8. Empty hint.
         if displayShots.isEmpty {
             ctx.draw(
                 Text("TAP WHERE IT LANDED")
                     .font(DispersionType.mono(10, weight: .semibold))
                     .tracking(2.4)
-                    .foregroundStyle(DesignTokens.foreground.opacity(0.6)),
-                at: CGPoint(x: center.x, y: center.y + 60)
+                    .foregroundStyle(DesignTokens.foreground.opacity(0.55)),
+                at: CGPoint(x: center.x, y: center.y + 40)
             )
         }
     }
 
-    // MARK: - Pin glyph
-
-    /// Borrowed from DispersionViz.drawPin so the practice radar and the
-    /// calculator viz share the same target language.
-    private func drawPin(ctx: GraphicsContext, at point: CGPoint) {
-        // Stick.
-        let stickTop = CGPoint(x: point.x, y: point.y - 22)
-        var stick = Path()
-        stick.move(to: point)
-        stick.addLine(to: stickTop)
-        ctx.stroke(stick, with: .color(.white.opacity(0.92)), lineWidth: 1.5)
-
-        // Flag triangle.
-        var flag = Path()
-        flag.move(to: stickTop)
-        flag.addLine(to: CGPoint(x: stickTop.x + 12, y: stickTop.y + 4))
-        flag.addLine(to: CGPoint(x: stickTop.x, y: stickTop.y + 8))
-        flag.closeSubpath()
-        ctx.fill(flag, with: .color(palette.flag))
-        ctx.stroke(flag, with: .color(palette.flag.opacity(0.8)), lineWidth: 0.5)
-
-        // Cup.
-        let cup = Path(ellipseIn: CGRect(
-            x: point.x - 3, y: point.y - 1.5, width: 6, height: 3
-        ))
-        ctx.fill(cup, with: .color(.black.opacity(0.55)))
-        ctx.stroke(cup, with: .color(.white.opacity(0.6)), lineWidth: 0.8)
-    }
-
     private func arcStep(for span: Double) -> Double {
-        if span <= 15 { return 3 }
-        if span <= 35 { return 5 }
-        if span <= 70 { return 10 }
-        return 20
+        if span <= 15 { return 5 }
+        if span <= 35 { return 10 }
+        if span <= 70 { return 20 }
+        return 30
     }
 }
