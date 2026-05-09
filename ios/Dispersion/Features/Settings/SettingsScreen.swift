@@ -18,6 +18,7 @@ public struct SettingsScreen: View {
     @State private var status: (kind: StatusKind, text: String)?
     @State private var devTapCount: Int = 0
     @State private var showDev: Bool = false
+    @State private var showHelp: Bool = false
 
     private enum StatusKind { case ok, err }
 
@@ -31,8 +32,18 @@ public struct SettingsScreen: View {
                 VStack(alignment: .leading, spacing: 0) {
                     hero
                     VStack(alignment: .leading, spacing: 16) {
+                        helpGroup
                         unitsGroup
                         themeGroup
+                        paletteGroup
+                        if settings.paletteMode == .custom {
+                            customPaletteGroup
+                        }
+                        feedbackGroup
+                        conditionsTuningGroup
+                        recommendationTuningGroup
+                        lieMultipliersGroup
+                        outlierGroup
                         storageGroup
                         dataGroup
                         if showDev { developerGroup }
@@ -94,6 +105,9 @@ public struct SettingsScreen: View {
             Text("This removes every club. Cannot be undone.")
         }
         .onAppear { dial.setActions([]) }
+        .fullScreenCover(isPresented: $showHelp) {
+            HelpScreen(onClose: { showHelp = false })
+        }
         .fileImporter(isPresented: $importerOpen, allowedContentTypes: [.json]) { result in
             importBackup(result)
         }
@@ -197,6 +211,432 @@ public struct SettingsScreen: View {
                 }
             }
         }
+    }
+
+    // MARK: Lie multipliers
+
+    @State private var lieStore = LieMultiplierStore.shared
+
+    private var lieMultipliersGroup: some View {
+        SettingsGroup(label: "Lie σ multipliers", systemImage: "leaf", accent: DesignTokens.bentgrass) {
+            ForEach(LieType.allCases, id: \.self) { lie in
+                lieMultiplierRow(lie)
+            }
+            // Footer: explanation + reset.
+            HStack(alignment: .center, spacing: 8) {
+                Text("Defaults are estimates — adjust to your game.")
+                    .font(DispersionType.ui(11))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+                Spacer()
+                Button {
+                    lieStore.resetAll()
+                    Haptics.medium()
+                } label: {
+                    Text("Reset all")
+                        .font(DispersionType.mono(10, weight: .medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(DesignTokens.surface))
+                        .foregroundStyle(DesignTokens.foreground)
+                }
+                .buttonStyle(.plain)
+                .opacity(lieStore.overrides.isEmpty ? 0.4 : 1)
+                .disabled(lieStore.overrides.isEmpty)
+                .accessibilityLabel("Reset all lie multipliers to defaults")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    @ViewBuilder
+    private func lieMultiplierRow(_ lie: LieType) -> some View {
+        let current = lieStore.multiplier(for: lie)
+        let isOverridden = lieStore.isOverridden(lie)
+        let binding = Binding<Double>(
+            get: { current },
+            set: { lieStore.setOverride($0, for: lie) }
+        )
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(lie.label)
+                    .font(DispersionType.ui(13, weight: .medium))
+                    .foregroundStyle(DesignTokens.foreground)
+                Spacer()
+                Text("×\(String(format: "%.2f", current))")
+                    .font(DispersionType.mono(12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(isOverridden ? DesignTokens.primary : DesignTokens.foreground)
+                if isOverridden {
+                    Button {
+                        lieStore.setOverride(nil, for: lie)
+                        Haptics.light()
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 10, weight: .medium))
+                            .frame(width: 22, height: 22)
+                            .background(Circle().fill(DesignTokens.surface))
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Reset \(lie.label) to default")
+                }
+            }
+            Slider(
+                value: binding,
+                in: LieType.multiplierRange,
+                step: 0.05,
+                onEditingChanged: { editing in
+                    if !editing { Haptics.light() }
+                }
+            )
+            .tint(isOverridden ? DesignTokens.primary : DesignTokens.foreground.opacity(0.6))
+            .accessibilityLabel("\(lie.label) sigma multiplier")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(divider, alignment: .bottom)
+    }
+
+    private var divider: some View {
+        DSeparator()
+            .padding(.horizontal, 16)
+            .opacity(0.4)
+    }
+
+    // MARK: Help & tutorials
+
+    private var helpGroup: some View {
+        SettingsGroup(label: "Help", systemImage: "questionmark.circle", accent: DesignTokens.primary) {
+            Button { showHelp = true; Haptics.light() } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Help & tutorials")
+                            .font(DispersionType.ui(14, weight: .medium))
+                            .foregroundStyle(DesignTokens.foreground)
+                        Text("How to read the calculator, log range shots, build a course, and more.")
+                            .font(DispersionType.ui(12))
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(DesignTokens.mutedForeground.opacity(0.5))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open help and tutorials")
+        }
+    }
+
+    // MARK: Palette mode + custom palette
+
+    @State private var customPalette = CustomPaletteStore.shared
+
+    private var paletteGroup: some View {
+        SettingsGroup(label: "Color theme", systemImage: "paintbrush", accent: DesignTokens.primary) {
+            ForEach(PaletteMode.allCases, id: \.self) { mode in
+                paletteModeRow(mode)
+            }
+        }
+    }
+
+    private func paletteModeRow(_ mode: PaletteMode) -> some View {
+        let isActive = settings.paletteMode == mode
+        let preview = (mode == .custom)
+            ? customPalette.resolved()
+            : Palettes.resolve(mode)
+
+        return Button {
+            // Switching INTO custom seeds it from whatever's currently active
+            // so the user has a non-blank starting point.
+            if mode == .custom && settings.paletteMode != .custom {
+                customPalette.seed(from: settings.paletteMode)
+            }
+            settings.setPaletteMode(mode)
+            Haptics.light()
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                paletteSwatch(preview)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mode.label)
+                        .font(DispersionType.ui(13, weight: .medium))
+                        .foregroundStyle(DesignTokens.foreground)
+                    Text(mode.helper)
+                        .font(DispersionType.ui(11))
+                        .foregroundStyle(DesignTokens.mutedForeground)
+                }
+                Spacer()
+                if isActive {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(DesignTokens.primary)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(divider, alignment: .bottom)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(mode.label). \(mode.helper)")
+        .accessibilityAddTraits(isActive ? [.isSelected, .isButton] : .isButton)
+    }
+
+    /// 5-stop horizontal swatch showing how the probability gradient reads
+    /// in the given palette. Lets the user preview before switching.
+    private func paletteSwatch(_ palette: Palette) -> some View {
+        HStack(spacing: 2) {
+            ForEach(Array([
+                palette.pStrong, palette.pFavored, palette.pMarginal,
+                palette.pPoor, palette.danger
+            ].enumerated()), id: \.offset) { _, c in
+                Rectangle().fill(c).frame(width: 8, height: 24)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+        )
+    }
+
+    // MARK: Custom palette pickers
+
+    private var customPaletteGroup: some View {
+        SettingsGroup(label: "Custom colors", systemImage: "paintpalette", accent: DesignTokens.primary) {
+            ForEach(CustomPaletteStore.Section.allCases, id: \.self) { section in
+                customSectionHeader(section.label)
+                ForEach(CustomPaletteStore.Slot.allCases.filter { $0.section == section }, id: \.self) { slot in
+                    customSlotRow(slot)
+                }
+            }
+            HStack(spacing: 8) {
+                Spacer()
+                ForEach([PaletteMode.standard, .redGreenSafe, .blueYellowSafe], id: \.self) { mode in
+                    Button {
+                        customPalette.seed(from: mode)
+                        Haptics.medium()
+                    } label: {
+                        Text("From \(mode.label)")
+                            .font(DispersionType.mono(10, weight: .medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(DesignTokens.surface))
+                            .foregroundStyle(DesignTokens.foreground)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Seed custom palette from \(mode.label)")
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    private func customSectionHeader(_ label: String) -> some View {
+        HStack {
+            Text(label.uppercased())
+                .font(DispersionType.mono(9, weight: .medium))
+                .tracking(1.6)
+                .foregroundStyle(DesignTokens.mutedForeground)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
+    }
+
+    private func customSlotRow(_ slot: CustomPaletteStore.Slot) -> some View {
+        let binding = Binding<Color>(
+            get: { customPalette.color(for: slot) },
+            set: { customPalette.setColor($0, for: slot) }
+        )
+
+        return HStack(alignment: .center, spacing: 12) {
+            ColorPicker("", selection: binding, supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 32, height: 32)
+            Text(slot.label)
+                .font(DispersionType.ui(13, weight: .medium))
+                .foregroundStyle(DesignTokens.foreground)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(divider, alignment: .bottom)
+    }
+
+    // MARK: Feedback (haptics + sounds)
+
+    private var feedbackGroup: some View {
+        SettingsGroup(label: "Feedback", systemImage: "hand.tap", accent: DesignTokens.primary) {
+            SettingsRow(label: "Haptics", helper: "Tactile feedback on taps and confirmations") {
+                DToggleGroup(
+                    options: HapticsIntensity.allCases.map {
+                        DToggleOption(value: $0, label: $0.label)
+                    },
+                    selection: Binding(
+                        get: { settings.hapticsIntensity },
+                        set: { if let v = $0 { settings.setHapticsIntensity(v); Haptics.light() } }
+                    )
+                )
+            }
+            SettingsRow(label: "System sounds", helper: "Toggle off to silence success / error cues") {
+                DSwitch(Binding(
+                    get: { settings.soundsEnabled },
+                    set: { settings.setSoundsEnabled($0) }
+                ))
+            }
+        }
+    }
+
+    // MARK: Conditions tuning
+
+    @State private var tuning = CalculatorTuningStore.shared
+
+    private var conditionsTuningGroup: some View {
+        SettingsGroup(label: "Conditions tuning", systemImage: "wind", accent: DesignTokens.primary) {
+            tuningSliderRow(
+                label: "Wind",
+                helper: "Yards of distance per mph of wind",
+                value: tuning.windYardsPerMph,
+                range: CalculatorTuningStore.windRange,
+                step: 0.05,
+                defaultValue: 1.0,
+                format: { "×\(String(format: "%.2f", $0))" },
+                onChange: { tuning.setWindYardsPerMph($0) }
+            )
+            tuningSliderRow(
+                label: "Elevation",
+                helper: "Yards of distance per foot of elevation",
+                value: tuning.elevYardsPerFoot,
+                range: CalculatorTuningStore.elevRange,
+                step: 0.05,
+                defaultValue: 1.0,
+                format: { "×\(String(format: "%.2f", $0))" },
+                onChange: { tuning.setElevYardsPerFoot($0) }
+            )
+        }
+    }
+
+    // MARK: Recommendation tuning
+
+    private var recommendationTuningGroup: some View {
+        SettingsGroup(label: "Recommendation", systemImage: "scope", accent: DesignTokens.primary) {
+            tuningSliderRow(
+                label: "Short-side bias",
+                helper: "DECADE penalty on clubs that fall short. Higher = aggressively prefer 'take more club'",
+                value: tuning.shortSideBias,
+                range: CalculatorTuningStore.biasRange,
+                step: 0.01,
+                defaultValue: 0.08,
+                format: { String(format: "%.2f", $0) },
+                onChange: { tuning.setShortSideBias($0) }
+            )
+        }
+    }
+
+    // MARK: Outlier threshold
+
+    private var outlierGroup: some View {
+        SettingsGroup(label: "Shot filtering", systemImage: "line.3.horizontal.decrease.circle", accent: DesignTokens.primary) {
+            tuningSliderRow(
+                label: "Outlier threshold",
+                helper: "Shots with deltas beyond this are treated as bad data and excluded from σ math",
+                value: tuning.shotOutlierYards,
+                range: CalculatorTuningStore.outlierRange,
+                step: 5,
+                defaultValue: 100,
+                format: { "\(Int($0))y" },
+                onChange: { tuning.setShotOutlierYards($0) }
+            )
+            SettingsRow(label: "Replay tutorial", helper: "Re-show the onboarding wizard") {
+                Button {
+                    settings.resetOnboarding()
+                    Haptics.success()
+                    status = (.ok, "Tutorial will appear next launch.")
+                } label: {
+                    Text("Replay")
+                        .font(DispersionType.mono(11, weight: .medium))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(DesignTokens.surface))
+                        .foregroundStyle(DesignTokens.foreground)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Reusable slider row used by the calculator-tuning groups. Shows the
+    /// label, helper, current value pill (accent-tinted when overridden), an
+    /// undo button when the value differs from the default, and a slider.
+    @ViewBuilder
+    private func tuningSliderRow(
+        label: String,
+        helper: String?,
+        value: Double,
+        range: ClosedRange<Double>,
+        step: Double,
+        defaultValue: Double,
+        format: @escaping (Double) -> String,
+        onChange: @escaping (Double) -> Void
+    ) -> some View {
+        let isOverridden = abs(value - defaultValue) > step / 2
+        let binding = Binding<Double>(
+            get: { value },
+            set: { onChange($0) }
+        )
+
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label).font(DispersionType.ui(13, weight: .medium))
+                        .foregroundStyle(DesignTokens.foreground)
+                    if let helper {
+                        Text(helper)
+                            .font(DispersionType.ui(11))
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                    }
+                }
+                Spacer()
+                Text(format(value))
+                    .font(DispersionType.mono(12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(isOverridden ? DesignTokens.primary : DesignTokens.foreground)
+                if isOverridden {
+                    Button {
+                        onChange(defaultValue)
+                        Haptics.light()
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 10, weight: .medium))
+                            .frame(width: 22, height: 22)
+                            .background(Circle().fill(DesignTokens.surface))
+                            .foregroundStyle(DesignTokens.mutedForeground)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Reset \(label) to default")
+                }
+            }
+            Slider(
+                value: binding,
+                in: range,
+                step: step,
+                onEditingChanged: { editing in
+                    if !editing { Haptics.light() }
+                }
+            )
+            .tint(isOverridden ? DesignTokens.primary : DesignTokens.foreground.opacity(0.6))
+            .accessibilityLabel(label)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(divider, alignment: .bottom)
     }
 
     private var storageGroup: some View {

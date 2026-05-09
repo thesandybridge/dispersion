@@ -14,8 +14,15 @@ public enum AppConfig {
     public static let shotOutlierYards: Double = 100
 
     /// Filters a shot collection down to records that look like real shots.
-    public static func validShots<S: Sequence>(_ shots: S) -> [Shot] where S.Element == Shot {
-        shots.filter { abs($0.longDelta) < shotOutlierYards && abs($0.latDelta) < shotOutlierYards }
+    /// Optional `threshold` overrides `shotOutlierYards`; the calculator
+    /// passes `CalculatorTuningStore.shared.shotOutlierYards` so the user's
+    /// preference applies to bag-stat aggregation too.
+    public static func validShots<S: Sequence>(
+        _ shots: S,
+        threshold: Double? = nil
+    ) -> [Shot] where S.Element == Shot {
+        let t = threshold ?? shotOutlierYards
+        return shots.filter { abs($0.longDelta) < t && abs($0.latDelta) < t }
     }
 
     // MARK: Statistics windows

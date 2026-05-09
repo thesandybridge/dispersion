@@ -1,4 +1,4 @@
-// 4-step onboarding wizard: Hello, MathPrimer, FirstClub, Ready.
+// 5-step onboarding wizard: Hello, MathPrimer, Theme, FirstClub, Ready.
 
 import SwiftData
 import SwiftUI
@@ -32,8 +32,9 @@ public struct OnboardingScreen: View {
                         switch step {
                         case 1: stepHello
                         case 2: stepMathPrimer
-                        case 3: stepFirstClub
-                        case 4: stepReady
+                        case 3: stepTheme
+                        case 4: stepFirstClub
+                        case 5: stepReady
                         default: stepHello
                         }
                     }
@@ -52,9 +53,11 @@ public struct OnboardingScreen: View {
 
     // MARK: - Progress
 
+    private static let totalSteps: Int = 5
+
     private var progressBar: some View {
         HStack(spacing: 4) {
-            ForEach(1...4, id: \.self) { i in
+            ForEach(1...Self.totalSteps, id: \.self) { i in
                 Capsule()
                     .fill(i <= step ? DesignTokens.primary : DesignTokens.muted)
                     .frame(height: 3)
@@ -149,7 +152,99 @@ public struct OnboardingScreen: View {
         }
     }
 
-    // MARK: - Step 3: First Club
+    // MARK: - Step 3: Theme
+
+    private var stepTheme: some View {
+        // Custom is intentionally absent here — too much choice for a
+        // first-run wizard. It's available later in Settings.
+        let modes: [PaletteMode] = [.standard, .redGreenSafe, .blueYellowSafe]
+
+        return VStack(alignment: .leading, spacing: 16) {
+            Text("Appearance")
+                .eyebrow(color: DesignTokens.primary)
+            Text("Pick a color theme.")
+                .font(DispersionType.display(32, weight: .regular))
+                .tracking(-0.8)
+                .foregroundStyle(DesignTokens.foreground)
+            Text("The probability gradient drives every recommendation card and the dispersion contours. If you have red-green or blue-yellow color vision deficiency, pick the safe variant.")
+                .font(DispersionType.ui(14))
+                .foregroundStyle(DesignTokens.foreground.opacity(0.6))
+                .lineSpacing(3)
+
+            VStack(spacing: 10) {
+                ForEach(modes, id: \.self) { mode in
+                    onboardingPaletteRow(mode)
+                }
+            }
+            .padding(.top, 8)
+
+            Text("You can change this anytime in Settings — and build a fully custom palette there too.")
+                .font(DispersionType.ui(12))
+                .foregroundStyle(DesignTokens.mutedForeground)
+                .padding(.top, 4)
+        }
+    }
+
+    private func onboardingPaletteRow(_ mode: PaletteMode) -> some View {
+        let isActive = settings.paletteMode == mode
+        let preview = Palettes.resolve(mode)
+        return Button {
+            settings.setPaletteMode(mode)
+            Haptics.light()
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                onboardingPaletteSwatch(preview)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mode.label)
+                        .font(DispersionType.ui(15, weight: .medium))
+                        .foregroundStyle(DesignTokens.foreground)
+                    Text(mode.helper)
+                        .font(DispersionType.ui(12))
+                        .foregroundStyle(DesignTokens.mutedForeground)
+                }
+                Spacer(minLength: 0)
+                if isActive {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(DesignTokens.primary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isActive ? DesignTokens.primary.opacity(0.12) : DesignTokens.surface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(
+                                isActive ? DesignTokens.primary.opacity(0.5) : DesignTokens.border,
+                                lineWidth: 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(mode.label). \(mode.helper)")
+        .accessibilityAddTraits(isActive ? [.isSelected, .isButton] : .isButton)
+    }
+
+    private func onboardingPaletteSwatch(_ palette: Palette) -> some View {
+        HStack(spacing: 2) {
+            ForEach(Array([
+                palette.pStrong, palette.pFavored, palette.pMarginal,
+                palette.pPoor, palette.danger
+            ].enumerated()), id: \.offset) { _, c in
+                Rectangle().fill(c).frame(width: 10, height: 38)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+        )
+    }
+
+    // MARK: - Step 4: First Club
 
     private var stepFirstClub: some View {
         let unit = settings.unit
@@ -208,7 +303,7 @@ public struct OnboardingScreen: View {
         }
     }
 
-    // MARK: - Step 4: Ready
+    // MARK: - Step 5: Ready
 
     private var stepReady: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -300,7 +395,7 @@ public struct OnboardingScreen: View {
             }
             Spacer()
 
-            if step < 4 {
+            if step < Self.totalSteps {
                 Button {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                         step += 1

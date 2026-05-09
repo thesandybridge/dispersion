@@ -15,7 +15,9 @@ public struct CalculatorScreen: View {
     @State private var settings = SettingsStore.shared
     @State private var session  = SessionStore.shared
     @State private var dial     = DialStore.shared
+    @State private var tuning   = CalculatorTuningStore.shared
     @Environment(\.themeAccent) private var accent
+    @Environment(\.palette) private var palette
 
     @State private var zoneOpen: Bool = false
     @State private var logOpen: Bool = false
@@ -31,11 +33,24 @@ public struct CalculatorScreen: View {
         Conditions.effectiveDistance(
             target: scenario.distance + scenario.pinPosition.distanceAdjustment,
             windMph: scenario.windMph,
-            elevationFt: scenario.elevationFt
+            elevationFt: scenario.elevationFt,
+            windYardsPerMph: tuning.windYardsPerMph,
+            elevYardsPerFoot: tuning.elevYardsPerFoot
         )
     }
 
-    private var lieMul: Double { scenario.lie.sigmaMultiplier }
+    private var lieMul: Double { LieMultiplierStore.shared.multiplier(for: scenario.lie) }
+
+    /// What kind of target is the user aiming at — drives the visual
+    /// treatment in DispersionViz (flag pin for greens, aim crosshair for
+    /// fairway corridors) and whether the pin-position pill is shown.
+    private var currentZoneKind: ZoneKind {
+        Presets.kind(
+            presetId: scenario.presetId,
+            width: scenario.width,
+            depth: scenario.depth
+        )
+    }
 
     private var adjustedClubs: [Club] {
         let dist = playingDistance
@@ -64,7 +79,11 @@ public struct CalculatorScreen: View {
             safeZoneDepthYards: scenario.depth,
             aimLateralYards: scenario.aimLateralYards
         )
-        return Probability.rankClubs(adjustedClubs, scenario: s)
+        return Probability.rankClubs(
+            adjustedClubs,
+            scenario: s,
+            shortSideBias: tuning.shortSideBias
+        )
     }
 
     private var qualifying: [ClubResult] {
@@ -132,11 +151,12 @@ public struct CalculatorScreen: View {
                     zoneDepth: scenario.depth,
                     aimLateralYards: scenario.aimLateralYards,
                     pinPosition: scenario.pinPosition,
+                    zoneKind: currentZoneKind,
                     liveProbability: vr.probabilityInZone,
                     contours: 7,
                     facets: 28,
                     background: .clear,
-                    onPinTap: cyclePinPosition
+                    onPinTap: currentZoneKind == .green ? cyclePinPosition : nil
                 )
                 .ignoresSafeArea()
                 .overlay {
@@ -303,9 +323,13 @@ public struct CalculatorScreen: View {
 
             distanceDisplay
 
-            // Pin position + zone preset, side by side as floating capsules
+            // Pin position + zone preset, side by side as floating capsules.
+            // Pin pill only renders for green-kind zones (front/middle/back
+            // is meaningless for a fairway corridor).
             HStack(spacing: 8) {
-                pinPositionPill
+                if currentZoneKind == .green {
+                    pinPositionPill
+                }
                 Spacer()
                 zonePresetPill
             }
@@ -636,7 +660,7 @@ public struct CalculatorScreen: View {
     }
 
     private func recommendedCard(club: Club, result: ClubResult) -> some View {
-        let lbl = ProbLabelRegistry.of(result.probabilityInZone)
+        let lbl = ProbLabelRegistry.of(result.probabilityInZone, palette: palette)
         let isActive = isViewingRecommended
         let isPreferred = ClubPreferences.preference(for: club.id, at: playingDistance) != nil
         return Button { viewClubId = nil } label: {
@@ -722,7 +746,7 @@ public struct CalculatorScreen: View {
     }
 
     private func altChip(result: ClubResult, club: Club) -> some View {
-        let lbl = ProbLabelRegistry.of(result.probabilityInZone)
+        let lbl = ProbLabelRegistry.of(result.probabilityInZone, palette: palette)
         let active = viewClubId == result.id
         return Button { viewClubId = active ? nil : result.id; Haptics.light() } label: {
             HStack(spacing: 8) {
@@ -891,13 +915,14 @@ public struct CalculatorScreen: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Lie").eyebrow()
             DToggleGroup(
-                options: LieType.allCases.map {
-                    DToggleOption(
-                        value: $0,
-                        label: $0.label,
-                        trailing: $0.sigmaMultiplier == 1
+                options: LieType.allCases.map { lie in
+                    let mul = LieMultiplierStore.shared.multiplier(for: lie)
+                    return DToggleOption(
+                        value: lie,
+                        label: lie.label,
+                        trailing: mul == 1
                             ? nil
-                            : "×\(String(format: "%.2f", $0.sigmaMultiplier))"
+                            : "×\(String(format: "%.2f", mul))"
                     )
                 },
                 selection: Binding(

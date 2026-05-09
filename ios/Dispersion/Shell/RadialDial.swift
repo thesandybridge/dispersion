@@ -347,37 +347,4 @@ private struct DialItemView: View {
     }
 }
 
-// MARK: haptics
-
-enum Haptics {
-    static func light() {
-        #if canImport(UIKit)
-        let g = UIImpactFeedbackGenerator(style: .light)
-        g.impactOccurred()
-        #endif
-    }
-    static func medium() {
-        #if canImport(UIKit)
-        let g = UIImpactFeedbackGenerator(style: .medium)
-        g.impactOccurred()
-        #endif
-    }
-    static func heavy() {
-        #if canImport(UIKit)
-        let g = UIImpactFeedbackGenerator(style: .heavy)
-        g.impactOccurred()
-        #endif
-    }
-    static func success() {
-        #if canImport(UIKit)
-        let g = UINotificationFeedbackGenerator()
-        g.notificationOccurred(.success)
-        #endif
-    }
-    static func error() {
-        #if canImport(UIKit)
-        let g = UINotificationFeedbackGenerator()
-        g.notificationOccurred(.error)
-        #endif
-    }
-}
+// (Haptics moved to DesignSystem/Haptics.swift so it can consult SettingsStore.)

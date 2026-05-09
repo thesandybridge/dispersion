@@ -33,7 +33,11 @@ public enum Probability {
 
     /// Probability the club lands inside the safe zone, with DECADE
     /// adjustment: clubs that come up short of the target are penalized.
-    public static func probabilityInZone(club: Club, scenario: ShotScenario) -> Double {
+    public static func probabilityInZone(
+        club: Club,
+        scenario: ShotScenario,
+        shortSideBias: Double = 0.08
+    ) -> Double {
         let longLo = -scenario.safeZoneDepthYards / 2
         let longHi = scenario.safeZoneDepthYards / 2
         let latLo = -scenario.safeZoneWidthYards / 2
@@ -49,11 +53,12 @@ public enum Probability {
         var p = pLong * pLat
 
         // DECADE: penalize clubs whose carry is short of the target.
-        // A club 5y short gets ~75% of its raw score. 10y short ~55%.
-        // A club that carries to or past the target gets no penalty.
-        if meanLong < 0 {
+        // With the default bias coefficient (0.08), a club 5y short gets
+        // ~75% of its raw score; 10y short ~55%. The user can tune the
+        // coefficient via `CalculatorTuningStore.shortSideBias`.
+        if meanLong < 0 && shortSideBias > 0 {
             let shortness = abs(meanLong)
-            let penalty = exp(-0.08 * shortness)
+            let penalty = exp(-shortSideBias * shortness)
             p *= penalty
         }
 
@@ -93,7 +98,11 @@ public enum Probability {
 
     /// Rank a bag against a scenario by descending probability-in-zone.
     /// Generates partial swing variants only for wedges and short irons.
-    public static func rankClubs(_ clubs: [Club], scenario: ShotScenario) -> [ClubResult] {
+    public static func rankClubs(
+        _ clubs: [Club],
+        scenario: ShotScenario,
+        shortSideBias: Double = 0.08
+    ) -> [ClubResult] {
         var results: [ClubResult] = []
         for c in clubs {
             // Skip putter from approach rankings
@@ -104,7 +113,11 @@ public enum Probability {
                 virtual.carryYards = c.carryYards * swing.carryMultiplier
                 virtual.carrySd = c.carrySd * swing.sigmaMultiplier
                 virtual.lateralSd = c.lateralSd * swing.sigmaMultiplier
-                let pZone = probabilityInZone(club: virtual, scenario: scenario)
+                let pZone = probabilityInZone(
+                    club: virtual,
+                    scenario: scenario,
+                    shortSideBias: shortSideBias
+                )
                 if swing != .full && pZone < 0.03 { continue }
                 results.append(ClubResult(
                     clubId: c.id,

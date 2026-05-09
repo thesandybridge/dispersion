@@ -18,6 +18,48 @@ public enum AppAppearance: String, CaseIterable, Sendable {
     }
 }
 
+public enum HapticsIntensity: String, CaseIterable, Sendable {
+    case off, light, medium, full
+
+    public var label: String {
+        switch self {
+        case .off:    return "Off"
+        case .light:  return "Light"
+        case .medium: return "Medium"
+        case .full:   return "Full"
+        }
+    }
+}
+
+public enum PaletteMode: String, CaseIterable, Sendable {
+    case standard
+    case redGreenSafe
+    case blueYellowSafe
+    case custom
+
+    public var label: String {
+        switch self {
+        case .standard:       return "Standard"
+        case .redGreenSafe:   return "Red-green safe"
+        case .blueYellowSafe: return "Blue-yellow safe"
+        case .custom:         return "Custom"
+        }
+    }
+
+    public var helper: String {
+        switch self {
+        case .standard:
+            return "Default green / red gradient"
+        case .redGreenSafe:
+            return "For deuteranopia or protanopia. Blue → orange axis."
+        case .blueYellowSafe:
+            return "For tritanopia. Red → teal axis."
+        case .custom:
+            return "Pick every color yourself."
+        }
+    }
+}
+
 @MainActor
 @Observable
 public final class SettingsStore {
@@ -31,6 +73,9 @@ public final class SettingsStore {
         static let themeAccent = "settings.themeAccent"
         static let handedness = "settings.handedness"
         static let appearance = "settings.appearance"
+        static let hapticsIntensity = "settings.hapticsIntensity"
+        static let soundsEnabled = "settings.soundsEnabled"
+        static let colorBlindMode = "settings.colorBlindMode"
     }
 
     public var unit: DistanceUnit = .yards
@@ -39,6 +84,9 @@ public final class SettingsStore {
     public var themeAccent: ProfileAccent = .bentgrass
     public var leftHanded: Bool = false
     public var appearance: AppAppearance = .system
+    public var hapticsIntensity: HapticsIntensity = .full
+    public var soundsEnabled: Bool = true
+    public var paletteMode: PaletteMode = .standard
 
     public init() {
         load()
@@ -60,6 +108,32 @@ public final class SettingsStore {
            let parsed = AppAppearance(rawValue: raw) {
             appearance = parsed
         }
+        if let raw = defaults.string(forKey: Keys.hapticsIntensity),
+           let parsed = HapticsIntensity(rawValue: raw) {
+            hapticsIntensity = parsed
+        }
+        if defaults.object(forKey: Keys.soundsEnabled) != nil {
+            soundsEnabled = defaults.bool(forKey: Keys.soundsEnabled)
+        }
+        if let raw = defaults.string(forKey: Keys.colorBlindMode),
+           let parsed = PaletteMode(rawValue: raw) {
+            paletteMode = parsed
+        }
+    }
+
+    public func setHapticsIntensity(_ v: HapticsIntensity) {
+        hapticsIntensity = v
+        defaults.set(v.rawValue, forKey: Keys.hapticsIntensity)
+    }
+
+    public func setSoundsEnabled(_ v: Bool) {
+        soundsEnabled = v
+        defaults.set(v, forKey: Keys.soundsEnabled)
+    }
+
+    public func setPaletteMode(_ v: PaletteMode) {
+        paletteMode = v
+        defaults.set(v.rawValue, forKey: Keys.colorBlindMode)
     }
 
     public func setUnit(_ u: DistanceUnit) {
