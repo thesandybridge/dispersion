@@ -20,6 +20,7 @@ public struct PutterRangeView: View {
     @State private var practiceFeet: Double = 6
     @State private var sessionPutts: [Putt] = []
     @State private var lastLanding: CGPoint?
+    @State private var dragReadout: PuttingGreenField.Tap?
     @State private var pendingMiss: PuttingGreenField.Tap?
     @State private var endConfirm: Bool = false
 
@@ -49,7 +50,8 @@ public struct PutterRangeView: View {
                     PuttingGreenField(
                         practiceDistanceFeet: practiceFeet,
                         lastLandingFeet: lastLanding,
-                        onLog: { tap in handleTap(tap) }
+                        onLog: { tap in handleTap(tap) },
+                        onDrag: { tap in dragReadout = tap }
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -57,6 +59,12 @@ public struct PutterRangeView: View {
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
                             .strokeBorder(DesignTokens.border, lineWidth: 1)
                     )
+                    .overlay(alignment: .top) {
+                        if let r = dragReadout {
+                            dragReadoutBadge(r)
+                                .padding(.top, 12)
+                        }
+                    }
                     sessionToolbar
                 }
                 .padding(.horizontal, 14)
@@ -198,6 +206,43 @@ public struct PutterRangeView: View {
             .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Drag readout badge
+
+    /// Floating capsule that shows live "made / X.X ft" while the finger is
+    /// down. Same idiom as the range's drag-readout — gives the user
+    /// confidence about exactly where they're going to log before they
+    /// release.
+    private func dragReadoutBadge(_ tap: PuttingGreenField.Tap) -> some View {
+        let label: String
+        let tint: Color
+        if tap.made {
+            label = "MADE"
+            tint = accent
+        } else {
+            label = String(format: "%.1f ft", tap.residualFeet)
+            tint = DesignTokens.foreground
+        }
+        return HStack(spacing: 6) {
+            Image(systemName: tap.made ? "checkmark.circle.fill" : "ruler")
+                .font(.system(size: 12, weight: .semibold))
+            Text(label)
+                .font(DispersionType.mono(13, weight: .semibold))
+                .monospacedDigit()
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(.black.opacity(0.65))
+                .overlay(Capsule().strokeBorder(tint.opacity(0.45), lineWidth: 1))
+        )
+        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+        .allowsHitTesting(false)
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        .animation(.spring(response: 0.25, dampingFraction: 0.85), value: tap.made)
     }
 
     // MARK: - Empty state

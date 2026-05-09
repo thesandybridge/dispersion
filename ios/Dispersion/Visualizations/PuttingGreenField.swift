@@ -25,6 +25,7 @@ public struct PuttingGreenField: View {
     public var cupRadiusFeet: Double = 0.21
 
     public var onLog: ((PuttingGreenField.Tap) -> Void)?
+    public var onDrag: ((PuttingGreenField.Tap?) -> Void)?
 
     public struct Tap: Sendable {
         public let made: Bool
@@ -33,16 +34,20 @@ public struct PuttingGreenField: View {
         public let y: Double          // feet, past cup (toward back of green)
     }
 
+    @State private var dragLanding: CGPoint?
+
     public init(
         practiceDistanceFeet: Double,
         lastLandingFeet: CGPoint? = nil,
         cupRadiusFeet: Double = 0.21,
-        onLog: ((Tap) -> Void)? = nil
+        onLog: ((Tap) -> Void)? = nil,
+        onDrag: ((Tap?) -> Void)? = nil
     ) {
         self.practiceDistanceFeet = practiceDistanceFeet
         self.lastLandingFeet = lastLandingFeet
         self.cupRadiusFeet = cupRadiusFeet
         self.onLog = onLog
+        self.onDrag = onDrag
     }
 
     public var body: some View {
@@ -50,30 +55,45 @@ public struct PuttingGreenField: View {
             let geom = layout(in: geo.size)
             ZStack {
                 Canvas { ctx, _ in
-                    drawScene(ctx: ctx, size: geo.size, geom: geom)
+                    drawScene(
+                        ctx: ctx,
+                        size: geo.size,
+                        geom: geom,
+                        liveLanding: dragLanding ?? lastLandingFeet,
+                        isDragging: dragLanding != nil
+                    )
                 }
                 if onLog != nil {
                     Color.clear
                         .contentShape(Rectangle())
                         .gesture(
                             DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    let xFeet = Double((value.location.x - geom.cup.x) / geom.scale)
+                                    let yFeet = Double((geom.cup.y - value.location.y) / geom.scale)
+                                    if dragLanding == nil { Haptics.light() }
+                                    dragLanding = CGPoint(x: xFeet, y: yFeet)
+                                    onDrag?(makeTap(x: xFeet, y: yFeet))
+                                }
                                 .onEnded { value in
                                     let xFeet = Double((value.location.x - geom.cup.x) / geom.scale)
                                     let yFeet = Double((geom.cup.y - value.location.y) / geom.scale)
-                                    let residual = sqrt(xFeet * xFeet + yFeet * yFeet)
-                                    let made = residual <= cupRadiusFeet * 8
+                                    let tap = makeTap(x: xFeet, y: yFeet)
+                                    dragLanding = nil
+                                    onDrag?(nil)
                                     Haptics.medium()
-                                    onLog?(Tap(
-                                        made: made,
-                                        residualFeet: residual,
-                                        x: xFeet,
-                                        y: yFeet
-                                    ))
+                                    onLog?(tap)
                                 }
                         )
                 }
             }
         }
+    }
+
+    private func makeTap(x: Double, y: Double) -> Tap {
+        let residual = sqrt(x * x + y * y)
+        let made = residual <= cupRadiusFeet * 8
+        return Tap(made: made, residualFeet: residual, x: x, y: y)
     }
 
     // MARK: - Layout
@@ -104,7 +124,13 @@ public struct PuttingGreenField: View {
 
     // MARK: - Draw
 
-    private func drawScene(ctx: GraphicsContext, size: CGSize, geom: Geom) {
+    private func drawScene(
+        ctx: GraphicsContext,
+        size: CGSize,
+        geom: Geom,
+        liveLanding: CGPoint?,
+        isDragging: Bool
+    ) {
         let bgRect = CGRect(origin: .zero, size: size)
 
         // 1. Green field — soft radial gradient bg.
@@ -240,8 +266,11 @@ public struct PuttingGreenField: View {
             anchor: .center
         )
 
-        // 9. Last landing point.
-        if let landing = lastLandingFeet {
+        // 9. Landing point — shows the user's last logged putt (or live drag
+        // preview while finger is down). During a drag we additionally render
+        // a dashed "lag line" from cup to landing so the user can see the
+        // residual at a glance.
+        if let landing = liveLanding {
             let p = CGPoint(
                 x: geom.cup.x + CGFloat(landing.x) * geom.scale,
                 y: geom.cup.y + CGFloat(-landing.y) * geom.scale
@@ -249,17 +278,31 @@ public struct PuttingGreenField: View {
             // (note: landing.y > 0 means past the cup — moves UP the screen
             //  from cup, which is decreasing y in screen coords. landing.y < 0
             //  means short — moves DOWN. -landing.y handles both.)
-            let halo = Path(ellipseIn: CGRect(x: p.x - 12, y: p.y - 12, width: 24, height: 24))
-            ctx.fill(halo, with: .color(palette.primary.opacity(0.30)))
-            let dot = Path(ellipseIn: CGRect(x: p.x - 5.5, y: p.y - 5.5, width: 11, height: 11))
+
+            if isDragging {
+                // Lag line from cup to live cursor.
+                var lag = Path()
+                lag.move(to: geom.cup)
+                lag.addLine(to: p)
+                ctx.stroke(
+                    lag,
+                    with: .color(palette.primary.opacity(0.65)),
+                    style: StrokeStyle(lineWidth: 1.2, dash: [3, 3])
+                )
+            }
+
+            let halo = Path(ellipseIn: CGRect(x: p.x - 14, y: p.y - 14, width: 28, height: 28))
+            ctx.fill(halo, with: .color(palette.primary.opacity(isDragging ? 0.40 : 0.30)))
+            let dotR: CGFloat = isDragging ? 7 : 5.5
+            let dot = Path(ellipseIn: CGRect(x: p.x - dotR, y: p.y - dotR, width: dotR * 2, height: dotR * 2))
             ctx.fill(dot, with: .color(palette.primary))
-            ctx.stroke(dot, with: .color(.white.opacity(0.7)), lineWidth: 1)
+            ctx.stroke(dot, with: .color(.white.opacity(0.7)), lineWidth: 1.2)
         }
 
-        // 10. Empty hint at the bottom.
-        if lastLandingFeet == nil {
+        // 10. Empty hint — only when no landing has been logged or previewed.
+        if liveLanding == nil {
             ctx.draw(
-                Text("TAP WHERE IT STOPPED")
+                Text("TAP OR DRAG WHERE IT STOPPED")
                     .font(DispersionType.mono(10, weight: .semibold))
                     .tracking(2.4)
                     .foregroundStyle(.white.opacity(0.45)),
