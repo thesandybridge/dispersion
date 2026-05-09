@@ -1,8 +1,11 @@
 # Dispersion
 
-iOS-native golf shot dispersion and club recommendation app.
+Probability-first golf shot dispersion + club recommendation, with an
+iOS app and a marketing site.
 
-- **`ios/`** — the SwiftUI app (iOS 17+, iPhone + iPad).
+- **`ios/`** — the SwiftUI app (iOS 18+, iPhone + iPad).
+- **`web/`** — Next.js marketing/SEO site with a live TS port of the
+  iOS probability math. Deploys to Vercel as `dispersion.app`.
 
 ## Get the iOS project running
 
@@ -12,6 +15,18 @@ brew install xcodegen   # one-time
 xcodegen generate
 open Dispersion.xcodeproj
 ```
+
+## Get the web project running
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+The web project's `lib/dispersion/` is a 1:1 TS port of the iOS math
+(`Probability.swift` + `Sigma.swift`). When the iOS math changes the TS
+port must follow so the marketing demo matches reality.
 
 Set a development team, hit Cmd+R. Cmd+U runs the test suite (Swift `Testing` framework).
 

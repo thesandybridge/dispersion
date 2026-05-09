@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-display: "Fraunces", "Times New Roman", serif;
+    --font-sans: "Inter", system-ui, sans-serif;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-canvas-50 text-canvas-700 font-sans;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  ::selection {
+    @apply bg-bentgrass/30 text-pine;
+  }
+}
+
+@layer components {
+  /* Editorial section frame — used between hero, features, demo, etc. */
+  .section {
+    @apply relative w-full overflow-hidden;
+  }
+
+  .container-prose {
+    @apply mx-auto w-full max-w-6xl px-6 sm:px-8;
+  }
+
+  .eyebrow {
+    @apply uppercase tracking-[0.18em] text-xs font-medium text-fairway/80;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer utilities {
+  .gradient-mesh {
+    background-image:
+      radial-gradient(at 20% 30%, theme(colors.bentgrass / 0.15), transparent 50%),
+      radial-gradient(at 80% 20%, theme(colors.sand / 0.25), transparent 50%),
+      radial-gradient(at 60% 80%, theme(colors.fairway / 0.12), transparent 55%);
+  }
+
+  .gradient-hero {
+    background:
+      radial-gradient(ellipse 90% 60% at 50% 0%, theme(colors.bentgrass / 0.18), transparent 70%),
+      linear-gradient(180deg, theme(colors.canvas.50), theme(colors.canvas.100));
+  }
+}
