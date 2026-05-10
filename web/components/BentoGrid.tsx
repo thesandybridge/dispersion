@@ -225,23 +225,76 @@ export function BentoGrid() {
             </div>
           </Card>
 
-          {/* Color-blind */}
+          {/* Putter */}
           <Card>
-            <div className="p-7">
-              <Eyebrow>Color-blind safe</Eyebrow>
+            <div className="relative h-full p-7">
+              <Eyebrow>Putter, separated</Eyebrow>
               <h3
                 className="mt-2 font-display text-xl font-semibold"
                 style={{ color: "var(--accent-strong)" }}
               >
-                Three palettes. One that works for everyone.
+                Distance brackets, lag stats, its own lane.
               </h3>
               <p
                 className="mt-3 text-sm leading-relaxed"
                 style={{ color: "var(--fg-soft)" }}
               >
-                Standard, deuteranopia/protanopia, and tritanopia
-                gradients. Plus a fully custom theme.
+                The putter is its own model — no carry, no σ. A linear
+                practice lane, make rate from 0–3 ft to 30+ ft, lag-putt
+                proximity tracked over time.
               </p>
+
+              {/* Mini bracket preview */}
+              <div className="mt-4 space-y-1.5">
+                {[
+                  { l: "0–3", pct: 0.96 },
+                  { l: "3–6", pct: 0.74 },
+                  { l: "6–15", pct: 0.43 },
+                ].map((b) => (
+                  <div key={b.l} className="flex items-center gap-2">
+                    <span
+                      className="w-9 font-mono text-[10px]"
+                      style={{ color: "var(--fg-muted)" }}
+                    >
+                      {b.l} ft
+                    </span>
+                    <div
+                      className="relative h-1.5 flex-1 overflow-hidden rounded-full"
+                      style={{ background: "var(--border)" }}
+                    >
+                      <span
+                        className="absolute inset-y-0 left-0 rounded-full"
+                        style={{
+                          width: `${b.pct * 100}%`,
+                          background:
+                            b.pct >= 0.7
+                              ? "var(--accent)"
+                              : b.pct >= 0.45
+                                ? "var(--accent-soft)"
+                                : "#e6c068",
+                        }}
+                      />
+                    </div>
+                    <span
+                      className="w-8 text-right font-mono text-[10px] font-semibold tabular-nums"
+                      style={{ color: "var(--accent-strong)" }}
+                    >
+                      {Math.round(b.pct * 100)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <a
+                href="/putter"
+                className="mt-4 inline-flex items-center gap-1 font-mono text-[11px] font-medium transition"
+                style={{ color: "var(--accent-strong)" }}
+              >
+                Putter mode
+                <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor" className="h-3 w-3">
+                  <path d="M5 12h14M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </a>
             </div>
           </Card>
         </div>

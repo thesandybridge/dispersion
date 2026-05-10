@@ -372,19 +372,28 @@ export default function RangePage() {
               className="mt-2 font-display text-2xl font-semibold tracking-tight"
               style={accentStrong}
             >
-              Build your home course in the satellite map.
+              Putting practice lives in its own lane.
             </h3>
           </div>
-          <Link
-            href="/course-builder"
-            className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-base font-medium transition"
-            style={{ background: "var(--accent-strong)", color: "var(--bg)" }}
-          >
-            Course builder
-            <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor" className="h-4 w-4">
-              <path d="M5 12h14M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/putter"
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-base font-medium transition"
+              style={{ background: "var(--accent-strong)", color: "var(--bg)" }}
+            >
+              Putter mode
+              <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor" className="h-4 w-4">
+                <path d="M5 12h14M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+            <Link
+              href="/course-builder"
+              className="inline-flex items-center gap-2 rounded-full border px-5 py-2.5 text-base font-medium transition"
+              style={{ borderColor: "var(--border-strong)", color: "var(--fg)" }}
+            >
+              Course builder
+            </Link>
+          </div>
         </div>
       </section>
     </PageLayout>

@@ -36,6 +36,7 @@ export function Footer() {
           <nav className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm surface-muted">
             <Link href="/math" className="transition hover:text-[color:var(--accent-strong)]">The math</Link>
             <Link href="/range" className="transition hover:text-[color:var(--accent-strong)]">Range</Link>
+            <Link href="/putter" className="transition hover:text-[color:var(--accent-strong)]">Putter</Link>
             <Link href="/course-builder" className="transition hover:text-[color:var(--accent-strong)]">Course builder</Link>
             <Link href="/privacy" className="transition hover:text-[color:var(--accent-strong)]">Privacy</Link>
           </nav>
