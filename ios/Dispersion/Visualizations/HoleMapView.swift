@@ -250,11 +250,14 @@ public struct HoleMapView: View {
     /// needs an upward bend in screen pixels.
     @ViewBuilder
     private func trajectoryOverlay(proxy: MapProxy) -> some View {
-        // `cameraTick` bumps on every camera event — pan, zoom, pitch,
-        // rotate — so the Canvas re-renders with fresh screen-space
-        // projections. (cameraCenter alone doesn't change on zoom.)
-        let _ = cameraTick
-        Canvas { ctx, size in
+        // Drive the Canvas off the display refresh clock instead of
+        // SwiftUI state. onMapCameraChange + cameraTick wasn't tight
+        // enough during pinch-zoom — Map's own render and the Canvas
+        // overlay could drift a frame apart, smearing the arcs. A
+        // TimelineView(.animation) ticks per frame, so proxy.convert
+        // is sampled in lock-step with whatever the map just rendered.
+        TimelineView(.animation) { _ in
+            Canvas { ctx, size in
             for shot in sortedShots {
                 let startCoord = CLLocationCoordinate2D(latitude: shot.startLat, longitude: shot.startLng)
                 let endCoord = CLLocationCoordinate2D(latitude: shot.endLat, longitude: shot.endLng)
@@ -327,6 +330,7 @@ public struct HoleMapView: View {
                         )
                     }
                 }
+            }
             }
         }
     }

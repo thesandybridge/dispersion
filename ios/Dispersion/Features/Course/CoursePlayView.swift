@@ -840,8 +840,12 @@ struct CoursePlayView: View {
                 let across = shotDist * sin(angleDiff)
                 let ld = along - clubCarry
                 let tags = autoOutcomeTags(longDelta: ld, latDelta: across)
+                // Mirror the CourseShot's id onto the main Shot so undo
+                // can find and delete it without a parallel lookup table.
+                let courseShotId = tracker.shotsForHole(tracker.currentHole).last?.id
+                    ?? UUID().uuidString.lowercased()
                 let mainShot = Shot(
-                    id: UUID().uuidString.lowercased(),
+                    id: courseShotId,
                     sessionId: tracker.sessionId, clubId: clubId,
                     targetDistanceYards: clubCarry,
                     longDelta: ld,
@@ -970,11 +974,16 @@ struct CoursePlayView: View {
     }
 
     private func undoShot() {
-        if let _ = tracker.undoLastShot() {
+        if let removed = tracker.undoLastShot() {
             try? CoursesRepo(context: modelContext).deleteShots(courseId: courseId, hole: tracker.currentHole)
             for shot in tracker.shotsForHole(tracker.currentHole) {
                 _ = try? CoursesRepo(context: modelContext).createShot(shot)
             }
+            // Drop the corresponding row from the per-club Shot log so the
+            // undone shot doesn't pollute the calculator's σ aggregates.
+            // The mainShot id matches the CourseShot id by construction
+            // (see completeShot).
+            try? ShotsRepo(context: modelContext).delete(id: removed.id)
             tracker.save()
             Haptics.medium()
         }
@@ -1270,12 +1279,16 @@ struct CoursePlayView: View {
     }
 
     private func cancelRound() {
-        // Delete all shots from this session
+        // Delete all shots from this session — both the course-specific
+        // CourseShot rows AND the per-club Shot rows that fed the
+        // calculator's σ aggregates. Keeping the latter would mean
+        // discarded rounds still influenced calibration.
         let shots = tracker.shots
         for shot in shots {
             try? CoursesRepo(context: modelContext).deleteShots(courseId: courseId, hole: shot.holeNumber)
         }
         if !tracker.sessionId.isEmpty {
+            try? ShotsRepo(context: modelContext).deleteBySession(tracker.sessionId)
             try? SessionsRepo(context: modelContext).delete(id: tracker.sessionId)
         }
         tracker.clearSave()
