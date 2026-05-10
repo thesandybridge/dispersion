@@ -28,6 +28,10 @@ public struct HoleMapView: View {
     @State private var position: MapCameraPosition = .automatic
     @State private var satellite = false
     @State private var cameraCenter: CLLocationCoordinate2D?
+    /// Bumped on every camera event (pan, zoom, pitch, rotate) so the
+    /// trajectory Canvas knows to redraw with fresh screen-space
+    /// projections. cameraCenter alone doesn't change on zoom.
+    @State private var cameraTick: UInt32 = 0
 
     private let greenFill = hex("#A8C97F")
     private let fairwayFill = hex("#C4D49A")
@@ -178,6 +182,7 @@ public struct HoleMapView: View {
                         lat: context.camera.centerCoordinate.latitude,
                         lng: context.camera.centerCoordinate.longitude
                     )
+                    cameraTick &+= 1
                 }
                 .overlay {
                     // Use MapProxy to get the true coordinate at screen center
@@ -245,9 +250,10 @@ public struct HoleMapView: View {
     /// needs an upward bend in screen pixels.
     @ViewBuilder
     private func trajectoryOverlay(proxy: MapProxy) -> some View {
-        // `cameraCenter` ticks on every camera change, so reading it here
-        // makes Canvas redraw whenever the user pans / pitches / zooms.
-        let _ = cameraCenter
+        // `cameraTick` bumps on every camera event — pan, zoom, pitch,
+        // rotate — so the Canvas re-renders with fresh screen-space
+        // projections. (cameraCenter alone doesn't change on zoom.)
+        let _ = cameraTick
         Canvas { ctx, size in
             for shot in sortedShots {
                 let startCoord = CLLocationCoordinate2D(latitude: shot.startLat, longitude: shot.startLng)
