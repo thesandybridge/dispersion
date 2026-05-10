@@ -15,8 +15,10 @@ interface CommonProps {
   opacity?: number;
 }
 
-// MARK: - Topographic contour pattern. Suggests a course map without being
-// literal. Sized so it tiles at any container width.
+// MARK: - Topographic contour pattern. Each line is a true sine wave with
+// period == tile width, so y(0) === y(width) and the lines flow seamlessly
+// across tile boundaries. Five wavy contours per tile at different y
+// offsets, amplitudes, and phases.
 export function TopoPattern({
   className = "",
   color = "currentColor",
@@ -25,6 +27,30 @@ export function TopoPattern({
   opacity = 0.10,
 }: CommonProps) {
   const id = `topo-${size}-${weight}`;
+  // Each contour: vertical anchor (fraction of tile), amplitude (px),
+  // phase offset (radians). Phases are chosen so adjacent lines don't
+  // crest at the same x — keeps the field lively rather than striped.
+  const lines: { y: number; amp: number; phase: number }[] = [
+    { y: size * 0.16, amp: 6, phase: 0.0 },
+    { y: size * 0.34, amp: 5, phase: 1.2 },
+    { y: size * 0.52, amp: 7, phase: 2.6 },
+    { y: size * 0.68, amp: 5, phase: 0.7 },
+    { y: size * 0.86, amp: 6, phase: 1.9 },
+  ];
+  const samples = 32; // smooth without bloating the path string
+  const d = lines
+    .map(({ y, amp, phase }) => {
+      let path = "";
+      for (let i = 0; i <= samples; i++) {
+        const t = i / samples;
+        const x = t * size;
+        const yPos = y + amp * Math.sin(t * Math.PI * 2 + phase);
+        path += `${i === 0 ? "M" : "L"} ${x.toFixed(2)} ${yPos.toFixed(2)} `;
+      }
+      return path.trim();
+    })
+    .join(" ");
+
   return (
     <svg
       aria-hidden
@@ -33,18 +59,7 @@ export function TopoPattern({
     >
       <defs>
         <pattern id={id} width={size} height={size} patternUnits="userSpaceOnUse">
-          <path
-            d={[
-              `M -10 ${size * 0.18} Q ${size * 0.25} ${size * 0.08}, ${size * 0.5} ${size * 0.20} T ${size + 10} ${size * 0.18}`,
-              `M -10 ${size * 0.34} Q ${size * 0.30} ${size * 0.24}, ${size * 0.55} ${size * 0.36} T ${size + 10} ${size * 0.34}`,
-              `M -10 ${size * 0.52} Q ${size * 0.20} ${size * 0.42}, ${size * 0.45} ${size * 0.54} T ${size + 10} ${size * 0.52}`,
-              `M -10 ${size * 0.68} Q ${size * 0.35} ${size * 0.58}, ${size * 0.60} ${size * 0.70} T ${size + 10} ${size * 0.68}`,
-              `M -10 ${size * 0.84} Q ${size * 0.25} ${size * 0.74}, ${size * 0.50} ${size * 0.86} T ${size + 10} ${size * 0.84}`,
-            ].join(" ")}
-            stroke="currentColor"
-            strokeWidth={weight}
-            fill="none"
-          />
+          <path d={d} stroke="currentColor" strokeWidth={weight} fill="none" />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill={`url(#${id})`} />
