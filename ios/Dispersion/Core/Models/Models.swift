@@ -142,6 +142,7 @@ public struct Club: Identifiable, Hashable, Sendable {
 public enum SessionKind: String, Codable, CaseIterable, Sendable {
     case range
     case round
+    case putt
 }
 
 public struct Session: Identifiable, Hashable, Sendable {

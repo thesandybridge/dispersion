@@ -345,7 +345,14 @@ public struct PutterRangeView: View {
     private func handleTap(_ tap: PuttingGreenField.Tap) {
         guard let putter = activePutter else { return }
         if sessionId == nil {
-            sessionId = UUID().uuidString.lowercased()
+            // Create a SessionModel so the session shows up in the History
+            // tab. SessionStore is intentionally NOT touched — putter
+            // practice doesn't compete with the live range / round session.
+            let id = UUID().uuidString.lowercased()
+            let label = "Putting · \(Date.now.formatted(.dateTime.month(.abbreviated).day().hour().minute()))"
+            let s = Session(id: id, kind: .putt, label: label, createdAt: .now)
+            try? SessionsRepo(context: modelContext).create(s)
+            sessionId = id
         }
         let putt = Putt(
             id: UUID().uuidString.lowercased(),
@@ -399,13 +406,14 @@ public struct PutterRangeView: View {
     }
 
     /// End: discard the session entirely. Deletes every putt that belongs
-    /// to this session id from the database.
+    /// to this session id, plus the SessionModel record itself, so the
+    /// session disappears from History.
     private func discardSession() {
         if let sid = sessionId {
             for p in sessionPutts {
                 try? PuttsRepo(context: modelContext).delete(id: p.id)
             }
-            _ = sid // keep the local clear simple; no SessionsRepo usage here
+            try? SessionsRepo(context: modelContext).delete(id: sid)
         }
         sessionId = nil
         sessionPutts = []

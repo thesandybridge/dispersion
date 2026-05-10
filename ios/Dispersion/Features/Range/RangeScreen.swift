@@ -256,26 +256,17 @@ struct LiveRangeView: View {
                 noClubsState
             }
 
-            // Drag coordinate readout — rendered above everything
+            // Drag coordinate readout — anchored to the top of the radar so
+            // the user's finger and the dispersion contours aren't covered
+            // by the live readout. Same floating pill chrome as the rest of
+            // the range UI.
             if let ds = dragReadout {
-                VStack(spacing: 2) {
-                    Text("\(Int(abs(ds.long)))y \(ds.long >= 0 ? "long" : "short")")
-                        .font(DispersionType.mono(16, weight: .semibold))
-                    Text("\(Int(abs(ds.lat)))y \(ds.lat >= 0 ? "right" : "left")")
-                        .font(DispersionType.mono(16, weight: .semibold))
+                VStack {
+                    dragReadoutBadge(ds)
+                    Spacer()
                 }
-                .foregroundStyle(DesignTokens.primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(DesignTokens.background.opacity(0.9))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(DesignTokens.primary.opacity(0.3), lineWidth: 1)
-                        )
-                )
-                .frame(maxHeight: .infinity, alignment: .center)
+                .padding(.top, 12)
+                .frame(maxWidth: .infinity)
                 .allowsHitTesting(false)
             }
 
@@ -971,6 +962,52 @@ struct LiveRangeView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+
+    /// Live drag-coordinate pill — anchors to the top of the radar so the
+    /// dispersion contours stay visible while the user is hunting. Same
+    /// floating-pill chrome family as the toolbar and tab pill.
+    private func dragReadoutBadge(_ ds: ShotXY) -> some View {
+        let longLabel = "\(Int(abs(ds.long)))y \(ds.long >= 0 ? "long" : "short")"
+        let latLabel = abs(ds.lat) < 1
+            ? "on line"
+            : "\(Int(abs(ds.lat)))y \(ds.lat >= 0 ? "right" : "left")"
+        return HStack(spacing: 8) {
+            HStack(spacing: 5) {
+                Image(systemName: ds.long >= 0 ? "arrow.up" : "arrow.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .opacity(0.7)
+                Text(longLabel)
+                    .font(DispersionType.mono(12, weight: .semibold))
+                    .monospacedDigit()
+            }
+            Capsule()
+                .fill(.white.opacity(0.25))
+                .frame(width: 1, height: 12)
+            HStack(spacing: 5) {
+                if abs(ds.lat) >= 1 {
+                    Image(systemName: ds.lat >= 0 ? "arrow.right" : "arrow.left")
+                        .font(.system(size: 10, weight: .semibold))
+                        .opacity(0.7)
+                }
+                Text(latLabel)
+                    .font(DispersionType.mono(12, weight: .semibold))
+                    .monospacedDigit()
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(DesignTokens.popover.opacity(0.92))
+                .overlay(Capsule().strokeBorder(accent.opacity(0.45), lineWidth: 1))
+        )
+        .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
+        .environment(\.colorScheme, .dark)
+        .transition(.opacity.combined(with: .move(edge: .top)))
+        .animation(.spring(response: 0.30, dampingFraction: 0.85), value: ds.long)
+        .animation(.spring(response: 0.30, dampingFraction: 0.85), value: ds.lat)
     }
 
     // MARK: sheets

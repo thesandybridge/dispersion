@@ -146,8 +146,24 @@ struct ShotLogView: View {
 
     private func sessionRow(_ session: Session) -> some View {
         let shotCount = (try? ShotsRepo(context: modelContext).listBySession(session.id))?.count ?? 0
-        let kindAccent: Color = session.kind == .range ? accent : DesignTokens.pMarginal
-        let kindLabel = session.kind == .range ? "RANGE" : "ROUND"
+        let puttCount = (try? PuttsRepo(context: modelContext).listBySession(session.id))?.count ?? 0
+        let kindAccent: Color
+        let kindLabel: String
+        let countLabel: String
+        switch session.kind {
+        case .range:
+            kindAccent = accent
+            kindLabel = "RANGE"
+            countLabel = "\(shotCount) shots"
+        case .round:
+            kindAccent = DesignTokens.pMarginal
+            kindLabel = "ROUND"
+            countLabel = "\(shotCount) shots"
+        case .putt:
+            kindAccent = DesignTokens.heat4
+            kindLabel = "PUTT"
+            countLabel = "\(puttCount) putt\(puttCount == 1 ? "" : "s")"
+        }
         return HStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(kindAccent)
@@ -163,7 +179,7 @@ struct ShotLogView: View {
                         .foregroundStyle(DesignTokens.foreground)
                         .lineLimit(1)
                 }
-                Text("\(formatSessionDate(session.createdAt)) · \(shotCount) shots")
+                Text("\(formatSessionDate(session.createdAt)) · \(countLabel)")
                     .font(DispersionType.mono(10))
                     .foregroundStyle(DesignTokens.mutedForeground)
             }
@@ -256,10 +272,16 @@ struct ShotLogView: View {
     private func refreshData() {
         let sessionsRepo = SessionsRepo(context: modelContext)
         let shotsRepo = ShotsRepo(context: modelContext)
+        let puttsRepo = PuttsRepo(context: modelContext)
 
         let allSessions = (try? sessionsRepo.list()) ?? []
         sessions = allSessions.filter { s in
-            ((try? shotsRepo.listBySession(s.id))?.count ?? 0) > 0
+            // A session counts as "real history" if it has either logged
+            // shots (range / round) or logged putts (putter practice).
+            let shotCount = (try? shotsRepo.listBySession(s.id))?.count ?? 0
+            if shotCount > 0 { return true }
+            let puttCount = (try? puttsRepo.listBySession(s.id))?.count ?? 0
+            return puttCount > 0
         }
 
         totalShots = (try? shotsRepo.countAll()) ?? 0
