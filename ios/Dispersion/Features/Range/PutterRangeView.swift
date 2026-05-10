@@ -1,7 +1,9 @@
 // Putter practice mode. Pick a distance, attempt putts, log makes and
-// misses. Live session stats track make % at this distance and average
-// lag proximity. Plays nicely against the PuttingGreenField — tap on the
-// green to log where the ball stopped (cup-area = make).
+// misses. The session is independent of the live range / round Session
+// model — we keep a local sessionId so putts are grouped without
+// polluting SessionStore. Save commits the session (putts persist),
+// End discards (deletes the session's putts), Undo removes only the
+// last putt.
 
 import SwiftData
 import SwiftUI
@@ -10,27 +12,21 @@ public struct PutterRangeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.themeAccent) private var accent
     @Query(sort: \PutterModel.createdAt) private var putterModels: [PutterModel]
-    @Query(sort: \SessionModel.createdAt, order: .reverse) private var sessionModels: [SessionModel]
 
     public init() {}
 
     @State private var settings = SettingsStore.shared
-    @State private var session = SessionStore.shared
 
     @State private var practiceFeet: Double = 6
+    @State private var sessionId: String?
     @State private var sessionPutts: [Putt] = []
     @State private var lastLanding: CGPoint?
     @State private var dragReadout: PuttingGreenField.Tap?
-    @State private var pendingMiss: PuttingGreenField.Tap?
     @State private var endConfirm: Bool = false
+    @State private var saveBanner: Bool = false
 
     private var activePutter: Putter? {
         putterModels.first?.toValue()
-    }
-
-    private var sessionId: String? {
-        if let s = session.active, s.kind == .range { return s.id }
-        return nil
     }
 
     private var stats: SessionPuttStats {
@@ -47,24 +43,33 @@ public struct PutterRangeView: View {
                 VStack(spacing: 12) {
                     distancePicker
                     statsCard
-                    PuttingGreenField(
-                        practiceDistanceFeet: practiceFeet,
-                        lastLandingFeet: lastLanding,
-                        onLog: { tap in handleTap(tap) },
-                        onDrag: { tap in dragReadout = tap }
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(DesignTokens.border, lineWidth: 1)
-                    )
-                    .overlay(alignment: .top) {
-                        if let r = dragReadout {
-                            dragReadoutBadge(r)
-                                .padding(.top, 12)
+
+                    HStack(alignment: .top, spacing: 10) {
+                        sessionDotColumn
+                        PuttingGreenField(
+                            practiceDistanceFeet: practiceFeet,
+                            lastLandingFeet: lastLanding,
+                            onLog: { tap in handleTap(tap) },
+                            onDrag: { tap in dragReadout = tap }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .strokeBorder(DesignTokens.border, lineWidth: 1)
+                        )
+                        .overlay(alignment: .top) {
+                            if let r = dragReadout {
+                                dragReadoutBadge(r)
+                                    .padding(.top, 12)
+                            }
+                            if saveBanner {
+                                savedBanner
+                                    .padding(.top, 12)
+                            }
                         }
                     }
+
                     sessionToolbar
                 }
                 .padding(.horizontal, 14)
@@ -75,22 +80,13 @@ public struct PutterRangeView: View {
             }
         }
         .alert("End putting session?", isPresented: $endConfirm) {
-            Button("End session", role: .destructive) {
-                if sessionPutts.isEmpty, let id = sessionId {
-                    try? SessionsRepo(context: modelContext).delete(id: id)
-                }
-                session.clear()
-                sessionPutts = []
-                lastLanding = nil
-                Haptics.medium()
+            Button("Discard \(sessionPutts.count) putt\(sessionPutts.count == 1 ? "" : "s")", role: .destructive) {
+                discardSession()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(sessionPutts.isEmpty
-                 ? "No putts to keep."
-                 : "\(sessionPutts.count) putt\(sessionPutts.count == 1 ? "" : "s") stay logged.")
+            Text("Removes every putt logged in this session. Cannot be undone.")
         }
-        .onAppear { reload() }
     }
 
     // MARK: - Distance picker
@@ -159,23 +155,88 @@ public struct PutterRangeView: View {
         .frame(maxWidth: .infinity)
     }
 
+    // MARK: - Session dots
+
+    /// Vertical column of dots tracking each putt this session — newest at
+    /// the top, oldest fades out. Made putts fill with accent; misses are
+    /// hollow rings.
+    private var sessionDotColumn: some View {
+        VStack(spacing: 6) {
+            // Counter pill
+            VStack(spacing: 2) {
+                Text("\(sessionPutts.count)")
+                    .font(DispersionType.mono(13, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(DesignTokens.foreground)
+                Text("PUTTS")
+                    .font(DispersionType.mono(7, weight: .medium))
+                    .tracking(1.4)
+                    .foregroundStyle(DesignTokens.mutedForeground)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+            .frame(width: 36)
+            .background(ThemedCardFill(cornerRadius: 10))
+
+            if !sessionPutts.isEmpty {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 5) {
+                        // Newest at the top; reverse the array.
+                        ForEach(Array(sessionPutts.reversed().prefix(40).enumerated()), id: \.element.id) { idx, putt in
+                            dot(for: putt, opacity: max(0.35, 1 - Double(idx) * 0.025))
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .frame(width: 36)
+                .frame(maxHeight: .infinity)
+            } else {
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(width: 36)
+    }
+
+    private func dot(for putt: Putt, opacity: Double) -> some View {
+        Group {
+            if putt.made {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 10, height: 10)
+                    .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 0.6))
+            } else {
+                Circle()
+                    .strokeBorder(DesignTokens.foreground.opacity(0.55), lineWidth: 1.4)
+                    .frame(width: 10, height: 10)
+            }
+        }
+        .opacity(opacity)
+        .help(putt.made
+              ? "Made from \(Int(putt.distanceFeet)) ft"
+              : "Missed from \(Int(putt.distanceFeet)) ft \(putt.residualFeet.map { "· \(String(format: "%.1f", $0)) ft left" } ?? "")")
+    }
+
     // MARK: - Toolbar
 
     private var sessionToolbar: some View {
         HStack(spacing: 8) {
-            if let last = sessionPutts.last {
-                rangePill("arrow.uturn.backward", "Undo last \(last.made ? "make" : "miss")") {
+            if !sessionPutts.isEmpty {
+                rangePill("arrow.uturn.backward", "Undo") {
                     undoLast()
                 }
             }
             if !sessionPutts.isEmpty {
-                rangePillTinted("stop.circle.fill", "End", tint: DesignTokens.destructive) {
+                rangePillTinted("checkmark.circle.fill", "Save", tint: accent) {
+                    saveSession()
+                }
+                rangePillTinted("trash.fill", "End", tint: DesignTokens.destructive) {
                     endConfirm = true
                 }
             }
         }
         .frame(maxWidth: .infinity)
         .environment(\.colorScheme, .dark)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: sessionPutts.count)
     }
 
     private func rangePill(_ icon: String, _ label: String, action: @escaping () -> Void) -> some View {
@@ -208,12 +269,8 @@ public struct PutterRangeView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Drag readout badge
+    // MARK: - Drag readout
 
-    /// Floating capsule that shows live "made / X.X ft" while the finger is
-    /// down. Same idiom as the range's drag-readout — gives the user
-    /// confidence about exactly where they're going to log before they
-    /// release.
     private func dragReadoutBadge(_ tap: PuttingGreenField.Tap) -> some View {
         let label: String
         let tint: Color
@@ -245,6 +302,26 @@ public struct PutterRangeView: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.85), value: tap.made)
     }
 
+    private var savedBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "checkmark.circle.fill").font(.system(size: 12, weight: .semibold))
+            Text("SESSION SAVED")
+                .font(DispersionType.mono(11, weight: .semibold))
+                .tracking(1.2)
+        }
+        .foregroundStyle(accent)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            Capsule()
+                .fill(.black.opacity(0.65))
+                .overlay(Capsule().strokeBorder(accent.opacity(0.45), lineWidth: 1))
+        )
+        .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+        .allowsHitTesting(false)
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+    }
+
     // MARK: - Empty state
 
     private var noPutterState: some View {
@@ -267,11 +344,13 @@ public struct PutterRangeView: View {
 
     private func handleTap(_ tap: PuttingGreenField.Tap) {
         guard let putter = activePutter else { return }
-        let sid = ensureSession()
+        if sessionId == nil {
+            sessionId = UUID().uuidString.lowercased()
+        }
         let putt = Putt(
             id: UUID().uuidString.lowercased(),
             putterId: putter.id,
-            sessionId: sid,
+            sessionId: sessionId,
             distanceFeet: practiceFeet,
             made: tap.made,
             residualFeet: tap.made ? nil : tap.residualFeet,
@@ -300,28 +379,39 @@ public struct PutterRangeView: View {
         Haptics.medium()
     }
 
-    private func ensureSession() -> String {
-        if let id = sessionId { return id }
-        let id = UUID().uuidString.lowercased()
-        let label = "Putting · \(Date.now.formatted(.dateTime.month(.abbreviated).day().hour().minute()))"
-        let s = Session(id: id, kind: .range, label: label, createdAt: .now)
-        do {
-            try SessionsRepo(context: modelContext).create(s)
-            session.setActive(ActiveSession(id: id, kind: .range, label: label))
-        } catch {
-            Haptics.error()
+    /// Save: commit the session. Putts already persist on log; saving just
+    /// clears the in-flight session so the user can start fresh. Shows a
+    /// brief banner so it doesn't feel like a no-op.
+    private func saveSession() {
+        sessionId = nil
+        sessionPutts = []
+        lastLanding = nil
+        dragReadout = nil
+        Haptics.success()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            saveBanner = true
         }
-        return id
-    }
-
-    private func reload() {
-        if let sid = sessionId {
-            let raw = (try? PuttsRepo(context: modelContext).listBySession(sid)) ?? []
-            sessionPutts = raw
-            if let last = raw.last, let x = last.landingX, let y = last.landingY {
-                lastLanding = CGPoint(x: x, y: y)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            withAnimation(.easeOut(duration: 0.25)) {
+                saveBanner = false
             }
         }
+    }
+
+    /// End: discard the session entirely. Deletes every putt that belongs
+    /// to this session id from the database.
+    private func discardSession() {
+        if let sid = sessionId {
+            for p in sessionPutts {
+                try? PuttsRepo(context: modelContext).delete(id: p.id)
+            }
+            _ = sid // keep the local clear simple; no SessionsRepo usage here
+        }
+        sessionId = nil
+        sessionPutts = []
+        lastLanding = nil
+        dragReadout = nil
+        Haptics.medium()
     }
 }
 
