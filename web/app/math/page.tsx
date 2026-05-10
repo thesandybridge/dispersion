@@ -5,14 +5,14 @@ import { Footer } from "@/components/Footer";
 import { InteractiveDemo } from "@/components/InteractiveDemo";
 
 export const metadata: Metadata = {
-  title: "The math — sigma, gaussian bands, and the DECADE short-side bias",
+  title: "The math — sigma, gaussian bands, and a short-side penalty",
   description:
     "Every shot is a 2D probability distribution. Dispersion integrates that distribution over your safe zone and ranks clubs by who lands in it. Here's the math, the assumptions, and why it matters.",
   alternates: { canonical: "/math" },
   openGraph: {
     title: "The math behind probability-first golf",
     description:
-      "Sigma, gaussian band integration, and the DECADE short-side bias — explained without hand-waving.",
+      "Sigma, gaussian band integration, and the short-side penalty — explained without hand-waving.",
     url: "/math",
   },
 };
@@ -54,7 +54,7 @@ export default function MathPage() {
           <nav className="flex flex-wrap gap-x-6 gap-y-2 font-mono text-xs uppercase tracking-widest surface-muted">
             <a href="#sigma" className="transition hover:text-[color:var(--accent-strong)]">σ — what it means</a>
             <a href="#bands" className="transition hover:text-[color:var(--accent-strong)]">Gaussian band integration</a>
-            <a href="#decade" className="transition hover:text-[color:var(--accent-strong)]">DECADE short-side bias</a>
+            <a href="#short-side" className="transition hover:text-[color:var(--accent-strong)]">Short-side penalty</a>
             <a href="#try" className="transition hover:text-[color:var(--accent-strong)]">Try it</a>
             <a href="#caveats" className="transition hover:text-[color:var(--accent-strong)]">What this doesn't model</a>
           </nav>
@@ -129,10 +129,10 @@ export default function MathPage() {
             </p>
           </section>
 
-          {/* DECADE bias */}
-          <section id="decade" className="mb-16">
+          {/* Short-side penalty */}
+          <section id="short-side" className="mb-16">
             <h2 className="font-display text-display-xs font-semibold tracking-display-tight" style={accentStrong}>
-              DECADE short-side bias
+              Short-side penalty
             </h2>
             <p className="surface-soft mt-4 text-lg leading-relaxed">
               The raw probability isn't quite enough. Two clubs can have
@@ -144,8 +144,8 @@ export default function MathPage() {
               greens.
             </p>
             <p className="surface-soft mt-4 text-lg leading-relaxed">
-              Following the DECADE methodology, we apply a multiplicative
-              penalty when the club's expected carry is short of the target:
+              We apply a multiplicative penalty when the club's expected
+              carry is short of the target:
             </p>
             <pre className="mt-6 overflow-x-auto rounded-2xl bg-[#0b3d2e] p-6 font-mono text-sm leading-relaxed text-[#f6f1e1]">
 {`if expectedCarry < target:

@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   authors: [{ name: "Dispersion" }],
   keywords: [
     "golf shot dispersion",
-    "DECADE methodology",
+    "strokes gained",
     "golf club selection",
     "probability-based golf",
     "sigma golf",

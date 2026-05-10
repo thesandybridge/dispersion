@@ -69,6 +69,6 @@ Store listing.
 
 `lib/dispersion/probability.ts` and `lib/dispersion/sigma.ts` are 1:1
 ports of the same-named Swift files in `ios/Dispersion/Core/Math/`.
-When the iOS math changes (e.g., the DECADE bias coefficient default,
+When the iOS math changes (e.g., the short-side penalty coefficient,
 new probability curves), the TS port must follow so the marketing demo
 matches reality.

@@ -588,7 +588,7 @@ public struct SettingsScreen: View {
         SettingsGroup(label: "Recommendation", systemImage: "scope", accent: DesignTokens.primary) {
             tuningSliderRow(
                 label: "Short-side bias",
-                helper: "DECADE penalty on clubs that fall short. Higher = aggressively prefer 'take more club'",
+                helper: "Penalty on clubs that fall short of the target. Higher = aggressively prefer 'take more club'",
                 value: tuning.shortSideBias,
                 range: CalculatorTuningStore.biasRange,
                 step: 0.01,

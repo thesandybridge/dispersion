@@ -30,8 +30,9 @@ public enum AppConfig {
     /// Rolling window of recent sessions used for sigma trend visualizations.
     public static let sigmaTrendSessions: Int = 8
 
-    /// DECADE-style "recent shots" window for per-club dispersion. 20 shots is
-    /// what the DECADE methodology recommends for stable sigma estimates.
+    /// "Recent shots" window for per-club dispersion. 20 shots is a common
+    /// rule-of-thumb sample size for stable sigma estimates without lagging
+    /// too far behind the player's current form.
     public static let recentShotsForDispersion: Int = 20
 
     /// Minimum shots before showing strokes-gained aggregates.
@@ -72,8 +73,8 @@ public enum AppConfig {
     /// data that the measured σ is reasonably trustworthy.
     public static let goodCalibrationSize: Int = 10
 
-    /// Sample size at which calibration confidence becomes "high" — DECADE
-    /// recommends ~30 shots for tight confidence intervals.
+    /// Sample size at which calibration confidence becomes "high" — ~30
+    /// shots gives tight confidence intervals on the measured σ.
     public static let highCalibrationSize: Int = 30
 }
 

@@ -3,9 +3,10 @@
 // can override them in Settings.
 //
 // Why a separate store from `SettingsStore`: these are *mathematical* tunings
-// (wind multiplier, DECADE bias, etc.) that the calculator passes into pure
-// functions in `Probability` and `Conditions`. Keeping them out of the
-// general app-settings store makes the surface explicit and self-documenting.
+// (wind multiplier, short-side penalty, etc.) that the calculator passes
+// into pure functions in `Probability` and `Conditions`. Keeping them out
+// of the general app-settings store makes the surface explicit and
+// self-documenting.
 
 import Foundation
 import Observation
@@ -27,8 +28,8 @@ public final class CalculatorTuningStore {
     public var elevYardsPerFoot: Double = 1.0
     public static let elevRange: ClosedRange<Double> = 0.5...2.0
 
-    /// Coefficient in the DECADE short-side penalty: a club whose expected
-    /// carry is short of the target gets a multiplier of `exp(-bias × shortness)`
+    /// Coefficient in the short-side penalty: a club whose expected carry
+    /// is short of the target gets a multiplier of `exp(-bias × shortness)`
     /// applied to its probability. 0 disables the bias entirely; higher
     /// values aggressively prefer clubs that carry to or past the target.
     public var shortSideBias: Double = 0.08

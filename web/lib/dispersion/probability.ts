@@ -36,8 +36,8 @@ export function gaussianBand(
   return Math.max(0, normalCdf(z2) - normalCdf(z1));
 }
 
-/// Probability the shot lands inside the safe zone, applying the DECADE
-/// short-side penalty when the club's expected carry is short of target.
+/// Probability the shot lands inside the safe zone, applying a short-side
+/// penalty when the club's expected carry is short of target.
 export function probabilityInZone(
   club: Club,
   scenario: ShotScenario,

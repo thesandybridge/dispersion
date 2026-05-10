@@ -217,8 +217,14 @@ handled by `AppIconStore` calling `UIApplication.setAlternateIconName`.
 - **Numeric input uses `NumericField`**, not
   `TextField(value:format:)`. The latter parses + reformats per
   keystroke and is perceptibly laggy in card-heavy sheets.
-- **DECADE bias in probability** — zone evaluation shifts toward short
-  side to favor "take more club."
+- **Short-side penalty in probability** — clubs whose expected carry
+  falls short of target get an exponential decay penalty so "take
+  more club" wins ties. Coefficient is user-tunable.
+- **No third-party trademarked methodologies in user-facing copy** —
+  describe the math in terms of strokes gained / probability /
+  short-side penalty / proximity-to-hole baselines, not the brand
+  names of the people who popularized them. Cite Broadie's published
+  research in source-code comments only (academic credit).
 - **iOS 18 dark/tinted icons** — every shipped icon set must include
   light, dark, and tinted variants so Home Screen customization works.
 - **Putter ≠ Club.** Don't bridge them; don't share storage; don't

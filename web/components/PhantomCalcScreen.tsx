@@ -71,7 +71,7 @@ export function PhantomCalcScreen() {
               boxShadow: "inset 0 0 0 1px rgba(98, 179, 117, 0.30)",
             }}
           >
-            DECADE bias
+            Strokes gained
           </span>
         </div>
       </div>

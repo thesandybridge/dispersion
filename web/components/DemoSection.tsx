@@ -44,7 +44,7 @@ export function DemoSection() {
             >
               probability calc
             </Link>
-            , same DECADE bias, same sample bag. Move the slider, switch the
+            , same short-side penalty, same sample bag. Move the slider, switch the
             target, see which club leads.
           </p>
         </div>

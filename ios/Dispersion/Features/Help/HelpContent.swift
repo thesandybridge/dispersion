@@ -105,7 +105,7 @@ public enum HelpContent {
     private static let dispersionMath = HelpTopic(
         id: "math",
         title: "How the math thinks",
-        summary: "σ, probability bands, and the DECADE short-side bias.",
+        summary: "σ, probability bands, and the short-side penalty.",
         icon: "function",
         sections: [
             HelpSection(
@@ -121,8 +121,8 @@ public enum HelpContent {
                 visual: .dispersion(carry: 150, sd: 6, lat: 8, target: 150, width: 25, depth: 25)
             ),
             HelpSection(
-                heading: "DECADE short-side bias",
-                body: "The recommendation engine penalizes clubs that fall short of the target. A club expected to come up 5 yards short loses about 25% of its raw probability score; 10 yards short loses ~45%. This is the DECADE methodology — short of the green is almost always worse than long. You can dial the bias up or down in Settings → Recommendation."
+                heading: "Short-side penalty",
+                body: "The recommendation engine penalizes clubs that fall short of the target. A club expected to come up 5 yards short loses about 25% of its raw probability score; 10 yards short loses ~45%. Short of the green is almost always worse than long. You can dial the penalty up or down in Settings → Recommendation."
             ),
         ]
     )

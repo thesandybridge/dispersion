@@ -81,7 +81,7 @@ struct SplashScreen: View {
                 // Bottom details
                 VStack(spacing: 8) {
                     HStack(spacing: 16) {
-                        detailPill("DECADE-Based")
+                        detailPill("Strokes-Gained")
                         detailPill("Local-First")
                         detailPill("No Ads")
                     }
