@@ -281,32 +281,46 @@ public struct HoleMapView: View {
                 ctx.draw(resolved, at: CGPoint(x: apex.x, y: apex.y))
             }
 
-            // Dashed residual line — current ball position → pin. The "ball"
-            // is the last shot's landing point if any shots have been hit,
-            // otherwise the tee.
-            if let pin = greenCoord {
-                let from: Coord
+            // Aim preview: arc from current ball position → crosshair,
+            // then a dashed straight line from crosshair → pin showing the
+            // residual distance the planned shot would leave. Only drawn
+            // while the crosshair is active.
+            if showCrosshair, let cursor = crosshairCoord {
+                let ballCoord: Coord
                 if let last = sortedShots.last {
-                    from = Coord(lat: last.endLat, lng: last.endLng)
+                    ballCoord = Coord(lat: last.endLat, lng: last.endLng)
                 } else if let tee = teeCoord {
-                    from = tee
+                    ballCoord = tee
                 } else {
                     return
                 }
-                let fromCoord = CLLocationCoordinate2D(latitude: from.lat, longitude: from.lng)
-                let toCoord = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.lng)
+                let cursorCoord = CLLocationCoordinate2D(latitude: cursor.lat, longitude: cursor.lng)
+                let ballCL = CLLocationCoordinate2D(latitude: ballCoord.lat, longitude: ballCoord.lng)
                 guard
-                    let p0 = proxy.convert(fromCoord, to: .local),
-                    let p1 = proxy.convert(toCoord, to: .local)
+                    let bp = proxy.convert(ballCL, to: .local),
+                    let cp = proxy.convert(cursorCoord, to: .local)
                 else { return }
-                var line = Path()
-                line.move(to: p0)
-                line.addLine(to: p1)
+                let aimYards = haversineYards(from: ballCoord, to: cursor)
+                let aimArc = arcPath(from: bp, to: cp, distanceYards: aimYards)
                 ctx.stroke(
-                    line,
+                    aimArc,
                     with: .color(.white.opacity(0.85)),
-                    style: StrokeStyle(lineWidth: 1.6, lineCap: .round, dash: [5, 5])
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round)
                 )
+
+                if let pin = greenCoord {
+                    let pinCoord = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.lng)
+                    if let pp = proxy.convert(pinCoord, to: .local) {
+                        var residual = Path()
+                        residual.move(to: cp)
+                        residual.addLine(to: pp)
+                        ctx.stroke(
+                            residual,
+                            with: .color(.white.opacity(0.65)),
+                            style: StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [4, 5])
+                        )
+                    }
+                }
             }
         }
     }
