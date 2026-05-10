@@ -46,8 +46,11 @@ public struct ClubEditSheet: View {
 
             // Fields
             sheetField(isPutter ? "Putter name" : "Club name") {
-                TextField(isPutter ? "e.g. Scotty Cameron, Odyssey" : "e.g. 7 Iron, Driver, Putter", text: $name)
-                    .textInputAutocapitalization(.words)
+                BufferedTextField(
+                    isPutter ? "e.g. Scotty Cameron, Odyssey" : "e.g. 7 Iron, Driver, Putter",
+                    value: $name,
+                    capitalization: .words
+                )
             }
 
             if !isPutter {

@@ -38,8 +38,11 @@ public struct PutterEditSheet: View {
             )
 
             sheetField("Putter name") {
-                TextField("e.g. Scotty Cameron, Odyssey", text: $name)
-                    .textInputAutocapitalization(.words)
+                BufferedTextField(
+                    "e.g. Scotty Cameron, Odyssey",
+                    value: $name,
+                    capitalization: .words
+                )
             }
 
             sheetField("Head type") {
