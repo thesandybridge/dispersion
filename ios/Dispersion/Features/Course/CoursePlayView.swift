@@ -404,7 +404,14 @@ struct CoursePlayView: View {
             greenCoord: flagCoord,
             showCrosshair: true,
             dispersion: clubDispersion,
-            crosshairCoord: $crosshairCoord
+            crosshairCoord: $crosshairCoord,
+            colorForClub: { clubId in
+                guard let club = clubs.first(where: { $0.id == clubId }) else {
+                    return DesignTokens.primary
+                }
+                let cat = ClubCategoryRegistry.categorize(name: club.name, carryYards: club.carryYards)
+                return ClubCategoryRegistry.style(for: cat).accent
+            }
         )
         .frame(maxHeight: .infinity)
 

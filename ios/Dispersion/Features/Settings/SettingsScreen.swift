@@ -1,5 +1,6 @@
 // Port of app/src/routes/settings.tsx.
 
+import SQLite3
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -841,10 +842,34 @@ public struct SettingsScreen: View {
             // Active session pointer (if any) is now stale — clear it.
             SessionStore.shared.clear()
 
+            // Reclaim disk space — SQLite holds onto freed pages until
+            // VACUUM is run, so deletes alone don't shrink the file on
+            // disk. Best-effort: if SwiftData has a lock we can't get,
+            // we at least truncate the WAL.
+            vacuumPersistentStore()
+
             status = (.ok, "All data cleared. Courses preserved.")
         } catch {
             status = (.err, String(describing: error))
         }
+    }
+
+    /// Run VACUUM + WAL checkpoint on the SwiftData SQLite store to
+    /// actually reclaim disk space after large deletes. Opens a parallel
+    /// sqlite3 connection because SwiftData doesn't expose the underlying
+    /// DB. Both operations are best-effort — failures (e.g., a busy lock)
+    /// leave the store intact, just not vacuumed.
+    private func vacuumPersistentStore() {
+        guard let url = modelContext.container.configurations.first?.url else { return }
+        // Force any pending SwiftData writes through before we open a
+        // second connection to the same file.
+        try? modelContext.save()
+
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK else { return }
+        defer { sqlite3_close(db) }
+        sqlite3_exec(db, "PRAGMA wal_checkpoint(TRUNCATE);", nil, nil, nil)
+        sqlite3_exec(db, "VACUUM;", nil, nil, nil)
     }
 
     private func exportBackup() {

@@ -15,6 +15,10 @@ public struct HoleMapView: View {
     public var showCrosshair: Bool
     public var dispersion: ClubDispersionOverlay?
     @Binding public var crosshairCoord: Coord?
+    /// Optional lookup that returns a tint for a given club id. Lets the
+    /// caller (CoursePlayView) feed the bag's club-category palette in
+    /// without HoleMapView having to know about Club. nil → theme accent.
+    public var colorForClub: ((String) -> Color)?
 
     public struct ClubDispersionOverlay {
         public var center: Coord
@@ -42,7 +46,8 @@ public struct HoleMapView: View {
                 centerCoord: Coord? = nil, teeCoord: Coord? = nil,
                 greenCoord: Coord? = nil, showCrosshair: Bool = true,
                 dispersion: ClubDispersionOverlay? = nil,
-                crosshairCoord: Binding<Coord?> = .constant(nil)) {
+                crosshairCoord: Binding<Coord?> = .constant(nil),
+                colorForClub: ((String) -> Color)? = nil) {
         self.polygons = polygons
         self.shots = shots
         self.centerCoord = centerCoord
@@ -51,6 +56,7 @@ public struct HoleMapView: View {
         self.showCrosshair = showCrosshair
         self.dispersion = dispersion
         self._crosshairCoord = crosshairCoord
+        self.colorForClub = colorForClub
     }
 
     public var body: some View {
@@ -82,29 +88,27 @@ public struct HoleMapView: View {
                         }
                     }
 
-                    // Shot arcs — sampled MapPolyline with a parabolic
-                    // perpendicular bow so the curve renders inside the
-                    // Map's native pipeline. Stays glued to its coords
-                    // through any pan/zoom/pitch.
+                    // Shot lines — straight MapPolyline color-coded by the
+                    // club's category. Driver/woods/irons/wedges each get
+                    // their own tint so the player can read the round at
+                    // a glance.
                     ForEach(sortedShots, id: \.id) { shot in
-                        MapPolyline(coordinates: arcCoords(
-                            startLat: shot.startLat, startLng: shot.startLng,
-                            endLat: shot.endLat, endLng: shot.endLng,
-                            distanceYards: shot.distanceYards
-                        ))
-                        .stroke(accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        MapPolyline(coordinates: [
+                            CLLocationCoordinate2D(latitude: shot.startLat, longitude: shot.startLng),
+                            CLLocationCoordinate2D(latitude: shot.endLat, longitude: shot.endLng),
+                        ])
+                        .stroke(shotColor(for: shot), style: StrokeStyle(lineWidth: 2.6, lineCap: .round))
 
-                        Annotation("\(Int(shot.distanceYards))y", coordinate: arcMidpoint(
-                            startLat: shot.startLat, startLng: shot.startLng,
-                            endLat: shot.endLat, endLng: shot.endLng,
-                            distanceYards: shot.distanceYards
+                        Annotation("\(Int(shot.distanceYards))y", coordinate: CLLocationCoordinate2D(
+                            latitude: (shot.startLat + shot.endLat) / 2,
+                            longitude: (shot.startLng + shot.endLng) / 2
                         )) {
                             Text("\(Int(shot.distanceYards))y")
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
-                                .background(Capsule().fill(accent.opacity(0.92)))
+                                .background(Capsule().fill(shotColor(for: shot).opacity(0.92)))
                         }
 
                         Annotation("", coordinate: CLLocationCoordinate2D(latitude: shot.startLat, longitude: shot.startLng)) {
@@ -264,14 +268,14 @@ public struct HoleMapView: View {
     @MapContentBuilder
     private var aimPreview: some MapContent {
         if showCrosshair, let cursor = crosshairCoord, let ball = ballAimAnchor {
-            let aimYards = haversineYards(from: ball, to: cursor)
-            MapPolyline(coordinates: arcCoords(
-                startLat: ball.lat, startLng: ball.lng,
-                endLat: cursor.lat, endLng: cursor.lng,
-                distanceYards: aimYards
-            ))
+            // Straight white line ball → cursor (planned shot).
+            MapPolyline(coordinates: [
+                CLLocationCoordinate2D(latitude: ball.lat, longitude: ball.lng),
+                CLLocationCoordinate2D(latitude: cursor.lat, longitude: cursor.lng),
+            ])
             .stroke(.white.opacity(0.85), style: StrokeStyle(lineWidth: 2, lineCap: .round))
 
+            // Dashed line cursor → pin (residual after planned shot).
             if let pin = greenCoord {
                 MapPolyline(coordinates: [
                     CLLocationCoordinate2D(latitude: cursor.lat, longitude: cursor.lng),
@@ -293,67 +297,17 @@ public struct HoleMapView: View {
         return teeCoord
     }
 
-    // MARK: - Trajectory geometry
+    // MARK: - Shot color coding
 
-    /// Sample N points along a parabolic arc. The base path is the
-    /// straight ground line from start → end; each sample is offset
-    /// perpendicular to that direction by a parabolic amount so the
-    /// rendered MapPolyline appears as a curve. Stays inside MapKit's
-    /// native rendering pipeline so it can't drift out of sync with
-    /// camera changes.
-    private func arcCoords(
-        startLat: Double, startLng: Double,
-        endLat: Double, endLng: Double,
-        distanceYards: Double,
-        samples: Int = 18
-    ) -> [CLLocationCoordinate2D] {
-        let start = Coord(lat: startLat, lng: startLng)
-        let end = Coord(lat: endLat, lng: endLng)
-        let bearing = bearingRad(from: start, to: end)
-        // Bow the curve in the perpendicular direction. Magnitude is a
-        // capped fraction of shot distance — looks like a flatter or
-        // taller arc depending on yardage.
-        let bowYards = max(6.0, min(28.0, distanceYards * 0.16))
-        let perpBearing = bearing + .pi / 2
-
-        var points: [CLLocationCoordinate2D] = []
-        for i in 0...samples {
-            let t = Double(i) / Double(samples)
-            let baseLat = startLat + (endLat - startLat) * t
-            let baseLng = startLng + (endLng - startLng) * t
-            // Parabola: peak 1 at t=0.5, 0 at t=0 and t=1.
-            let bow = 4 * t * (1 - t) * bowYards
-            let off = projectCoord(
-                from: Coord(lat: baseLat, lng: baseLng),
-                distanceYards: bow,
-                bearing: perpBearing
-            )
-            points.append(CLLocationCoordinate2D(latitude: off.lat, longitude: off.lng))
+    /// Color for a shot's polyline, derived from the club's category. Same
+    /// palette the bag uses on club rows so the round reads consistently
+    /// against the bag screen. Falls back to the theme accent when the
+    /// club has been deleted.
+    private func shotColor(for shot: CourseShot) -> Color {
+        guard let clubId = shot.clubId, let lookup = colorForClub else {
+            return accent
         }
-        return points
-    }
-
-    /// Coordinate at the apex of the arc — used to anchor the distance
-    /// label so it sits at the bow's peak rather than on the straight
-    /// midpoint.
-    private func arcMidpoint(
-        startLat: Double, startLng: Double,
-        endLat: Double, endLng: Double,
-        distanceYards: Double
-    ) -> CLLocationCoordinate2D {
-        let bowYards = max(6.0, min(28.0, distanceYards * 0.16))
-        let baseLat = (startLat + endLat) / 2
-        let baseLng = (startLng + endLng) / 2
-        let bearing = bearingRad(
-            from: Coord(lat: startLat, lng: startLng),
-            to: Coord(lat: endLat, lng: endLng)
-        )
-        let off = projectCoord(
-            from: Coord(lat: baseLat, lng: baseLng),
-            distanceYards: bowYards,
-            bearing: bearing + .pi / 2
-        )
-        return CLLocationCoordinate2D(latitude: off.lat, longitude: off.lng)
+        return lookup(clubId)
     }
 
     // MARK: - Crosshair
