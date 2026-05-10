@@ -1,6 +1,8 @@
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
-import { FeatureGrid } from "@/components/FeatureGrid";
+import { MarqueeStrip } from "@/components/MarqueeStrip";
+import { BentoGrid } from "@/components/BentoGrid";
+import { HowItWorks } from "@/components/HowItWorks";
 import { DemoSection } from "@/components/DemoSection";
 import { CallToAction } from "@/components/CallToAction";
 import { Footer } from "@/components/Footer";
@@ -10,7 +12,9 @@ export default function HomePage() {
     <main className="relative">
       <Header />
       <Hero />
-      <FeatureGrid />
+      <MarqueeStrip />
+      <BentoGrid />
+      <HowItWorks />
       <DemoSection />
       <CallToAction />
       <Footer />
