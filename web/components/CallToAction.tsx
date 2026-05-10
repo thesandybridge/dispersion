@@ -1,18 +1,37 @@
 import Link from "next/link";
+import { TopoPattern, HatchPattern } from "./Patterns";
 
 export function CallToAction() {
   return (
     <section className="section surface-bg py-24 sm:py-32">
       <div className="container-prose">
         <div
-          className="overflow-hidden rounded-3xl px-8 py-16 text-[#f6f1e1] shadow-xl sm:px-16 sm:py-20"
+          className="relative overflow-hidden rounded-3xl px-8 py-16 text-[#f6f1e1] shadow-xl sm:px-16 sm:py-20"
           style={{
             background:
-              "linear-gradient(135deg, #0b3d2e 0%, #16624a 100%)",
+              "linear-gradient(135deg, #0b3d2e 0%, #16624a 70%, #0b3d2e 100%)",
             boxShadow: "0 24px 48px -16px rgba(11, 61, 46, 0.35)",
           }}
         >
-          <div className="max-w-2xl">
+          {/* Topo lines drift across the dark gradient */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ color: "#a9d18e" }}
+          >
+            <TopoPattern opacity={0.12} size={240} />
+          </div>
+          {/* Soft accent halo on the right */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(98, 179, 117, 0.30), transparent 70%)",
+              filter: "blur(40px)",
+            }}
+          />
+          <div className="relative max-w-2xl">
             <span className="eyebrow" style={{ color: "#a9d18e" }}>
               Stop guessing
             </span>

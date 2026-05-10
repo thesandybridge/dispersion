@@ -5,6 +5,7 @@
 // the messaging between the bento grid and the live demo.
 
 import { motion } from "framer-motion";
+import { DotPattern } from "./Patterns";
 
 const STEPS = [
   {
@@ -30,10 +31,23 @@ const STEPS = [
 export function HowItWorks() {
   return (
     <section
-      className="section py-24 sm:py-32"
+      className="section relative py-24 sm:py-32"
       style={{ background: "var(--bg-elevated)" }}
     >
-      <div className="container-prose">
+      {/* Dot pattern fades in from the right edge so the section feels
+          like drafting paper without taking the whole canvas. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 w-2/3"
+        style={{
+          color: "var(--accent)",
+          maskImage: "linear-gradient(to left, black, transparent)",
+          WebkitMaskImage: "linear-gradient(to left, black, transparent)",
+        }}
+      >
+        <DotPattern opacity={0.18} size={26} weight={1.1} />
+      </div>
+      <div className="container-prose relative">
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-[1fr_2fr] lg:gap-20">
           <div>
             <motion.div

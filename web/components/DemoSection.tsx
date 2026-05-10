@@ -1,13 +1,31 @@
 import Link from "next/link";
 import { InteractiveDemo } from "./InteractiveDemo";
+import { TopoPattern } from "./Patterns";
 
 export function DemoSection() {
   return (
     <section
       id="demo"
-      className="section surface-inverse pt-24 pb-28 sm:pt-32 sm:pb-36"
+      className="section surface-inverse relative pt-24 pb-28 sm:pt-32 sm:pb-36"
     >
-      <div className="container-prose">
+      {/* Topo lines as ambient texture on the dark surface */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ color: "#a9d18e" }}
+      >
+        <TopoPattern opacity={0.07} size={320} />
+      </div>
+      {/* Soft glow at the top */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-48"
+        style={{
+          background:
+            "radial-gradient(ellipse 60% 100% at 50% 0%, rgba(98, 179, 117, 0.18), transparent 70%)",
+        }}
+      />
+      <div className="container-prose relative">
         <div className="max-w-2xl">
           <span
             className="eyebrow"

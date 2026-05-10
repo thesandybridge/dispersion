@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { NoiseTexture } from "@/components/NoiseTexture";
 
 const SITE_URL = "https://dispersion.app";
 const APP_NAME = "Dispersion";
@@ -101,7 +102,10 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <NoiseTexture opacity={0.05} />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

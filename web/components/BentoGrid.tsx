@@ -8,6 +8,7 @@
 
 import { motion } from "framer-motion";
 import { LiveDispersionBackdrop } from "./LiveDispersionBackdrop";
+import { TopoPattern, DotPattern, HatchPattern } from "./Patterns";
 
 interface CardProps {
   className?: string;
@@ -59,8 +60,16 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 
 export function BentoGrid() {
   return (
-    <section className="section py-24 sm:py-32">
-      <div className="container-prose">
+    <section className="section relative py-24 sm:py-32">
+      {/* Topo pattern peeking through behind the section */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ color: "var(--accent-strong)" }}
+      >
+        <TopoPattern opacity={0.04} size={280} />
+      </div>
+      <div className="container-prose relative">
         <div className="max-w-2xl">
           <Eyebrow>Built for serious amateurs</Eyebrow>
           <h2
@@ -84,6 +93,15 @@ export function BentoGrid() {
             <div className="relative h-full">
               <div className="absolute inset-0">
                 <LiveDispersionBackdrop showZone intense={false} />
+              </div>
+              {/* Diagonal hatch over the dispersion gives the dark surface
+                  tactile depth without competing with the contours. */}
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0"
+                style={{ color: "#a9d18e" }}
+              >
+                <HatchPattern opacity={0.05} size={14} />
               </div>
               <div className="relative z-10 flex h-full flex-col justify-between p-8">
                 <div>
