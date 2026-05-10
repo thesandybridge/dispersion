@@ -367,7 +367,7 @@ struct SessionDetailView: View {
                 }
 
                 if !putt.made, let r = putt.residualFeet {
-                    Text("left \(String(format: "%.1f", r)) ft from cup")
+                    Text(missDescription(putt: putt, residual: r))
                         .font(DispersionType.mono(11))
                         .foregroundStyle(DesignTokens.mutedForeground)
                 }
@@ -411,6 +411,24 @@ struct SessionDetailView: View {
     private func formatDistance(_ feet: Double) -> String {
         if feet < 10 { return String(format: "%.1f ft", feet) }
         return "\(Int(feet)) ft"
+    }
+
+    /// Direction-aware miss copy — same logic as PutterDetailView.
+    /// Avoids the "left X.X ft" wording that read as "missed left".
+    private func missDescription(putt: Putt, residual: Double) -> String {
+        guard let x = putt.landingX, let y = putt.landingY else {
+            return String(format: "%.1f ft from cup", residual)
+        }
+        let dx = abs(x), dy = abs(y)
+        let primary: String
+        if dx > dy * 1.2 {
+            primary = x >= 0 ? "right" : "left"
+        } else if dy > dx * 1.2 {
+            primary = y >= 0 ? "past" : "short"
+        } else {
+            return String(format: "%.1f ft from cup", residual)
+        }
+        return String(format: "%.1f ft %@ of cup", residual, primary)
     }
 
     // MARK: - Actions

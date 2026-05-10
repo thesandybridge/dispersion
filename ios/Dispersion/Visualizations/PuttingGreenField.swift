@@ -20,9 +20,10 @@ public struct PuttingGreenField: View {
     public var lastLandingFeet: CGPoint?
 
     /// Cup radius in feet — anything tapped within this distance counts
-    /// as made. Forgiving multiplier applied at tap time so the cup is
-    /// finger-friendly without claiming everything as a make.
-    public var cupRadiusFeet: Double = 0.21
+    /// as made. Defaults to a regulation cup (4.25 in diameter →
+    /// 0.177 ft radius). The user has a finger-precise drag, so we use
+    /// the real cup size — no forgiving margin.
+    public var cupRadiusFeet: Double = 0.177
 
     public var onLog: ((PuttingGreenField.Tap) -> Void)?
     public var onDrag: ((PuttingGreenField.Tap?) -> Void)?
@@ -39,7 +40,7 @@ public struct PuttingGreenField: View {
     public init(
         practiceDistanceFeet: Double,
         lastLandingFeet: CGPoint? = nil,
-        cupRadiusFeet: Double = 0.21,
+        cupRadiusFeet: Double = 0.177,
         onLog: ((Tap) -> Void)? = nil,
         onDrag: ((Tap?) -> Void)? = nil
     ) {
@@ -92,7 +93,7 @@ public struct PuttingGreenField: View {
 
     private func makeTap(x: Double, y: Double) -> Tap {
         let residual = sqrt(x * x + y * y)
-        let made = residual <= cupRadiusFeet * 8
+        let made = residual <= cupRadiusFeet
         return Tap(made: made, residualFeet: residual, x: x, y: y)
     }
 

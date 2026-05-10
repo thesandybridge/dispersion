@@ -99,11 +99,11 @@ public struct SettingsScreen: View {
         } message: {
             Text("Wipes your bag and inserts \(SampleBag.entries.count) sample clubs.")
         }
-        .alert("Delete all clubs?", isPresented: $clearConfirm) {
+        .alert("Delete all data?", isPresented: $clearConfirm) {
             Button("Delete all", role: .destructive) { clearAll() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes every club. Cannot be undone.")
+            Text("Wipes clubs, putters, every shot, putt, session, and round. Your saved courses stay — re-add their play history yourself if you want it back. Cannot be undone.")
         }
         .onAppear { dial.setActions([]) }
         .fullScreenCover(isPresented: $showHelp) {
@@ -816,13 +816,32 @@ public struct SettingsScreen: View {
         }
     }
 
+    /// Wipe every piece of personal play data — clubs, putters, every shot,
+    /// putt, session, face strike, and recorded round. Course definitions
+    /// (CourseModel + holes + polygons) are preserved deliberately because
+    /// they're hand-built and tedious to recreate; the user can clear those
+    /// individually from the Course tab.
     private func clearAll() {
         do {
             try ClubsRepo(context: modelContext).deleteAll()
             try ShotsRepo(context: modelContext).deleteAll()
             try SessionsRepo(context: modelContext).deleteAll()
             try FaceStrikesRepo(context: modelContext).deleteAll()
-            status = (.ok, "All data cleared.")
+            try PuttersRepo(context: modelContext).deleteAll()
+            try PuttsRepo(context: modelContext).deleteAll()
+
+            // Round play history — RoundModel rows are play data, not part
+            // of the course definition. Clear them; the Course / Polygon /
+            // HoleInfo records that define the course stay.
+            let coursesRepo = CoursesRepo(context: modelContext)
+            for r in (try? coursesRepo.rounds()) ?? [] {
+                try? coursesRepo.deleteRound(id: r.id)
+            }
+
+            // Active session pointer (if any) is now stale — clear it.
+            SessionStore.shared.clear()
+
+            status = (.ok, "All data cleared. Courses preserved.")
         } catch {
             status = (.err, String(describing: error))
         }
