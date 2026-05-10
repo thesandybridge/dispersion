@@ -33,7 +33,9 @@ public struct ClubsRepo {
             carrySd: club.carrySd,
             lateralSd: club.lateralSd,
             createdAt: club.createdAt,
-            updatedAt: club.updatedAt
+            updatedAt: club.updatedAt,
+            threeQuarter: club.threeQuarter,
+            half: club.half
         )
         context.insert(model)
         try context.save()
@@ -45,16 +47,25 @@ public struct ClubsRepo {
         public var carryYards: Double?
         public var carrySd: Double?
         public var lateralSd: Double?
+        /// Updating a partial-swing profile.
+        /// `.some(nil)` clears it; `.some(profile)` writes/replaces; `.none`
+        /// leaves it alone.
+        public var threeQuarter: SwingProfile??
+        public var half: SwingProfile??
         public init(
             name: String? = nil,
             carryYards: Double? = nil,
             carrySd: Double? = nil,
-            lateralSd: Double? = nil
+            lateralSd: Double? = nil,
+            threeQuarter: SwingProfile?? = nil,
+            half: SwingProfile?? = nil
         ) {
             self.name = name
             self.carryYards = carryYards
             self.carrySd = carrySd
             self.lateralSd = lateralSd
+            self.threeQuarter = threeQuarter
+            self.half = half
         }
     }
 
@@ -67,6 +78,18 @@ public struct ClubsRepo {
         if let v = patch.carryYards { model.carryYards = v }
         if let v = patch.carrySd { model.carrySd = v }
         if let v = patch.lateralSd { model.lateralSd = v }
+        if let tq = patch.threeQuarter {
+            model.threeQuarterCarryYards = tq?.carryYards
+            model.threeQuarterCarrySd = tq?.carrySd
+            model.threeQuarterLateralSd = tq?.lateralSd
+            model.threeQuarterSamples = tq?.sampleCount
+        }
+        if let h = patch.half {
+            model.halfCarryYards = h?.carryYards
+            model.halfCarrySd = h?.carrySd
+            model.halfLateralSd = h?.lateralSd
+            model.halfSamples = h?.sampleCount
+        }
         model.updatedAt = .now
         try context.save()
     }

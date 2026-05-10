@@ -19,6 +19,17 @@ public struct ClubEditSheet: View {
     @State private var deleteConfirm: Bool = false
     @State private var saveError: String?
 
+    // Swing-variant calibration. nil = not calibrated; the picker hides
+    // the row by default. Tapping "Add 3/4 swing" creates a profile
+    // pre-seeded against the current full-swing values.
+    @State private var threeQuarterCarry: Double?
+    @State private var threeQuarterCarrySd: Double?
+    @State private var threeQuarterLateralSd: Double?
+
+    @State private var halfCarry: Double?
+    @State private var halfCarrySd: Double?
+    @State private var halfLateralSd: Double?
+
     public init(initial: Club?, onClose: @escaping () -> Void) {
         self.initial = initial
         self.onClose = onClose
@@ -73,6 +84,30 @@ public struct ClubEditSheet: View {
                 Text("Not sure about σ? Start with 4–8 for carry and 5–10 for lateral. Measure real values in Range mode.")
                     .font(DispersionType.ui(12))
                     .foregroundStyle(DesignTokens.mutedForeground)
+
+                // Swing variants — optional. Only calibrated variants
+                // appear in the calculator's recommendation list.
+                swingVariantSection(
+                    label: "3/4 swing",
+                    helper: "Optional · used when the calculator picks it",
+                    carry: $threeQuarterCarry,
+                    carrySd: $threeQuarterCarrySd,
+                    lateralSd: $threeQuarterLateralSd,
+                    fallbackCarry: carry * 0.85,
+                    fallbackCarrySd: carrySd * 0.90,
+                    fallbackLateralSd: lateralSd * 0.90
+                )
+
+                swingVariantSection(
+                    label: "Half swing",
+                    helper: "Optional · used when the calculator picks it",
+                    carry: $halfCarry,
+                    carrySd: $halfCarrySd,
+                    lateralSd: $halfLateralSd,
+                    fallbackCarry: carry * 0.65,
+                    fallbackCarrySd: carrySd * 0.80,
+                    fallbackLateralSd: lateralSd * 0.80
+                )
             }
 
             // Actions
@@ -103,6 +138,16 @@ public struct ClubEditSheet: View {
                 carry = Units.from(yards: c.carryYards, in: unit)
                 carrySd = Units.from(yards: c.carrySd, in: unit)
                 lateralSd = Units.from(yards: c.lateralSd, in: unit)
+                if let tq = c.threeQuarter {
+                    threeQuarterCarry = Units.from(yards: tq.carryYards, in: unit)
+                    threeQuarterCarrySd = Units.from(yards: tq.carrySd, in: unit)
+                    threeQuarterLateralSd = Units.from(yards: tq.lateralSd, in: unit)
+                }
+                if let h = c.half {
+                    halfCarry = Units.from(yards: h.carryYards, in: unit)
+                    halfCarrySd = Units.from(yards: h.carrySd, in: unit)
+                    halfLateralSd = Units.from(yards: h.lateralSd, in: unit)
+                }
             }
         }
         .confirmAction("Delete \(initial?.name ?? "club")?", isPresented: $deleteConfirm,
@@ -153,6 +198,111 @@ public struct ClubEditSheet: View {
         )
     }
 
+    // MARK: - Swing variant section
+
+    /// Collapsed by default. Tap "Add" to expand and pre-seed values from
+    /// the current full-swing profile via the synthetic multiplier.
+    /// Tap "Remove" to clear the profile (sets every binding to nil).
+    @ViewBuilder
+    private func swingVariantSection(
+        label: String,
+        helper: String,
+        carry: Binding<Double?>,
+        carrySd: Binding<Double?>,
+        lateralSd: Binding<Double?>,
+        fallbackCarry: Double,
+        fallbackCarrySd: Double,
+        fallbackLateralSd: Double
+    ) -> some View {
+        let isCalibrated = carry.wrappedValue != nil
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(label).eyebrow()
+                Spacer()
+                Button {
+                    if isCalibrated {
+                        carry.wrappedValue = nil
+                        carrySd.wrappedValue = nil
+                        lateralSd.wrappedValue = nil
+                    } else {
+                        carry.wrappedValue = fallbackCarry
+                        carrySd.wrappedValue = fallbackCarrySd
+                        lateralSd.wrappedValue = fallbackLateralSd
+                    }
+                    Haptics.light()
+                } label: {
+                    Text(isCalibrated ? "Remove" : "Add")
+                        .font(DispersionType.mono(10, weight: .medium))
+                        .tracking(1.2)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(
+                                isCalibrated
+                                    ? DesignTokens.destructive.opacity(0.14)
+                                    : DesignTokens.primary.opacity(0.14)
+                            )
+                        )
+                        .overlay(
+                            Capsule().strokeBorder(
+                                isCalibrated
+                                    ? DesignTokens.destructive.opacity(0.4)
+                                    : DesignTokens.primary.opacity(0.4),
+                                lineWidth: 1
+                            )
+                        )
+                        .foregroundStyle(
+                            isCalibrated ? DesignTokens.destructive : DesignTokens.primary
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            if isCalibrated {
+                HStack(spacing: 12) {
+                    sheetField("Carry") {
+                        NumericField("0", value: optionalBinding(carry, default: fallbackCarry), precision: 1)
+                    }
+                    sheetField("σ↕") {
+                        NumericField("0", value: optionalBinding(carrySd, default: fallbackCarrySd), precision: 1)
+                    }
+                    sheetField("σ↔") {
+                        NumericField("0", value: optionalBinding(lateralSd, default: fallbackLateralSd), precision: 1)
+                    }
+                }
+            } else {
+                Text(helper)
+                    .font(DispersionType.ui(11))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+                    .padding(.leading, 2)
+            }
+        }
+    }
+
+    /// Bridges a Binding<Double?> to a Binding<Double> for NumericField,
+    /// preserving the optional behavior — writes nil if the user clears
+    /// to zero.
+    private func optionalBinding(_ source: Binding<Double?>, default fallback: Double) -> Binding<Double> {
+        Binding(
+            get: { source.wrappedValue ?? fallback },
+            set: { source.wrappedValue = $0 }
+        )
+    }
+
+    private func makeProfile(
+        carry: Double?,
+        carrySd: Double?,
+        lateralSd: Double?,
+        existing: SwingProfile?
+    ) -> SwingProfile? {
+        guard let carry, let carrySd, let lateralSd else { return nil }
+        return SwingProfile(
+            carryYards: Units.toYards(carry, from: unit),
+            carrySd: Units.toYards(carrySd, from: unit),
+            lateralSd: Units.toYards(lateralSd, from: unit),
+            sampleCount: existing?.sampleCount ?? 0
+        )
+    }
+
     // MARK: - Reusable field
 
     private func sheetField<Content: View>(_ label: String, hint: String? = nil, @ViewBuilder content: () -> Content) -> some View {
@@ -188,15 +338,37 @@ public struct ClubEditSheet: View {
         let yC = isPutter ? 0 : Units.toYards(carry, from: unit)
         let yCS = isPutter ? 0.5 : Units.toYards(carrySd, from: unit)
         let yLS = isPutter ? 0.5 : Units.toYards(lateralSd, from: unit)
+        let tqProfile = makeProfile(
+            carry: threeQuarterCarry,
+            carrySd: threeQuarterCarrySd,
+            lateralSd: threeQuarterLateralSd,
+            existing: initial?.threeQuarter
+        )
+        let halfProfile = makeProfile(
+            carry: halfCarry,
+            carrySd: halfCarrySd,
+            lateralSd: halfLateralSd,
+            existing: initial?.half
+        )
         do {
             if let id = initial?.id {
                 try repo.update(id: id, patch: .init(
-                    name: trimmed, carryYards: yC, carrySd: yCS, lateralSd: yLS
+                    name: trimmed,
+                    carryYards: yC,
+                    carrySd: yCS,
+                    lateralSd: yLS,
+                    threeQuarter: .some(tqProfile),
+                    half: .some(halfProfile)
                 ))
             } else {
                 try repo.create(Club(
                     id: UUID().uuidString.lowercased(),
-                    name: trimmed, carryYards: yC, carrySd: yCS, lateralSd: yLS
+                    name: trimmed,
+                    carryYards: yC,
+                    carrySd: yCS,
+                    lateralSd: yLS,
+                    threeQuarter: tqProfile,
+                    half: halfProfile
                 ))
             }
             saveError = nil

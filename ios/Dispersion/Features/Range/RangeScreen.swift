@@ -168,6 +168,10 @@ struct LiveRangeView: View {
     @State private var dragReadout: ShotXY?
 
     @State private var sessionGoal: Int = 20
+    /// What swing the user is practicing right now. Logged shots adopt
+    /// this swing type; Save calibration writes to the corresponding
+    /// Club variant slot (or the full-swing primary fields).
+    @State private var practiceSwing: SwingType = .full
     @State private var switchClubOpen: Bool = false
     @State private var targetSheetOpen: Bool = false
     @State private var addShotOpen: Bool = false
@@ -351,7 +355,7 @@ struct LiveRangeView: View {
     // MARK: floating cards
 
     private func floatingSessionCard(_ club: Club) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(sessionId != nil ? DesignTokens.primary : DesignTokens.mutedForeground.opacity(0.4))
                 .frame(width: 6, height: 6)
@@ -366,6 +370,48 @@ struct LiveRangeView: View {
                     .font(DispersionType.mono(11, weight: .medium))
                     .foregroundStyle(DesignTokens.primary)
             }
+
+            // Swing-type chip — tap to cycle Full → 3/4 → Half. The
+            // chip is bordered when the user is practicing a partial
+            // swing so it reads as a deliberate choice.
+            Button {
+                guard taps.isEmpty else { return }
+                practiceSwing = nextSwing(after: practiceSwing)
+                Haptics.light()
+            } label: {
+                Text(practiceSwing.label.uppercased())
+                    .font(DispersionType.mono(9, weight: .semibold))
+                    .tracking(0.8)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .foregroundStyle(
+                        practiceSwing == .full
+                            ? DesignTokens.mutedForeground
+                            : accent
+                    )
+                    .background(
+                        Capsule().fill(
+                            practiceSwing == .full
+                                ? DesignTokens.surface
+                                : accent.opacity(0.18)
+                        )
+                    )
+                    .overlay(
+                        Capsule().strokeBorder(
+                            practiceSwing == .full
+                                ? DesignTokens.border
+                                : accent.opacity(0.6),
+                            lineWidth: 0.8
+                        )
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(!taps.isEmpty)
+            .opacity(taps.isEmpty ? 1 : 0.6)
+            .accessibilityLabel("Swing type: \(practiceSwing.label)")
+            .accessibilityHint(taps.isEmpty
+                               ? "Tap to cycle to next swing type"
+                               : "Locked while shots are logged in this session")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -375,6 +421,14 @@ struct LiveRangeView: View {
                 .overlay(Capsule().strokeBorder(DesignTokens.border, lineWidth: 1))
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
         )
+    }
+
+    private func nextSwing(after s: SwingType) -> SwingType {
+        switch s {
+        case .full: return .threeQuarter
+        case .threeQuarter: return .half
+        case .half: return .full
+        }
     }
 
     private func liveStatsCard(_ club: Club) -> some View {
@@ -457,11 +511,14 @@ struct LiveRangeView: View {
                 clubId: club.id,
                 targetDistanceYards: effectiveTarget,
                 longDelta: shot.long,
-                latDelta: shot.lat
+                latDelta: shot.lat,
+                outcomes: [],
+                timestamp: .now,
+                swingType: practiceSwing
             ))
             pendingShot = shot
             pendingShotId = shotId
-            pendingSwingType = .full
+            pendingSwingType = practiceSwing
             pendingOutcomes = autoDetectOutcomes(longDelta: shot.long, latDelta: shot.lat)
             lastShotPB = detectPersonalBest(after: shot)
         } catch {
@@ -864,12 +921,25 @@ struct LiveRangeView: View {
         // Absolute measured carry = target + mean long delta
         let measuredCarry = effectiveTarget + stats.longBias
         let repo = ClubsRepo(context: modelContext)
+        let profile = SwingProfile(
+            carryYards: measuredCarry,
+            carrySd: stats.carrySd,
+            lateralSd: stats.lateralSd,
+            sampleCount: taps.count
+        )
         do {
-            try repo.update(id: club.id, patch: .init(
-                carryYards: measuredCarry,
-                carrySd: stats.carrySd,
-                lateralSd: stats.lateralSd
-            ))
+            switch practiceSwing {
+            case .full:
+                try repo.update(id: club.id, patch: .init(
+                    carryYards: measuredCarry,
+                    carrySd: stats.carrySd,
+                    lateralSd: stats.lateralSd
+                ))
+            case .threeQuarter:
+                try repo.update(id: club.id, patch: .init(threeQuarter: .some(profile)))
+            case .half:
+                try repo.update(id: club.id, patch: .init(half: .some(profile)))
+            }
         } catch {
             self.error = "Failed to save calibration: \(error.localizedDescription)"
         }

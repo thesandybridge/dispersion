@@ -22,16 +22,16 @@ struct WhyClubExplainer: View {
     private var recCarryFit: Double { recExpectedCarry - scenario.distanceToTargetYards }
 
     private var viewingCarrySd: Double {
-        viewingClub.carrySd * viewing.swingType.sigmaMultiplier
+        viewingClub.profile(for: viewing.swingType).carrySd
     }
     private var recCarrySd: Double {
-        recommendedClub.carrySd * recommended.swingType.sigmaMultiplier
+        recommendedClub.profile(for: recommended.swingType).carrySd
     }
     private var viewingLateralSd: Double {
-        viewingClub.lateralSd * viewing.swingType.sigmaMultiplier
+        viewingClub.profile(for: viewing.swingType).lateralSd
     }
     private var recLateralSd: Double {
-        recommendedClub.lateralSd * recommended.swingType.sigmaMultiplier
+        recommendedClub.profile(for: recommended.swingType).lateralSd
     }
 
     private var probDelta: Double {

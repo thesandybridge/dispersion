@@ -17,6 +17,19 @@ public final class ClubModel {
     public var createdAt: Date
     public var updatedAt: Date
 
+    // Optional swing-variant calibration. SwiftData lightweight migration
+    // assigns nil to legacy rows. Stored as flat columns rather than a
+    // nested struct so the schema is easy to evolve.
+    public var threeQuarterCarryYards: Double?
+    public var threeQuarterCarrySd: Double?
+    public var threeQuarterLateralSd: Double?
+    public var threeQuarterSamples: Int?
+
+    public var halfCarryYards: Double?
+    public var halfCarrySd: Double?
+    public var halfLateralSd: Double?
+    public var halfSamples: Int?
+
     public init(
         id: String,
         name: String,
@@ -24,7 +37,9 @@ public final class ClubModel {
         carrySd: Double,
         lateralSd: Double,
         createdAt: Date,
-        updatedAt: Date
+        updatedAt: Date,
+        threeQuarter: SwingProfile? = nil,
+        half: SwingProfile? = nil
     ) {
         self.id = id
         self.name = name
@@ -33,6 +48,14 @@ public final class ClubModel {
         self.lateralSd = lateralSd
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.threeQuarterCarryYards = threeQuarter?.carryYards
+        self.threeQuarterCarrySd = threeQuarter?.carrySd
+        self.threeQuarterLateralSd = threeQuarter?.lateralSd
+        self.threeQuarterSamples = threeQuarter?.sampleCount
+        self.halfCarryYards = half?.carryYards
+        self.halfCarrySd = half?.carrySd
+        self.halfLateralSd = half?.lateralSd
+        self.halfSamples = half?.sampleCount
     }
 
     public func toValue() -> Club {
@@ -42,8 +65,35 @@ public final class ClubModel {
             carryYards: carryYards,
             carrySd: carrySd,
             lateralSd: lateralSd,
+            threeQuarter: swingProfile(
+                carry: threeQuarterCarryYards,
+                carrySd: threeQuarterCarrySd,
+                lateralSd: threeQuarterLateralSd,
+                samples: threeQuarterSamples
+            ),
+            half: swingProfile(
+                carry: halfCarryYards,
+                carrySd: halfCarrySd,
+                lateralSd: halfLateralSd,
+                samples: halfSamples
+            ),
             createdAt: createdAt,
             updatedAt: updatedAt
+        )
+    }
+
+    private func swingProfile(
+        carry: Double?,
+        carrySd: Double?,
+        lateralSd: Double?,
+        samples: Int?
+    ) -> SwingProfile? {
+        guard let carry, let carrySd, let lateralSd else { return nil }
+        return SwingProfile(
+            carryYards: carry,
+            carrySd: carrySd,
+            lateralSd: lateralSd,
+            sampleCount: samples ?? 0
         )
     }
 }

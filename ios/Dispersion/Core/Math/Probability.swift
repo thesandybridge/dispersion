@@ -83,21 +83,9 @@ public enum Probability {
         return min(total, 1)
     }
 
-    /// Which clubs get partial swing variants — only wedges and short irons.
-    private static func swingsForClub(_ club: Club) -> [SwingType] {
-        let cat = ClubCategoryRegistry.categorize(name: club.name, carryYards: club.carryYards)
-        switch cat {
-        case .wedge:
-            return [.full, .threeQuarter, .half]
-        case .shortIron:
-            return [.full, .threeQuarter]
-        default:
-            return [.full]
-        }
-    }
-
     /// Rank a bag against a scenario by descending probability-in-zone.
-    /// Generates partial swing variants only for wedges and short irons.
+    /// Partial-swing variants are considered only when the user has
+    /// explicitly calibrated them (Club.threeQuarter / Club.half non-nil).
     public static func rankClubs(
         _ clubs: [Club],
         scenario: ShotScenario,
@@ -108,11 +96,12 @@ public enum Probability {
             // Skip putter from approach rankings
             let cat = ClubCategoryRegistry.categorize(name: c.name, carryYards: c.carryYards)
             if cat == .putter { continue }
-            for swing in swingsForClub(c) {
+            for swing in c.availableSwings {
+                let p = c.profile(for: swing)
                 var virtual = c
-                virtual.carryYards = c.carryYards * swing.carryMultiplier
-                virtual.carrySd = c.carrySd * swing.sigmaMultiplier
-                virtual.lateralSd = c.lateralSd * swing.sigmaMultiplier
+                virtual.carryYards = p.carry
+                virtual.carrySd = p.carrySd
+                virtual.lateralSd = p.lateralSd
                 let pZone = probabilityInZone(
                     club: virtual,
                     scenario: scenario,

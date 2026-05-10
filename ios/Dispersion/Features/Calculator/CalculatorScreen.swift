@@ -142,10 +142,11 @@ public struct CalculatorScreen: View {
             // horizontally to bias lateral aim. Live P(zone) badge floats
             // beside the pin on the green.
             if let club = viewedClub, let vr = viewedResult {
+                let p = club.profile(for: vr.swingType)
                 DispersionViz(
                     carry: vr.expectedCarry,
-                    carrySd: club.carrySd * vr.swingType.sigmaMultiplier,
-                    lateralSd: club.lateralSd * vr.swingType.sigmaMultiplier,
+                    carrySd: p.carrySd,
+                    lateralSd: p.lateralSd,
                     distanceToTarget: scenario.distance,
                     zoneWidth: scenario.width,
                     zoneDepth: scenario.depth,

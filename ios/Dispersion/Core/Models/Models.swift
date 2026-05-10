@@ -107,6 +107,28 @@ public enum SwingType: String, Codable, CaseIterable, Sendable {
     }
 }
 
+// MARK: Swing profile
+
+/// A calibrated set of carry + σ values for a partial swing of a club.
+/// Lives next to the full-swing values on `Club`. nil means the user
+/// hasn't calibrated this swing variant yet — the calculator will not
+/// recommend a swing it has no real numbers for.
+public struct SwingProfile: Codable, Hashable, Sendable {
+    public var carryYards: Double
+    public var carrySd: Double
+    public var lateralSd: Double
+    /// Sample count from calibration runs; the running stats updater
+    /// uses this to weight new shots against the stored profile.
+    public var sampleCount: Int
+
+    public init(carryYards: Double, carrySd: Double, lateralSd: Double, sampleCount: Int = 0) {
+        self.carryYards = carryYards
+        self.carrySd = carrySd
+        self.lateralSd = lateralSd
+        self.sampleCount = sampleCount
+    }
+}
+
 // MARK: Club
 
 public struct Club: Identifiable, Hashable, Sendable {
@@ -115,6 +137,11 @@ public struct Club: Identifiable, Hashable, Sendable {
     public var carryYards: Double
     public var carrySd: Double
     public var lateralSd: Double
+    /// Calibrated 3/4 swing profile. nil = uncalibrated; the calculator
+    /// will not include 3/4 in the recommendation list.
+    public var threeQuarter: SwingProfile?
+    /// Calibrated half swing profile. nil = uncalibrated.
+    public var half: SwingProfile?
     public var createdAt: Date
     public var updatedAt: Date
 
@@ -124,6 +151,8 @@ public struct Club: Identifiable, Hashable, Sendable {
         carryYards: Double,
         carrySd: Double,
         lateralSd: Double,
+        threeQuarter: SwingProfile? = nil,
+        half: SwingProfile? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now
     ) {
@@ -132,8 +161,43 @@ public struct Club: Identifiable, Hashable, Sendable {
         self.carryYards = carryYards
         self.carrySd = carrySd
         self.lateralSd = lateralSd
+        self.threeQuarter = threeQuarter
+        self.half = half
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    /// Swings the calculator may consider for this club. Always includes
+    /// `.full`; 3/4 and half only if the user has calibrated them.
+    public var availableSwings: [SwingType] {
+        var swings: [SwingType] = [.full]
+        if threeQuarter != nil { swings.append(.threeQuarter) }
+        if half != nil { swings.append(.half) }
+        return swings
+    }
+
+    /// Resolved (carry, σ↕, σ↔) for a given swing type. Falls back to the
+    /// synthetic SwingType multipliers if the variant isn't calibrated —
+    /// callers that want only-real values should gate on
+    /// `availableSwings` first.
+    public func profile(for swing: SwingType) -> (carry: Double, carrySd: Double, lateralSd: Double) {
+        switch swing {
+        case .full:
+            return (carryYards, carrySd, lateralSd)
+        case .threeQuarter:
+            if let p = threeQuarter {
+                return (p.carryYards, p.carrySd, p.lateralSd)
+            }
+        case .half:
+            if let p = half {
+                return (p.carryYards, p.carrySd, p.lateralSd)
+            }
+        }
+        return (
+            carryYards * swing.carryMultiplier,
+            carrySd * swing.sigmaMultiplier,
+            lateralSd * swing.sigmaMultiplier
+        )
     }
 }
 
