@@ -108,7 +108,13 @@ public struct ClubsRepo {
     }
 
     public func deleteAll() throws {
-        try context.delete(model: ClubModel.self)
+        // SwiftData's `context.delete(model:)` bulk-delete API has known
+        // reliability issues — silently no-ops in some iOS builds, leaves
+        // rows in the persistent store. Explicit fetch + per-row delete
+        // is the only path that consistently wipes the table.
+        for m in try context.fetch(FetchDescriptor<ClubModel>()) {
+            context.delete(m)
+        }
         try context.save()
     }
 

@@ -85,7 +85,9 @@ public struct PuttersRepo {
     }
 
     public func deleteAll() throws {
-        try context.delete(model: PutterModel.self)
+        for m in try context.fetch(FetchDescriptor<PutterModel>()) {
+            context.delete(m)
+        }
         try context.save()
     }
 
@@ -165,7 +167,9 @@ public struct PuttsRepo {
     }
 
     public func deleteAll() throws {
-        try context.delete(model: PuttModel.self)
+        for m in try context.fetch(FetchDescriptor<PuttModel>()) {
+            context.delete(m)
+        }
         try context.save()
     }
 }

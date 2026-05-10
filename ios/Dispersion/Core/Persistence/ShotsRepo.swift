@@ -112,7 +112,9 @@ public struct ShotsRepo {
     }
 
     public func deleteAll() throws {
-        try context.delete(model: ShotModel.self)
+        for m in try context.fetch(FetchDescriptor<ShotModel>()) {
+            context.delete(m)
+        }
         try context.save()
     }
 }

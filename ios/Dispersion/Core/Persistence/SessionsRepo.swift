@@ -46,7 +46,9 @@ public struct SessionsRepo {
     }
 
     public func deleteAll() throws {
-        try context.delete(model: SessionModel.self)
+        for m in try context.fetch(FetchDescriptor<SessionModel>()) {
+            context.delete(m)
+        }
         try context.save()
     }
 }

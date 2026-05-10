@@ -28,10 +28,6 @@ public struct HoleMapView: View {
     @State private var position: MapCameraPosition = .automatic
     @State private var satellite = false
     @State private var cameraCenter: CLLocationCoordinate2D?
-    /// Bumped on every camera event (pan, zoom, pitch, rotate) so the
-    /// trajectory Canvas knows to redraw with fresh screen-space
-    /// projections. cameraCenter alone doesn't change on zoom.
-    @State private var cameraTick: UInt32 = 0
 
     private let greenFill = hex("#A8C97F")
     private let fairwayFill = hex("#C4D49A")
@@ -86,11 +82,31 @@ public struct HoleMapView: View {
                         }
                     }
 
-                    // Shot markers — the arcs themselves are drawn as a
-                    // SwiftUI overlay below so they can take screen-space
-                    // height (a true 3D arc on a tilted MapKit projection
-                    // isn't supported by MapPolyline).
+                    // Shot arcs — sampled MapPolyline with a parabolic
+                    // perpendicular bow so the curve renders inside the
+                    // Map's native pipeline. Stays glued to its coords
+                    // through any pan/zoom/pitch.
                     ForEach(sortedShots, id: \.id) { shot in
+                        MapPolyline(coordinates: arcCoords(
+                            startLat: shot.startLat, startLng: shot.startLng,
+                            endLat: shot.endLat, endLng: shot.endLng,
+                            distanceYards: shot.distanceYards
+                        ))
+                        .stroke(accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+
+                        Annotation("\(Int(shot.distanceYards))y", coordinate: arcMidpoint(
+                            startLat: shot.startLat, startLng: shot.startLng,
+                            endLat: shot.endLat, endLng: shot.endLng,
+                            distanceYards: shot.distanceYards
+                        )) {
+                            Text("\(Int(shot.distanceYards))y")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(accent.opacity(0.92)))
+                        }
+
                         Annotation("", coordinate: CLLocationCoordinate2D(latitude: shot.startLat, longitude: shot.startLng)) {
                             ZStack {
                                 Circle().fill(.white).frame(width: 16, height: 16)
@@ -169,6 +185,8 @@ public struct HoleMapView: View {
                         }
                     }
 
+                    aimPreview
+
                     UserAnnotation()
                 }
                 .mapStyle(.standard(elevation: .realistic, pointsOfInterest: .excludingAll))
@@ -182,7 +200,6 @@ public struct HoleMapView: View {
                         lat: context.camera.centerCoordinate.latitude,
                         lng: context.camera.centerCoordinate.longitude
                     )
-                    cameraTick &+= 1
                 }
                 .overlay {
                     // Use MapProxy to get the true coordinate at screen center
@@ -196,10 +213,6 @@ public struct HoleMapView: View {
                         }
                     }
                     .allowsHitTesting(false)
-                }
-                .overlay {
-                    trajectoryOverlay(proxy: proxy)
-                        .allowsHitTesting(false)
                 }
             }
 
@@ -241,127 +254,106 @@ public struct HoleMapView: View {
         .onChange(of: greenCoord?.lat) { _, _ in orientCamera() }
     }
 
-    // MARK: - Trajectory overlay
+    // MARK: - Aim preview
 
-    /// Per-shot screen-space arc + dashed residual line from the ball to
-    /// the pin. Drawn in screen coordinates because SwiftUI's MapPolyline
-    /// is 2D-only — projecting the start/end through MapProxy already
-    /// accounts for the camera's pitch and rotation, so the arc just
-    /// needs an upward bend in screen pixels.
-    @ViewBuilder
-    private func trajectoryOverlay(proxy: MapProxy) -> some View {
-        // Drive the Canvas off the display refresh clock instead of
-        // SwiftUI state. onMapCameraChange + cameraTick wasn't tight
-        // enough during pinch-zoom — Map's own render and the Canvas
-        // overlay could drift a frame apart, smearing the arcs. A
-        // TimelineView(.animation) ticks per frame, so proxy.convert
-        // is sampled in lock-step with whatever the map just rendered.
-        TimelineView(.animation) { _ in
-            Canvas { ctx, size in
-            for shot in sortedShots {
-                let startCoord = CLLocationCoordinate2D(latitude: shot.startLat, longitude: shot.startLng)
-                let endCoord = CLLocationCoordinate2D(latitude: shot.endLat, longitude: shot.endLng)
-                guard
-                    let s = proxy.convert(startCoord, to: .local),
-                    let e = proxy.convert(endCoord, to: .local)
-                else { continue }
+    /// Arc from the player's current ball position to the crosshair, then
+    /// a dashed straight line from the crosshair to the pin. Wrapped in a
+    /// MapContentBuilder helper because inlining all the conditional
+    /// guards inside the parent `Map { ... }` content was tripping
+    /// SwiftUI's type inference budget.
+    @MapContentBuilder
+    private var aimPreview: some MapContent {
+        if showCrosshair, let cursor = crosshairCoord, let ball = ballAimAnchor {
+            let aimYards = haversineYards(from: ball, to: cursor)
+            MapPolyline(coordinates: arcCoords(
+                startLat: ball.lat, startLng: ball.lng,
+                endLat: cursor.lat, endLng: cursor.lng,
+                distanceYards: aimYards
+            ))
+            .stroke(.white.opacity(0.85), style: StrokeStyle(lineWidth: 2, lineCap: .round))
 
-                let path = arcPath(from: s, to: e, distanceYards: shot.distanceYards)
-                ctx.stroke(path, with: .color(accent), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
-
-                // Distance label — perched at the apex of the arc.
-                let apex = arcApex(from: s, to: e, distanceYards: shot.distanceYards)
-                let label = Text("\(Int(shot.distanceYards))y")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white)
-                let resolved = ctx.resolve(label)
-                let labelSize = resolved.measure(in: size)
-                let pad: CGFloat = 5
-                let bgRect = CGRect(
-                    x: apex.x - labelSize.width / 2 - pad,
-                    y: apex.y - labelSize.height / 2 - 2,
-                    width: labelSize.width + pad * 2,
-                    height: labelSize.height + 4
+            if let pin = greenCoord {
+                MapPolyline(coordinates: [
+                    CLLocationCoordinate2D(latitude: cursor.lat, longitude: cursor.lng),
+                    CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.lng),
+                ])
+                .stroke(
+                    .white.opacity(0.6),
+                    style: StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [4, 5])
                 )
-                ctx.fill(
-                    Path(roundedRect: bgRect, cornerRadius: bgRect.height / 2),
-                    with: .color(accent.opacity(0.92))
-                )
-                ctx.draw(resolved, at: CGPoint(x: apex.x, y: apex.y))
-            }
-
-            // Aim preview: arc from current ball position → crosshair,
-            // then a dashed straight line from crosshair → pin showing the
-            // residual distance the planned shot would leave. Only drawn
-            // while the crosshair is active.
-            if showCrosshair, let cursor = crosshairCoord {
-                let ballCoord: Coord
-                if let last = sortedShots.last {
-                    ballCoord = Coord(lat: last.endLat, lng: last.endLng)
-                } else if let tee = teeCoord {
-                    ballCoord = tee
-                } else {
-                    return
-                }
-                let cursorCoord = CLLocationCoordinate2D(latitude: cursor.lat, longitude: cursor.lng)
-                let ballCL = CLLocationCoordinate2D(latitude: ballCoord.lat, longitude: ballCoord.lng)
-                guard
-                    let bp = proxy.convert(ballCL, to: .local),
-                    let cp = proxy.convert(cursorCoord, to: .local)
-                else { return }
-                let aimYards = haversineYards(from: ballCoord, to: cursor)
-                let aimArc = arcPath(from: bp, to: cp, distanceYards: aimYards)
-                ctx.stroke(
-                    aimArc,
-                    with: .color(.white.opacity(0.85)),
-                    style: StrokeStyle(lineWidth: 2, lineCap: .round)
-                )
-
-                if let pin = greenCoord {
-                    let pinCoord = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.lng)
-                    if let pp = proxy.convert(pinCoord, to: .local) {
-                        var residual = Path()
-                        residual.move(to: cp)
-                        residual.addLine(to: pp)
-                        ctx.stroke(
-                            residual,
-                            with: .color(.white.opacity(0.65)),
-                            style: StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [4, 5])
-                        )
-                    }
-                }
-            }
             }
         }
     }
 
-    /// Quadratic-Bezier arc in screen space whose apex height scales with
-    /// the shot's actual yardage. Apex is `~0.18 × distance` in yards,
-    /// rendered in pixels via the start→end screen distance / yards ratio.
-    private func arcPath(from s: CGPoint, to e: CGPoint, distanceYards: Double) -> Path {
-        let apex = arcApex(from: s, to: e, distanceYards: distanceYards)
-        var path = Path()
-        path.move(to: s)
-        // Quadratic control point at 2 × apex - midpoint so the curve passes
-        // through the apex at t = 0.5.
-        let mid = CGPoint(x: (s.x + e.x) / 2, y: (s.y + e.y) / 2)
-        let control = CGPoint(x: 2 * apex.x - mid.x, y: 2 * apex.y - mid.y)
-        path.addQuadCurve(to: e, control: control)
-        return path
+    /// Last shot's landing point, or the tee if no shots have been hit.
+    private var ballAimAnchor: Coord? {
+        if let last = sortedShots.last {
+            return Coord(lat: last.endLat, lng: last.endLng)
+        }
+        return teeCoord
     }
 
-    private func arcApex(from s: CGPoint, to e: CGPoint, distanceYards: Double) -> CGPoint {
-        let mid = CGPoint(x: (s.x + e.x) / 2, y: (s.y + e.y) / 2)
-        let dx = e.x - s.x
-        let dy = e.y - s.y
-        let screenDist = sqrt(dx * dx + dy * dy)
-        guard screenDist > 1, distanceYards > 1 else { return mid }
-        // Real golf shot apex is roughly proportional to carry: ~30 yards
-        // for a driver, ~15 for a wedge. 0.18× is a tasteful average.
-        let apexYards = max(8.0, min(40.0, distanceYards * 0.18))
-        let pixelsPerYard = screenDist / distanceYards
-        let lift = apexYards * pixelsPerYard
-        return CGPoint(x: mid.x, y: mid.y - lift)
+    // MARK: - Trajectory geometry
+
+    /// Sample N points along a parabolic arc. The base path is the
+    /// straight ground line from start → end; each sample is offset
+    /// perpendicular to that direction by a parabolic amount so the
+    /// rendered MapPolyline appears as a curve. Stays inside MapKit's
+    /// native rendering pipeline so it can't drift out of sync with
+    /// camera changes.
+    private func arcCoords(
+        startLat: Double, startLng: Double,
+        endLat: Double, endLng: Double,
+        distanceYards: Double,
+        samples: Int = 18
+    ) -> [CLLocationCoordinate2D] {
+        let start = Coord(lat: startLat, lng: startLng)
+        let end = Coord(lat: endLat, lng: endLng)
+        let bearing = bearingRad(from: start, to: end)
+        // Bow the curve in the perpendicular direction. Magnitude is a
+        // capped fraction of shot distance — looks like a flatter or
+        // taller arc depending on yardage.
+        let bowYards = max(6.0, min(28.0, distanceYards * 0.16))
+        let perpBearing = bearing + .pi / 2
+
+        var points: [CLLocationCoordinate2D] = []
+        for i in 0...samples {
+            let t = Double(i) / Double(samples)
+            let baseLat = startLat + (endLat - startLat) * t
+            let baseLng = startLng + (endLng - startLng) * t
+            // Parabola: peak 1 at t=0.5, 0 at t=0 and t=1.
+            let bow = 4 * t * (1 - t) * bowYards
+            let off = projectCoord(
+                from: Coord(lat: baseLat, lng: baseLng),
+                distanceYards: bow,
+                bearing: perpBearing
+            )
+            points.append(CLLocationCoordinate2D(latitude: off.lat, longitude: off.lng))
+        }
+        return points
+    }
+
+    /// Coordinate at the apex of the arc — used to anchor the distance
+    /// label so it sits at the bow's peak rather than on the straight
+    /// midpoint.
+    private func arcMidpoint(
+        startLat: Double, startLng: Double,
+        endLat: Double, endLng: Double,
+        distanceYards: Double
+    ) -> CLLocationCoordinate2D {
+        let bowYards = max(6.0, min(28.0, distanceYards * 0.16))
+        let baseLat = (startLat + endLat) / 2
+        let baseLng = (startLng + endLng) / 2
+        let bearing = bearingRad(
+            from: Coord(lat: startLat, lng: startLng),
+            to: Coord(lat: endLat, lng: endLng)
+        )
+        let off = projectCoord(
+            from: Coord(lat: baseLat, lng: baseLng),
+            distanceYards: bowYards,
+            bearing: bearing + .pi / 2
+        )
+        return CLLocationCoordinate2D(latitude: off.lat, longitude: off.lng)
     }
 
     // MARK: - Crosshair

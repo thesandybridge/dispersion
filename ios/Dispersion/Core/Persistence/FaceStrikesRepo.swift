@@ -50,7 +50,9 @@ public struct FaceStrikesRepo {
     }
 
     public func deleteAll() throws {
-        try context.delete(model: FaceStrikeModel.self)
+        for m in try context.fetch(FetchDescriptor<FaceStrikeModel>()) {
+            context.delete(m)
+        }
         try context.save()
     }
 }

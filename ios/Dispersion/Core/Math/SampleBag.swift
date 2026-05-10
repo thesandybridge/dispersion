@@ -10,6 +10,9 @@ public enum SampleBag {
         public let lateralSd: Double
     }
 
+    /// Sample bag contains regular clubs only — putters are their own
+    /// domain (PutterModel) and seeding one as a Club row would create
+    /// an orphan that doesn't belong to either side.
     public static let entries: [Entry] = [
         .init(name: "Driver",  carryYards: 258, carrySd: 9.5, lateralSd: 14),
         .init(name: "3 Wood",  carryYards: 232, carrySd: 8.5, lateralSd: 11),
@@ -24,7 +27,6 @@ public enum SampleBag {
         .init(name: "GW",      carryYards: 112, carrySd: 3.4, lateralSd: 5),
         .init(name: "SW",      carryYards: 92,  carrySd: 3.0, lateralSd: 4.5),
         .init(name: "LW",      carryYards: 70,  carrySd: 2.6, lateralSd: 4),
-        .init(name: "Putter",  carryYards: 0,   carrySd: 0.5, lateralSd: 0.5),
     ]
 
     public static func clubs(idGen: () -> String = { UUID().uuidString.lowercased() }) -> [Club] {
