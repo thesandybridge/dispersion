@@ -82,14 +82,11 @@ public struct HoleMapView: View {
                         }
                     }
 
-                    // Shot lines and markers
+                    // Shot markers — the arcs themselves are drawn as a
+                    // SwiftUI overlay below so they can take screen-space
+                    // height (a true 3D arc on a tilted MapKit projection
+                    // isn't supported by MapPolyline).
                     ForEach(sortedShots, id: \.id) { shot in
-                        MapPolyline(coordinates: [
-                            CLLocationCoordinate2D(latitude: shot.startLat, longitude: shot.startLng),
-                            CLLocationCoordinate2D(latitude: shot.endLat, longitude: shot.endLng)
-                        ])
-                        .stroke(accent, lineWidth: 2.5)
-
                         Annotation("", coordinate: CLLocationCoordinate2D(latitude: shot.startLat, longitude: shot.startLng)) {
                             ZStack {
                                 Circle().fill(.white).frame(width: 16, height: 16)
@@ -100,17 +97,6 @@ public struct HoleMapView: View {
                             }
                         }
 
-                        Annotation("", coordinate: CLLocationCoordinate2D(
-                            latitude: (shot.startLat + shot.endLat) / 2,
-                            longitude: (shot.startLng + shot.endLng) / 2
-                        )) {
-                            Text("\(Int(shot.distanceYards))y")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Capsule().fill(accent.opacity(0.9)))
-                        }
                     }
 
                     // Final landing
@@ -206,6 +192,10 @@ public struct HoleMapView: View {
                     }
                     .allowsHitTesting(false)
                 }
+                .overlay {
+                    trajectoryOverlay(proxy: proxy)
+                        .allowsHitTesting(false)
+                }
             }
 
             // Crosshair overlay
@@ -244,6 +234,110 @@ public struct HoleMapView: View {
         .onAppear { orientCamera() }
         .onChange(of: teeCoord?.lat) { _, _ in orientCamera() }
         .onChange(of: greenCoord?.lat) { _, _ in orientCamera() }
+    }
+
+    // MARK: - Trajectory overlay
+
+    /// Per-shot screen-space arc + dashed residual line from the ball to
+    /// the pin. Drawn in screen coordinates because SwiftUI's MapPolyline
+    /// is 2D-only — projecting the start/end through MapProxy already
+    /// accounts for the camera's pitch and rotation, so the arc just
+    /// needs an upward bend in screen pixels.
+    @ViewBuilder
+    private func trajectoryOverlay(proxy: MapProxy) -> some View {
+        // `cameraCenter` ticks on every camera change, so reading it here
+        // makes Canvas redraw whenever the user pans / pitches / zooms.
+        let _ = cameraCenter
+        Canvas { ctx, size in
+            for shot in sortedShots {
+                let startCoord = CLLocationCoordinate2D(latitude: shot.startLat, longitude: shot.startLng)
+                let endCoord = CLLocationCoordinate2D(latitude: shot.endLat, longitude: shot.endLng)
+                guard
+                    let s = proxy.convert(startCoord, to: .local),
+                    let e = proxy.convert(endCoord, to: .local)
+                else { continue }
+
+                let path = arcPath(from: s, to: e, distanceYards: shot.distanceYards)
+                ctx.stroke(path, with: .color(accent), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
+
+                // Distance label — perched at the apex of the arc.
+                let apex = arcApex(from: s, to: e, distanceYards: shot.distanceYards)
+                let label = Text("\(Int(shot.distanceYards))y")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
+                let resolved = ctx.resolve(label)
+                let labelSize = resolved.measure(in: size)
+                let pad: CGFloat = 5
+                let bgRect = CGRect(
+                    x: apex.x - labelSize.width / 2 - pad,
+                    y: apex.y - labelSize.height / 2 - 2,
+                    width: labelSize.width + pad * 2,
+                    height: labelSize.height + 4
+                )
+                ctx.fill(
+                    Path(roundedRect: bgRect, cornerRadius: bgRect.height / 2),
+                    with: .color(accent.opacity(0.92))
+                )
+                ctx.draw(resolved, at: CGPoint(x: apex.x, y: apex.y))
+            }
+
+            // Dashed residual line — current ball position → pin. The "ball"
+            // is the last shot's landing point if any shots have been hit,
+            // otherwise the tee.
+            if let pin = greenCoord {
+                let from: Coord
+                if let last = sortedShots.last {
+                    from = Coord(lat: last.endLat, lng: last.endLng)
+                } else if let tee = teeCoord {
+                    from = tee
+                } else {
+                    return
+                }
+                let fromCoord = CLLocationCoordinate2D(latitude: from.lat, longitude: from.lng)
+                let toCoord = CLLocationCoordinate2D(latitude: pin.lat, longitude: pin.lng)
+                guard
+                    let p0 = proxy.convert(fromCoord, to: .local),
+                    let p1 = proxy.convert(toCoord, to: .local)
+                else { return }
+                var line = Path()
+                line.move(to: p0)
+                line.addLine(to: p1)
+                ctx.stroke(
+                    line,
+                    with: .color(.white.opacity(0.85)),
+                    style: StrokeStyle(lineWidth: 1.6, lineCap: .round, dash: [5, 5])
+                )
+            }
+        }
+    }
+
+    /// Quadratic-Bezier arc in screen space whose apex height scales with
+    /// the shot's actual yardage. Apex is `~0.18 × distance` in yards,
+    /// rendered in pixels via the start→end screen distance / yards ratio.
+    private func arcPath(from s: CGPoint, to e: CGPoint, distanceYards: Double) -> Path {
+        let apex = arcApex(from: s, to: e, distanceYards: distanceYards)
+        var path = Path()
+        path.move(to: s)
+        // Quadratic control point at 2 × apex - midpoint so the curve passes
+        // through the apex at t = 0.5.
+        let mid = CGPoint(x: (s.x + e.x) / 2, y: (s.y + e.y) / 2)
+        let control = CGPoint(x: 2 * apex.x - mid.x, y: 2 * apex.y - mid.y)
+        path.addQuadCurve(to: e, control: control)
+        return path
+    }
+
+    private func arcApex(from s: CGPoint, to e: CGPoint, distanceYards: Double) -> CGPoint {
+        let mid = CGPoint(x: (s.x + e.x) / 2, y: (s.y + e.y) / 2)
+        let dx = e.x - s.x
+        let dy = e.y - s.y
+        let screenDist = sqrt(dx * dx + dy * dy)
+        guard screenDist > 1, distanceYards > 1 else { return mid }
+        // Real golf shot apex is roughly proportional to carry: ~30 yards
+        // for a driver, ~15 for a wedge. 0.18× is a tasteful average.
+        let apexYards = max(8.0, min(40.0, distanceYards * 0.18))
+        let pixelsPerYard = screenDist / distanceYards
+        let lift = apexYards * pixelsPerYard
+        return CGPoint(x: mid.x, y: mid.y - lift)
     }
 
     // MARK: - Crosshair
