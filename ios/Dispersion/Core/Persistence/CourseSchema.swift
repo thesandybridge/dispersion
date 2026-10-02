@@ -194,6 +194,10 @@ public final class RoundModel {
 
 @Model
 public final class CourseShotModel {
+    public var sessionId: String?
+    public var kind: String?
+    public var excludedFromDistances: Bool?
+    public var penaltyStrokes: Int?
     @Attribute(.unique) public var id: String
     public var courseId: String
     public var holeNumber: Int
@@ -224,10 +228,15 @@ public final class CourseShotModel {
     }
 
     public func toValue() -> CourseShot {
-        CourseShot(id: id, courseId: courseId, holeNumber: holeNumber,
+        var value = CourseShot(id: id, courseId: courseId, holeNumber: holeNumber,
                    shotNumber: shotNumber, clubId: clubId.isEmpty ? nil : clubId,
                    startLat: startLat, startLng: startLng,
                    endLat: endLat, endLng: endLng,
                    accuracy: accuracy, timestamp: timestamp)
+        value.sessionId = sessionId
+        value.kind = kind
+        value.excludedFromDistances = excludedFromDistances
+        value.penaltyStrokes = penaltyStrokes
+        return value
     }
 }

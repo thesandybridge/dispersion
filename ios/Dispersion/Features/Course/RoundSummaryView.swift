@@ -8,6 +8,10 @@ struct RoundSummaryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.themeAccent) private var accent
 
+    @State private var reviewOpen = false
+    @Query private var recordedShots: [CourseShotModel]
+    private var courseShots: [CourseShot] { recordedShots.filter { $0.sessionId == sessionId }.map { $0.toValue() } }
+
     var sessionId: String
     var courseName: String
     var onBack: () -> Void
@@ -40,13 +44,14 @@ struct RoundSummaryView: View {
     private var back9Score: Int { back9.reduce(0) { $0 + $1.score } }
 
     private var firPct: Double {
-        let eligible = played.filter { $0.par >= 4 }
+        let eligible = played.filter { $0.par >= 4 && $0.fairwayHit != nil }
         guard !eligible.isEmpty else { return 0 }
         return Double(eligible.filter { $0.fairwayHit == true }.count) / Double(eligible.count)
     }
     private var girPct: Double {
-        guard !played.isEmpty else { return 0 }
-        return Double(played.filter { $0.girHit == true }.count) / Double(played.count)
+        let known = played.filter { $0.girHit != nil }
+        guard !known.isEmpty else { return 0 }
+        return Double(known.filter { $0.girHit == true }.count) / Double(known.count)
     }
     private var totalPutts: Int { played.compactMap(\.putts).reduce(0, +) }
     private var puttsPerHole: Double {
@@ -97,6 +102,27 @@ struct RoundSummaryView: View {
                         .foregroundStyle(DesignTokens.mutedForeground)
                 }
 
+                if let round = try? CoursesRepo(context: modelContext).round(id: sessionId) {
+                    Button { reviewOpen = true } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text("Your tracked round").font(.headline)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                            }
+                            Text("\(courseShots.filter { !$0.isPenalty }.count) shots · \(scores.reduce(0) { $0 + $1.penaltyStrokes }) penalty strokes")
+                                .font(.subheadline)
+                            Text("Review the map, fill missing shots and correct clubs or penalties.")
+                                .font(.caption).foregroundStyle(DesignTokens.mutedForeground)
+                        }.foregroundStyle(DesignTokens.foreground)
+                            .padding(18).background(ThemedCardFill())
+                    }.buttonStyle(.plain)
+                    .dispersionSheet(isPresented: $reviewOpen, detents: [.large], scrollable: false) {
+                        CourseShotReview(sessionId: sessionId, courseId: round.courseId, initialHole: round.startHole)
+                    }
+                    .onAppear { try? CoursesRepo(context: modelContext).associateLegacyShots(sessionId: sessionId) }
+                }
+
                 // Front / Back split
                 if !front9.isEmpty || !back9.isEmpty {
                     HStack(spacing: 0) {
@@ -111,8 +137,8 @@ struct RoundSummaryView: View {
 
                 // Key stats grid
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    statCard("FIR", value: "\(Int(firPct * 100))%", sub: "fairways hit")
-                    statCard("GIR", value: "\(Int(girPct * 100))%", sub: "greens in reg")
+                    statCard("FIR", value: played.contains { $0.fairwayHit != nil } ? "\(Int(firPct * 100))%" : "—", sub: "fairways hit")
+                    statCard("GIR", value: played.contains { $0.girHit != nil } ? "\(Int(girPct * 100))%" : "—", sub: "greens in reg")
                     statCard("Putts", value: String(format: "%.1f", puttsPerHole), sub: "per hole · \(totalPutts) total")
                     statCard("Up & Down", value: "\(Int(upDownPct * 100))%", sub: "scrambling")
                 }
@@ -121,7 +147,7 @@ struct RoundSummaryView: View {
                 let sg = StrokesGained.aggregate(shots)
                 if sg.shotCount >= 2 {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Strokes gained").eyebrow()
+                        Text("Measured-shot strokes gained").eyebrow()
                         HStack(spacing: 20) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(String(format: "%+.2f", sg.avgSG))

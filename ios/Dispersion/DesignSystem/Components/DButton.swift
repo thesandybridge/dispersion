@@ -23,6 +23,7 @@ public enum DButtonSize: Equatable {
 
 public struct DButtonStyle: ButtonStyle {
     @Environment(\.themeAccent) private var accent
+    @Environment(\.isEnabled) private var isEnabled
     public var variant: DButtonVariant = .primary
     public var size: DButtonSize = .default
 
@@ -46,7 +47,7 @@ public struct DButtonStyle: ButtonStyle {
             }
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.spring(response: 0.18, dampingFraction: 0.85), value: configuration.isPressed)
-            .opacity(0.999) // ensures animations register
+            .opacity(isEnabled ? 1 : 0.4)
             .contentShape(Capsule())
     }
 
@@ -54,18 +55,18 @@ public struct DButtonStyle: ButtonStyle {
 
     private var height: CGFloat {
         switch size {
-        case .default:    return 40
-        case .sm:         return 32
-        case .lg:         return 48
-        case .icon:       return 40
-        case .iconSmall:  return 32
+        case .default:    return 44
+        case .sm:         return 44
+        case .lg:         return 52
+        case .icon:       return 44
+        case .iconSmall:  return 44
         }
     }
 
     private var horizontalPadding: CGFloat {
         switch size {
         case .default:   return 16
-        case .sm:        return 12
+        case .sm:        return 13
         case .lg:        return 24
         case .icon, .iconSmall: return 0
         }
@@ -73,11 +74,11 @@ public struct DButtonStyle: ButtonStyle {
 
     private var fontSize: CGFloat {
         switch size {
-        case .default:   return 13
-        case .sm:        return 12
-        case .lg:        return 14
-        case .icon:      return 14
-        case .iconSmall: return 12
+        case .default:   return 15
+        case .sm:        return 13
+        case .lg:        return 16
+        case .icon:      return 16
+        case .iconSmall: return 13
         }
     }
 

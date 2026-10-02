@@ -15,7 +15,7 @@ public struct OnboardingScreen: View {
     public var body: some View {
         ZStack {
             LinearGradient(
-                colors: [DesignTokens.ink, DesignTokens.pine, DesignTokens.backgroundDeep],
+                colors: [DesignTokens.background, DesignTokens.backgroundDeep],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
@@ -70,7 +70,10 @@ public struct OnboardingScreen: View {
 
     private var stepHello: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Spacer().frame(height: 40)
+            BrandMark()
+                .foregroundStyle(DesignTokens.primary)
+                .frame(width: 88, height: 88)
+                .accessibilityHidden(true)
             Text("Dispersion")
                 .eyebrow(color: DesignTokens.primary)
             Text("Hit the club ")
@@ -87,7 +90,7 @@ public struct OnboardingScreen: View {
                 .tracking(-1)
                 .foregroundStyle(DesignTokens.foreground)
 
-            Text("A probability-first club selector for serious amateurs. You teach it your dispersion. It does the math.")
+            Text("Know your distances, understand your misses and choose with confidence. Your bag and every shot stay on your device.")
                 .font(DispersionType.ui(15))
                 .foregroundStyle(DesignTokens.foreground.opacity(0.6))
                 .lineSpacing(3)

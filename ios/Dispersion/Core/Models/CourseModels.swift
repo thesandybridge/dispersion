@@ -190,6 +190,19 @@ public struct HoleInfo: Identifiable, Hashable, Codable, Sendable {
 // MARK: - Course shot (absolute GPS)
 
 public struct CourseShot: Identifiable, Hashable, Codable, Sendable {
+    public var sessionId: String? = nil
+    public var kind: String? = nil
+    public var excludedFromDistances: Bool? = nil
+    public var penaltyStrokes: Int? = nil
+
+    public var isPenalty: Bool { kind == "penalty" }
+    public var strokeCount: Int { isPenalty ? max(1, penaltyStrokes ?? 1) : 1 }
+    public var usableDistance: Bool {
+        !isPenalty && (kind == nil || kind == "full") && excludedFromDistances != true
+            && accuracy.isFinite && accuracy >= 0 && accuracy <= 20
+            && distanceYards.isFinite && (10...450).contains(distanceYards)
+    }
+
     public var id: String
     public var courseId: String
     public var holeNumber: Int
@@ -228,7 +241,7 @@ public struct CourseShot: Identifiable, Hashable, Codable, Sendable {
 
 // MARK: - Round summary (persisted after round completion)
 
-public struct RoundSummary: Identifiable, Hashable, Sendable {
+public struct RoundSummary: Identifiable, Hashable, Codable, Sendable {
     public var id: String
     public var courseId: String
     public var courseName: String

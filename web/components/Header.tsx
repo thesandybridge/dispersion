@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandMark } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function Header() {
@@ -6,21 +7,7 @@ export function Header() {
     <header className="absolute inset-x-0 top-0 z-20 py-6">
       <div className="container-prose flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5">
-          <span
-            className="grid h-8 w-8 place-items-center rounded-full"
-            style={{ background: "var(--accent-strong)", color: "var(--bg)" }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              className="h-4 w-4"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-              <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
-              <circle cx="12" cy="12" r="1" fill="currentColor" />
-            </svg>
-          </span>
+          <BrandMark className="h-11 w-11 text-[color:var(--accent-strong)]" />
           <span
             className="font-display text-lg font-semibold tracking-tight"
             style={{ color: "var(--accent-strong)" }}

@@ -161,9 +161,44 @@ public struct CoursesRepo {
             endLat: shot.endLat, endLng: shot.endLng,
             accuracy: shot.accuracy, timestamp: shot.timestamp
         )
+        model.sessionId = shot.sessionId
+        model.kind = shot.kind
+        model.excludedFromDistances = shot.excludedFromDistances
+        model.penaltyStrokes = shot.penaltyStrokes
         context.insert(model)
         try context.save()
         return shot
+    }
+
+    public func shots(sessionId: String) throws -> [CourseShot] {
+        let all = try context.fetch(FetchDescriptor<CourseShotModel>(sortBy: [SortDescriptor(\.timestamp)]))
+        return all.filter { $0.sessionId == sessionId }.map { $0.toValue() }
+    }
+
+    public func shots(clubId: String) throws -> [CourseShot] {
+        let descriptor = FetchDescriptor<CourseShotModel>(predicate: #Predicate { $0.clubId == clubId }, sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+        return try context.fetch(descriptor).map { $0.toValue() }
+    }
+
+    public func updateShot(_ shot: CourseShot) throws {
+        let id = shot.id
+        guard let model = try context.fetch(FetchDescriptor<CourseShotModel>(predicate: #Predicate { $0.id == id })).first else { return }
+        model.clubId = shot.clubId ?? ""
+        model.sessionId = shot.sessionId
+        model.kind = shot.kind
+        model.excludedFromDistances = shot.excludedFromDistances
+        model.penaltyStrokes = shot.penaltyStrokes
+        model.startLat = shot.startLat; model.startLng = shot.startLng
+        model.endLat = shot.endLat; model.endLng = shot.endLng
+        model.accuracy = shot.accuracy
+        try context.save()
+    }
+
+    public func deleteShot(id: String) throws {
+        for model in try context.fetch(FetchDescriptor<CourseShotModel>(predicate: #Predicate { $0.id == id })) {
+            context.delete(model)
+        }
+        try context.save()
     }
 
     public func deleteShots(courseId: String, hole: Int) throws {
@@ -213,6 +248,36 @@ public struct CoursesRepo {
         context.insert(model)
         try context.save()
         return round
+    }
+
+    public func associateLegacyShots(sessionId: String) throws {
+        guard let round = try round(id: sessionId) else { return }
+        let rounds = try rounds(courseId: round.courseId)
+        let models = try context.fetch(FetchDescriptor<CourseShotModel>())
+        for model in models where model.sessionId == nil && model.courseId == round.courseId {
+            let matches = rounds.filter { model.timestamp >= $0.startedAt && model.timestamp <= $0.completedAt }
+            if matches.count == 1, matches[0].id == sessionId { model.sessionId = sessionId }
+        }
+        try context.save()
+    }
+
+    public func updateHoleScore(sessionId: String, hole: Int, score: Int, putts: Int, penalties: Int) throws {
+        guard (1...30).contains(score), (0...15).contains(putts), (0...15).contains(penalties), putts + penalties <= score else {
+            throw WatchRoundBridge.ImportError.invalidShot
+        }
+        guard let model = try context.fetch(FetchDescriptor<RoundModel>(predicate: #Predicate { $0.id == sessionId })).first else { return }
+        var scores = model.toValue().scores
+        guard let index = scores.firstIndex(where: { $0.hole == hole }) else { return }
+        scores[index].score = score
+        scores[index].putts = putts
+        scores[index].penaltyStrokes = penalties
+        model.scoresJSON = try JSONEncoder().encode(scores)
+        let played = scores.filter { $0.score > 0 }
+        model.totalScore = played.reduce(0) { $0 + $1.score }
+        model.totalPar = played.reduce(0) { $0 + $1.par }
+        model.totalPutts = played.compactMap(\.putts).reduce(0, +)
+        model.holesPlayed = played.count
+        try context.save()
     }
 
     public func deleteRound(id: String) throws {

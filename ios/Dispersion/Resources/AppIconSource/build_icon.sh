@@ -16,57 +16,12 @@ cd "$(dirname "$0")"
 
 ASSETS_DIR="../Assets.xcassets"
 
-# ─── Geometry (shared across palettes) ────────────────────────────────
-W=1024
-H=1024
-CX=$((W / 2))
-CY=540   # slightly low — leaves headroom for the flag
-
-# Heat-ellipse rings (rx, ry) — outer → inner, then center bullseye.
-# Same shape across palettes, only colors change.
-RINGS=(
-  "465 380"
-  "395 320"
-  "320 258"
-  "245 196"
-  "170 135"
-  "95 74"
-  "38 30"
-)
-
-# Pin geometry constants
-PIN_TOP=$((CY - 220))
-PIN_TOP_FLAG=$((CY - 200))
-PIN_BOT_FLAG=$((CY - 180))
-
 # ─── Palette definitions ─────────────────────────────────────────────
-# Each palette is a list of:
-#   bg_inner bg_outer  ring1 ring2 ring3 ring4 ring5 ring6 ring7  shaft  flag
-# All as hex colors (no #).
-
-palette_pine=(
-  "1f6147" "0a2e1f"
-  "0b3d2e" "165e4a" "2d8a5e" "62b375" "a9d18e" "f0e7b8" "fff7d6"
-  "f6f1e1" "e85d4d"
-)
-
-palette_sand=(
-  "9c8458" "30281a"
-  "5a4a30" "7d6740" "a18957" "c4a872" "decb98" "f0e3b9" "fff5d6"
-  "f6f1e1" "1f6147"
-)
-
-palette_sunset=(
-  "9b5a3a" "2a1a14"
-  "5c2a1d" "8c4a35" "b06a48" "d18860" "ecb586" "f7d4a3" "ffe9c8"
-  "f6f1e1" "0a2618"
-)
-
-palette_slate=(
-  "5a6878" "14181f"
-  "2c3a4a" "4a5867" "6f7e8d" "9da9b5" "c5d0db" "e3eaf1" "f3f6f8"
-  "f6f1e1" "e85d4d"
-)
+# Background gradient, contour, flag. Geometry matches BrandMark.svg.
+palette_pine=("1f6147" "0a2e1f" "f6f1e1" "a9d18e")
+palette_sand=("9c8458" "30281a" "f6f1e1" "decb98")
+palette_sunset=("9b5a3a" "2a1a14" "f6f1e1" "ecb586")
+palette_slate=("5a6878" "14181f" "f6f1e1" "c5d0db")
 
 PALETTES=(pine sand sunset slate)
 
@@ -82,129 +37,33 @@ iconset_for() {
 
 # ─── Per-palette renderers ───────────────────────────────────────────
 
+render_mark() {
+  local out=$1 bg_inner=$2 bg_outer=$3 contour=$4 flag=$5
+  magick -size 1024x1024 gradient:"#${bg_inner}-#${bg_outer}" \
+    -fill none -stroke "#${contour}" -strokewidth 32 \
+    -draw "ellipse 512,665 348,195 0,360" \
+    -draw "ellipse 512,665 235,123 0,360" \
+    -stroke none -fill "#${flag}" \
+    -draw "roundrectangle 486,205 538,676 26,26" \
+    -draw "polygon 512,205 788,317 512,430" \
+    -strip -alpha off "${out}"
+}
+
 render_light() {
   local out=$1; shift
-  local bg_inner=$1 bg_outer=$2
-  local rings=("$3" "$4" "$5" "$6" "$7" "$8" "$9")
-  local shaft=${10} flag=${11}
-
-  # Base radial gradient
-  magick -size ${W}x${H} radial-gradient:"#${bg_inner}-#${bg_outer}" .work.png
-
-  # Heat ellipses, outer → inner. Alpha rises slightly toward the center
-  # for a more dimensional feel.
-  local alphas=(0.78 0.86 0.90 0.93 0.95 1.00 1.00)
-  for i in "${!RINGS[@]}"; do
-    read -r rx ry <<< "${RINGS[$i]}"
-    local a=${alphas[$i]}
-    magick .work.png \
-      -fill "rgba($(hex_rgb ${rings[$i]}),${a})" \
-      -draw "ellipse ${CX},${CY} ${rx},${ry} 0,360" \
-      .work.png
-  done
-
-  # Subtle vignette
-  magick -size ${W}x${H} radial-gradient:'rgba(0,0,0,0)-rgba(0,0,0,0.20)' .vig.png
-  magick .work.png .vig.png -compose over -composite .work.png
-
-  # Pin
-  magick .work.png \
-    -fill "#0a2618" -stroke "#${shaft}" -strokewidth 6 \
-    -draw "ellipse ${CX},${CY} 22,10 0,360" \
-    -stroke none \
-    -fill "#${shaft}" \
-    -draw "roundrectangle $((CX - 7)),${PIN_TOP} $((CX + 7)),${CY} 6,6" \
-    -fill "#${flag}" \
-    -draw "polygon $((CX + 7)),${PIN_TOP} $((CX + 130)),${PIN_TOP_FLAG} $((CX + 7)),${PIN_BOT_FLAG}" \
-    .work.png
-
-  magick .work.png -strip -background "#${bg_outer}" -alpha remove -alpha off "${out}"
-  rm -f .vig.png
+  render_mark "$out" "$1" "$2" "$3" "$4"
 }
 
-# Dark variant: same palette, but darkened bg + brighter foreground for
-# legibility on dark home screens. Apple may composite over a dark
-# wallpaper-aware area, so we keep an opaque bg (still recommended).
 render_dark() {
   local out=$1; shift
-  local bg_inner=$1 bg_outer=$2
-  local rings=("$3" "$4" "$5" "$6" "$7" "$8" "$9")
-  local shaft=${10} flag=${11}
-
-  # Darken the bg by ~50%
-  local dk_inner; dk_inner=$(darken "${bg_inner}" 0.55)
-  local dk_outer; dk_outer=$(darken "${bg_outer}" 0.40)
-
-  magick -size ${W}x${H} radial-gradient:"#${dk_inner}-#${dk_outer}" .work.png
-
-  local alphas=(0.55 0.66 0.74 0.84 0.92 1.00 1.00)
-  for i in "${!RINGS[@]}"; do
-    read -r rx ry <<< "${RINGS[$i]}"
-    local a=${alphas[$i]}
-    magick .work.png \
-      -fill "rgba($(hex_rgb ${rings[$i]}),${a})" \
-      -draw "ellipse ${CX},${CY} ${rx},${ry} 0,360" \
-      .work.png
-  done
-
-  magick -size ${W}x${H} radial-gradient:'rgba(0,0,0,0)-rgba(0,0,0,0.30)' .vig.png
-  magick .work.png .vig.png -compose over -composite .work.png
-
-  magick .work.png \
-    -fill "#000000" -stroke "#${shaft}" -strokewidth 6 \
-    -draw "ellipse ${CX},${CY} 22,10 0,360" \
-    -stroke none \
-    -fill "#${shaft}" \
-    -draw "roundrectangle $((CX - 7)),${PIN_TOP} $((CX + 7)),${CY} 6,6" \
-    -fill "#${flag}" \
-    -draw "polygon $((CX + 7)),${PIN_TOP} $((CX + 130)),${PIN_TOP_FLAG} $((CX + 7)),${PIN_BOT_FLAG}" \
-    .work.png
-
-  magick .work.png -strip -background "#${dk_outer}" -alpha remove -alpha off "${out}"
-  rm -f .vig.png
+  render_mark "$out" "$(darken "$1" 0.45)" "$(darken "$2" 0.45)" "$3" "$4"
 }
 
-# Tinted variant: monochrome silhouette that iOS will recolor with the
-# user's chosen tint. Background is BLACK; foreground is grayscale white,
-# brightness varying to imply depth. (iOS uses the luminance of the image
-# to drive the tint mapping.)
 render_tinted() {
-  local out=$1
-
-  magick -size ${W}x${H} xc:'#000000' .work.png
-
-  # Heat ellipses as grayscale (outer dim → inner bright)
-  local grays=(2a 3c 55 76 9c c8 ee)
-  local alphas=(0.40 0.55 0.70 0.85 0.95 1.00 1.00)
-  for i in "${!RINGS[@]}"; do
-    read -r rx ry <<< "${RINGS[$i]}"
-    local g=${grays[$i]} a=${alphas[$i]}
-    magick .work.png \
-      -fill "rgba($(hex_rgb ${g}${g}${g}),${a})" \
-      -draw "ellipse ${CX},${CY} ${rx},${ry} 0,360" \
-      .work.png
-  done
-
-  # Pin in white
-  magick .work.png \
-    -fill "#000000" -stroke "#ffffff" -strokewidth 6 \
-    -draw "ellipse ${CX},${CY} 22,10 0,360" \
-    -stroke none \
-    -fill "#ffffff" \
-    -draw "roundrectangle $((CX - 7)),${PIN_TOP} $((CX + 7)),${CY} 6,6" \
-    -draw "polygon $((CX + 7)),${PIN_TOP} $((CX + 130)),${PIN_TOP_FLAG} $((CX + 7)),${PIN_BOT_FLAG}" \
-    .work.png
-
-  magick .work.png -strip -background '#000000' -alpha remove -alpha off "${out}"
+  render_mark "$1" "080808" "000000" "cccccc" "ffffff"
 }
 
 # ─── Helpers ─────────────────────────────────────────────────────────
-
-# hex → "r,g,b" decimal triplet for use inside rgba()
-hex_rgb() {
-  local h=$1
-  echo "$((16#${h:0:2})),$((16#${h:2:2})),$((16#${h:4:2}))"
-}
 
 # Multiply each channel of a hex color by `factor` (0..1).
 darken() {
@@ -328,8 +187,13 @@ for name in "${PALETTES[@]}"; do
   magick "${out_dir}/icon_1024.png" -resize 180x180 "${preview_dir}/${name}_180.png"
 done
 
-# Tidy
-rm -f .work.png
+# Keep the companion icon in step with the primary iPhone icon.
+watch_icons="../../../DispersionWatch/Assets.xcassets/AppIcon.appiconset"
+if [ -d "$watch_icons" ]; then
+  cp "${ASSETS_DIR}/AppIcon.appiconset/icon_1024.png" "$watch_icons/icon_1024.png"
+  cp "${ASSETS_DIR}/AppIcon.appiconset/icon_dark_1024.png" "$watch_icons/icon_dark_1024.png"
+  cp "${ASSETS_DIR}/AppIcon.appiconset/icon_tinted_1024.png" "$watch_icons/icon_tinted_1024.png"
+fi
 
 echo "✓ Built ${#PALETTES[@]} palettes (${#PALETTES[@]} × 3 appearances)"
 ls -la "${preview_dir}"

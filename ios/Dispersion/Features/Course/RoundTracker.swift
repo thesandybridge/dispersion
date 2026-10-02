@@ -26,6 +26,7 @@ public final class RoundTracker {
     public var startHole: Int = 1
     public var lastHole: Int { startHole + holeCount - 1 }
     public var startedAt: Date = .now
+    var watchFinishedCommands: [String] = []
 
     public func startRound(courseId: String, holeCount: Int, startHole: Int = 1) {
         self.courseId = courseId
@@ -36,13 +37,14 @@ public final class RoundTracker {
         self.shots = []
         self.scores = [:]
         self.startedAt = .now
+        self.watchFinishedCommands = []
         self.state = .awaitingTeeShot(hole: startHole)
         initScores()
     }
 
     public func logShot(from: Coord, to: Coord, clubId: String?, accuracy: Double) {
         let shotNumber = shots.filter { $0.holeNumber == currentHole }.count + 1
-        let shot = CourseShot(
+        var shot = CourseShot(
             id: UUID().uuidString.lowercased(),
             courseId: courseId,
             holeNumber: currentHole,
@@ -52,25 +54,61 @@ public final class RoundTracker {
             endLat: to.lat, endLng: to.lng,
             accuracy: accuracy
         )
+        shot.sessionId = sessionId
         shots.append(shot)
         lastPosition = to
         state = .holeInProgress(hole: currentHole, shotCount: shotNumber)
 
         // Auto-update score to match shot count + putts estimate
-        if scores[currentHole] != nil {
-            scores[currentHole]?.score = shotNumber
+        if var score = scores[currentHole] {
+            score.score = shotsForHole(currentHole).filter { !$0.isPenalty }.count + score.penaltyStrokes + (score.putts ?? 0)
+            scores[currentHole] = score
         }
     }
 
     public func undoLastShot() -> CourseShot? {
         guard let last = shots.last, last.holeNumber == currentHole else { return nil }
-        shots.removeLast()
-        let remaining = shots.filter { $0.holeNumber == currentHole }.count
+        removeCourseShot(id: last.id)
+        let remaining = shotsForHole(currentHole).filter { !$0.isPenalty }.count
         state = remaining > 0
             ? .holeInProgress(hole: currentHole, shotCount: remaining)
             : .awaitingTeeShot(hole: currentHole)
-        scores[currentHole]?.score = remaining
         return last
+    }
+
+    public func acceptWatchShot(_ shot: CourseShot) {
+        guard !shots.contains(where: { $0.id == shot.id }) else { return }
+        shots.append(shot)
+        let count = shotsForHole(shot.holeNumber).filter { !$0.isPenalty }.count
+        if var score = scores[shot.holeNumber] {
+            if shot.isPenalty { score.penaltyStrokes += shot.strokeCount; score.score += shot.strokeCount }
+            score.score = max(score.score, count + (score.putts ?? 0) + score.penaltyStrokes)
+            scores[shot.holeNumber] = score
+        }
+        if shot.holeNumber == currentHole && !shot.isPenalty {
+            lastPosition = Coord(lat: shot.endLat, lng: shot.endLng)
+            state = .holeInProgress(hole: currentHole, shotCount: count)
+        }
+    }
+
+    public func replaceCourseShot(_ shot: CourseShot) {
+        guard let index = shots.firstIndex(where: { $0.id == shot.id }) else { return }
+        shots[index] = shot
+        save()
+    }
+
+    public func removeCourseShot(id: String) {
+        guard let index = shots.firstIndex(where: { $0.id == id }) else { return }
+        let shot = shots.remove(at: index)
+        if var score = scores[shot.holeNumber] {
+            score.score = max(0, score.score - shot.strokeCount)
+            if shot.isPenalty { score.penaltyStrokes = max(0, score.penaltyStrokes - shot.strokeCount) }
+            scores[shot.holeNumber] = score
+        }
+        if shot.holeNumber == currentHole {
+            lastPosition = shotsForHole(currentHole).last(where: { !$0.isPenalty }).map { Coord(lat: $0.endLat, lng: $0.endLng) }
+        }
+        save()
     }
 
     public func finishHole(score: Int? = nil) {
@@ -86,6 +124,25 @@ public final class RoundTracker {
             lastPosition = nil
             state = .awaitingTeeShot(hole: currentHole)
         }
+    }
+
+    public func setPenalties(hole: Int, count: Int) {
+        guard var value = scores[hole] else { return }
+        let next = max(0, min(15, count))
+        value.score = max(0, value.score + next - value.penaltyStrokes)
+        value.penaltyStrokes = next
+        scores[hole] = value
+        save()
+    }
+
+    public func setPutts(hole: Int, count: Int) {
+        guard var value = scores[hole] else { return }
+        let next = max(0, min(15, count))
+        let strokes = shotsForHole(hole).filter { !$0.isPenalty }.count
+        value.score = max(strokes + next + value.penaltyStrokes, value.score + next - (value.putts ?? 0))
+        value.putts = next
+        scores[hole] = value
+        save()
     }
 
     public func setScore(hole: Int, score: Int) {
@@ -122,6 +179,8 @@ public final class RoundTracker {
 
     // MARK: - Persistence
 
+    var hasSavedRound: Bool { UserDefaults.standard.data(forKey: saveKey) != nil }
+
     private var saveKey: String { "activeRound.\(courseId)" }
 
     public func save() {
@@ -133,7 +192,9 @@ public final class RoundTracker {
             startHole: startHole,
             scores: scores,
             shots: shots,
-            startedAt: startedAt
+            startedAt: startedAt,
+            watchFinishedCommands: watchFinishedCommands,
+            lastPosition: lastPosition
         )
         if let encoded = try? JSONEncoder().encode(data) {
             UserDefaults.standard.set(encoded, forKey: saveKey)
@@ -152,7 +213,9 @@ public final class RoundTracker {
         self.startHole = round.startHole ?? 1
         self.scores = round.scores
         self.shots = round.shots
+        self.lastPosition = round.lastPosition
         self.startedAt = round.startedAt
+        self.watchFinishedCommands = round.watchFinishedCommands ?? []
         self.state = .holeInProgress(hole: currentHole, shotCount: shotsForHole(currentHole).count)
         return true
     }
@@ -191,4 +254,6 @@ private struct RoundData: Codable {
     var scores: [Int: HoleScore]
     var shots: [CourseShot]
     var startedAt: Date
+    var watchFinishedCommands: [String]?
+    var lastPosition: Coord?
 }

@@ -63,10 +63,10 @@ public enum DesignTokens {
     public static let danger    = hex("#a23939")
 
     // Semantic — adaptive dark/light
-    public static let background          = adaptive(dark: "#0e1a13", light: "#f8f6f0")
+    public static let background          = adaptive(dark: "#101a17", light: "#f8f6f0")
     public static let backgroundDeep      = adaptive(dark: "#070d0a", light: "#f0ece4")
     public static let foreground          = adaptive(dark: "#f6f1e1", light: "#1a2419")
-    public static let card                = adaptive(dark: "#16201a", light: "#ffffff")
+    public static let card                = adaptive(dark: "#1b2621", light: "#ffffff")
     public static let cardForeground      = adaptive(dark: "#f6f1e1", light: "#1a2419")
     public static let popover             = adaptive(dark: "#1a2419", light: "#f4f2ec")
     public static let primary             = adaptive(dark: "#a9d18e", light: "#4a8a3c")
@@ -96,12 +96,12 @@ public enum DesignTokens {
         light: UIColor.black.withAlphaComponent(0.06)
     )
     public static let mutedForeground = adaptive(
-        dark: UIColor.white.withAlphaComponent(0.55),
-        light: UIColor.black.withAlphaComponent(0.55)
+        dark: UIColor.white.withAlphaComponent(0.70),
+        light: UIColor.black.withAlphaComponent(0.70)
     )
     public static let subtleForeground = adaptive(
-        dark: UIColor.white.withAlphaComponent(0.40),
-        light: UIColor.black.withAlphaComponent(0.40)
+        dark: UIColor.white.withAlphaComponent(0.56),
+        light: UIColor.black.withAlphaComponent(0.56)
     )
 
     public enum Radius {
@@ -136,7 +136,6 @@ public extension View {
 // MARK: Themed card background
 
 public struct ThemedCardFill: View {
-    @Environment(\.themeAccent) private var accent
     var cornerRadius: CGFloat
     var opacity: Double
 
@@ -150,8 +149,8 @@ public struct ThemedCardFill: View {
             .fill(
                 LinearGradient(
                     colors: [
-                        accent.opacity(0.12 * opacity),
-                        DesignTokens.card.opacity(opacity)
+                        DesignTokens.card.opacity(opacity),
+                        DesignTokens.card.opacity(opacity * 0.96)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -159,7 +158,7 @@ public struct ThemedCardFill: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(accent.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(DesignTokens.border, lineWidth: 1)
             )
     }
 }

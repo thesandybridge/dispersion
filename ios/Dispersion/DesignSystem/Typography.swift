@@ -35,8 +35,8 @@ public struct EyebrowStyle: ViewModifier {
 
     public func body(content: Content) -> some View {
         content
-            .font(DispersionType.mono(10, weight: .medium))
-            .tracking(2.2)
+            .font(DispersionType.ui(11, weight: .semibold))
+            .tracking(1.3)
             .textCase(.uppercase)
             .foregroundStyle(color)
     }

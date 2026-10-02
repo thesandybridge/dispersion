@@ -133,7 +133,7 @@ public struct CalculatorScreen: View {
         ZStack {
             // Background — dark fairway
             LinearGradient(
-                colors: [DesignTokens.ink, DesignTokens.pine, DesignTokens.ink],
+                colors: [DesignTokens.background, DesignTokens.card, DesignTokens.background],
                 startPoint: .top, endPoint: .bottom
             )
             .ignoresSafeArea()
@@ -313,8 +313,8 @@ public struct CalculatorScreen: View {
                     }
                 } else {
                     HStack(spacing: 6) {
-                        Image(systemName: "scope")
-                            .font(.system(size: 10))
+                        BrandMark()
+                            .frame(width: 22, height: 22)
                             .foregroundStyle(DesignTokens.mutedForeground)
                         Text("Calculator").eyebrow()
                     }
@@ -728,12 +728,8 @@ public struct CalculatorScreen: View {
                                 .foregroundStyle(lbl.color)
                         }
                     }
-                    HStack(spacing: 10) {
-                        Text("EXP \(Int(result.expectedCarry))y")
-                        Text("σ↕ \(String(format: "%.1f", club.carrySd))")
-                        Text("σ↔ \(String(format: "%.1f", club.lateralSd))")
-                    }
-                    .font(DispersionType.mono(10))
+                    Text("\(Int(Units.from(yards: result.expectedCarry, in: settings.unit).rounded())) \(settings.unit.label) expected carry")
+                    .font(DispersionType.ui(13))
                     .foregroundStyle(DesignTokens.mutedForeground)
 
                     // Aim recommendation from miss data
@@ -745,7 +741,12 @@ public struct CalculatorScreen: View {
                     }
                 }
                 Spacer()
-                ProbabilityDial(value: result.probabilityInZone, color: lbl.color, diameter: 64, trackThickness: 5)
+                VStack(spacing: 4) {
+                    ProbabilityDial(value: result.probabilityInZone, color: lbl.color, diameter: 64, trackThickness: 5)
+                    Text("in target")
+                        .font(DispersionType.ui(11))
+                        .foregroundStyle(DesignTokens.mutedForeground)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandMark } from "./BrandMark";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function Footer() {
@@ -10,16 +11,7 @@ export function Footer() {
       <div className="container-prose flex flex-col items-start justify-between gap-6 py-12 md:flex-row md:items-center">
         <div>
           <div className="flex items-center gap-2">
-            <span
-              className="grid h-7 w-7 place-items-center rounded-full"
-              style={{ background: "var(--accent-strong)", color: "var(--bg)" }}
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-                <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
-                <circle cx="12" cy="12" r="1" fill="currentColor" />
-              </svg>
-            </span>
+            <BrandMark className="h-11 w-11 text-[color:var(--accent-strong)]" />
             <span
               className="font-display text-base font-semibold tracking-tight"
               style={{ color: "var(--accent-strong)" }}

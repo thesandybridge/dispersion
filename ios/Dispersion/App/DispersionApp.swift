@@ -37,6 +37,9 @@ struct DispersionApp: App {
                 fatalError("Dispersion couldn't start: SwiftData refused both persistent and in-memory stores. Underlying error: \(error)")
             }
         }
+        if !dbFailed {
+            WatchRoundBridge.shared.start(context: modelContainer.mainContext)
+        }
     }
 
     @State private var showSplash = true

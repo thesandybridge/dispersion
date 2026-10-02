@@ -186,7 +186,7 @@ public struct BagScreen: View {
     /// circular action icons on the right (open bag tag, add club).
     private var headerBar: some View {
         HStack(alignment: .center) {
-            Text("Bag")
+            Text("Your bag")
                 .font(DispersionType.display(32, weight: .regular))
                 .tracking(-0.7)
                 .foregroundStyle(DesignTokens.foreground)
@@ -195,7 +195,7 @@ public struct BagScreen: View {
                 Button { showingTag = true; Haptics.light() } label: {
                     Image(systemName: "tag")
                         .font(.system(size: 13, weight: .medium))
-                        .padding(10)
+                        .frame(width: 44, height: 44)
                         .background(Circle().fill(DesignTokens.surface))
                         .foregroundStyle(DesignTokens.foreground)
                 }
@@ -205,7 +205,7 @@ public struct BagScreen: View {
                 Button { creatingNewClub = true; Haptics.light() } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .semibold))
-                        .padding(10)
+                        .frame(width: 44, height: 44)
                         .background(Circle().fill(accent))
                         .foregroundStyle(DesignTokens.primaryForeground)
                 }
@@ -221,42 +221,33 @@ public struct BagScreen: View {
 
     private var heroCard: some View {
         let carries = regularClubs.map { Units.from(yards: $0.carryYards, in: unit) }
-        let avgSd = regularClubs.isEmpty ? 0 : regularClubs.map { $0.carrySd }.reduce(0, +) / Double(regularClubs.count)
         let minC = carries.min() ?? 0
         let maxC = carries.max() ?? 0
 
-        return HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(regularClubs.count)")
-                    .font(DispersionType.display(40, weight: .regular))
-                    .foregroundStyle(DesignTokens.foreground)
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("KNOW YOUR DISTANCES").eyebrow(color: accent)
+                Spacer()
+                Text("\(regularClubs.count) clubs")
+                    .font(DispersionType.ui(12, weight: .medium))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(Int(minC))–\(Int(maxC))")
+                    .font(DispersionType.display(36))
                     .monospacedDigit()
-                Text("clubs")
-                    .font(DispersionType.mono(10))
+                Text(unit.label + " carry range")
+                    .font(DispersionType.ui(13))
                     .foregroundStyle(DesignTokens.mutedForeground)
             }
-            DSeparator(.vertical).frame(height: 40)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("\(Int(minC))–\(Int(maxC))\(unit.label)")
-                    .font(DispersionType.mono(13, weight: .medium))
-                    .foregroundStyle(DesignTokens.foreground)
-                Text("carry range")
-                    .font(DispersionType.mono(10))
-                    .foregroundStyle(DesignTokens.mutedForeground)
-            }
-            DSeparator(.vertical).frame(height: 40)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(String(format: "%.1f", avgSd))
-                    .font(DispersionType.mono(13, weight: .medium))
-                    .foregroundStyle(DesignTokens.foreground)
-                Text("avg σ↕")
-                    .font(DispersionType.mono(10))
-                    .foregroundStyle(DesignTokens.mutedForeground)
-            }
-            Spacer()
+            Text("Tap a club to explore its distances and miss pattern.")
+                .font(DispersionType.ui(13))
+                .foregroundStyle(DesignTokens.mutedForeground)
         }
-        .padding(16)
-        .background(ThemedCardFill(cornerRadius: 16))
+        .foregroundStyle(DesignTokens.foreground)
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ThemedCardFill(cornerRadius: 20))
     }
 
     // MARK: - Club list
@@ -284,10 +275,10 @@ public struct BagScreen: View {
                     .frame(width: 3, height: 36)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(club.name)
-                        .font(DispersionType.ui(15, weight: .medium))
+                        .font(DispersionType.ui(16, weight: .medium))
                         .foregroundStyle(DesignTokens.foreground)
-                    Text("σ↕\(String(format: "%.1f", club.carrySd)) · σ↔\(String(format: "%.1f", club.lateralSd))")
-                        .font(DispersionType.mono(10))
+                    Text("Spread \(Int(Units.from(yards: club.carrySd, in: unit).rounded())) × \(Int(Units.from(yards: club.lateralSd, in: unit).rounded())) \(unit.label)")
+                        .font(DispersionType.ui(12))
                         .foregroundStyle(DesignTokens.mutedForeground)
                 }
                 Spacer()
@@ -295,15 +286,15 @@ public struct BagScreen: View {
                     carrySd: club.carrySd,
                     lateralSd: club.lateralSd,
                     fill: style.accent.opacity(0.3),
-                    stroke: style.accentDeep
+                    stroke: accent.opacity(0.7)
                 )
-                .frame(width: 28, height: 20)
+                .frame(width: 32, height: 24)
                 Text("\(carry)")
                     .font(DispersionType.display(24, weight: .regular))
                     .foregroundStyle(DesignTokens.foreground)
                     .monospacedDigit()
                 Text(unit.label)
-                    .font(DispersionType.mono(10))
+                    .font(DispersionType.ui(12))
                     .foregroundStyle(DesignTokens.mutedForeground)
             }
             .padding(.horizontal, 14)
@@ -334,16 +325,16 @@ public struct BagScreen: View {
                             .frame(width: 3, height: 36)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(p.name)
-                                .font(DispersionType.ui(15, weight: .medium))
+                                .font(DispersionType.ui(16, weight: .medium))
                                 .foregroundStyle(DesignTokens.foreground)
                             HStack(spacing: 6) {
                                 Text("\(Int(p.lengthInches))″ · \(p.headType.label)")
-                                    .font(DispersionType.mono(10))
+                                    .font(DispersionType.ui(12))
                                     .foregroundStyle(DesignTokens.mutedForeground)
                                 let count = (try? PuttsRepo(context: modelContext).count(putterId: p.id)) ?? 0
                                 if count > 0 {
                                     Text("· \(count) putts")
-                                        .font(DispersionType.mono(10))
+                                        .font(DispersionType.ui(12))
                                         .foregroundStyle(DesignTokens.mutedForeground)
                                 }
                             }

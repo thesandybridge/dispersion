@@ -10,11 +10,12 @@ public enum Backup {
     public static func build(
         clubs: [Club], sessions: [Session], shots: [Shot],
         faceStrikes: [FaceStrike] = [],
-        courses: [Course] = [], holeInfos: [HoleInfo] = [], polygons: [CoursePolygon] = []
+        courses: [Course] = [], holeInfos: [HoleInfo] = [], polygons: [CoursePolygon] = [],
+        courseShots: [CourseShot] = [], rounds: [RoundSummary] = []
     ) -> Data {
         let iso = ISO8601DateFormatter()
         let payload = BackupPayload(
-            version: 3,
+            version: 4,
             exportedAt: iso.string(from: .now),
             clubs: clubs.map { c in
                 .init(id: c.id, name: c.name, carryYards: c.carryYards,
@@ -45,7 +46,9 @@ public enum Backup {
             polygons: polygons.map { p in
                 .init(id: p.id, courseId: p.courseId, holeNumber: p.holeNumber ?? 0,
                       surface: p.surface.rawValue, coordinates: p.coordinates)
-            }
+            },
+            courseShots: courseShots,
+            rounds: rounds
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -62,12 +65,14 @@ public enum Backup {
         public var courses: [Course]
         public var holeInfos: [HoleInfo]
         public var polygons: [CoursePolygon]
+        public var courseShots: [CourseShot]
+        public var rounds: [RoundSummary]
         public var warnings: [String]
     }
 
     public static func parse(_ data: Data) throws -> ParsedBackup {
         let payload = try JSONDecoder().decode(BackupPayload.self, from: data)
-        guard (1...3).contains(payload.version) else {
+        guard (1...4).contains(payload.version) else {
             throw BackupError.unsupportedVersion(payload.version)
         }
         let iso = ISO8601DateFormatter()
@@ -157,6 +162,8 @@ public enum Backup {
             clubs: clubs, sessions: sessions, shots: shots,
             faceStrikes: faceStrikes,
             courses: courses, holeInfos: holeInfos, polygons: polygons,
+            courseShots: (payload.courseShots ?? []).filter { courseIds.contains($0.courseId) && $0.distanceYards.isFinite && (1...18).contains($0.holeNumber) },
+            rounds: (payload.rounds ?? []).filter { courseIds.contains($0.courseId) && (1...18).contains($0.holeCount) },
             warnings: warnings
         )
     }
@@ -183,6 +190,8 @@ private struct BackupPayload: Codable {
     var courses: [CourseEntry]?
     var holeInfos: [HoleInfo]?
     var polygons: [PolygonEntry]?
+    var courseShots: [CourseShot]?
+    var rounds: [RoundSummary]?
 
     struct ClubEntry: Codable {
         var id, name: String

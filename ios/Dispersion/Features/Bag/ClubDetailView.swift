@@ -35,6 +35,7 @@ struct ClubDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 statsCard
+                if !isPutter { CourseDistanceCard(club: club) }
                 if !isPutter { dispersionSection }
                 if !isPutter { trendSection }
                 if !isPutter { missPatternSection }

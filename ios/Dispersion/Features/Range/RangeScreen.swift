@@ -49,26 +49,33 @@ public struct RangeScreen: View {
     }
 
     private var rangeHeader: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    if tab == .live || tab == .putt {
-                        Circle().fill(DesignTokens.primary).frame(width: 6, height: 6)
-                    }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(headerEyebrow).eyebrow()
+                    Text(headerTitle)
+                        .font(DispersionType.display(32))
+                        .foregroundStyle(DesignTokens.foreground)
                 }
-                Text(headerTitle)
-                    .font(DispersionType.display(28, weight: .regular))
-                    .tracking(-0.56)
-                    .foregroundStyle(DesignTokens.foreground)
+                Spacer()
+                BrandMark().foregroundStyle(DesignTokens.primary)
+                    .frame(width: 44, height: 44)
+                    .accessibilityHidden(true)
             }
-            Spacer()
-            tabPill
+            Picker("Practice mode", selection: $tab) {
+                Text("Full swing").tag(RangeTab.live)
+                Text("Putting").tag(RangeTab.putt)
+                Text("History").tag(RangeTab.history)
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: tab) { _, _ in
+                historyPath = NavigationPath()
+                Haptics.light()
+            }
         }
         .padding(.horizontal, 18)
         .padding(.top, 8)
-        .padding(.bottom, 12)
-        .overlay(alignment: .bottom) { DSeparator() }
+        .padding(.bottom, 14)
     }
 
     private var headerEyebrow: String {
@@ -87,68 +94,6 @@ public struct RangeScreen: View {
         }
     }
 
-    // MARK: - Tab pill (drag-select)
-
-    private static let tabChipMinWidth: CGFloat = 52
-    private static let tabChipSpacing: CGFloat = 4
-    private static let tabClusterHPad: CGFloat = 4
-    private static let tabOrder: [RangeTab] = [.live, .putt, .history]
-
-    private var tabPill: some View {
-        HStack(spacing: Self.tabChipSpacing) {
-            tabChip("Live", tab: .live)
-            tabChip("Putt", tab: .putt)
-            tabChip("History", tab: .history)
-        }
-        .padding(.horizontal, Self.tabClusterHPad)
-        .padding(.vertical, 4)
-        .background(Capsule().fill(DesignTokens.popover.opacity(0.92)))
-        .overlay(Capsule().strokeBorder(DesignTokens.border, lineWidth: 1))
-        .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
-        .contentShape(Capsule())
-        .gesture(tabDragGesture)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Range mode")
-        .accessibilityValue(headerTitle)
-        .accessibilityAdjustableAction { direction in
-            guard let idx = Self.tabOrder.firstIndex(of: tab) else { return }
-            switch direction {
-            case .increment:
-                if idx + 1 < Self.tabOrder.count { switchTab(Self.tabOrder[idx + 1]) }
-            case .decrement:
-                if idx > 0 { switchTab(Self.tabOrder[idx - 1]) }
-            @unknown default: break
-            }
-        }
-    }
-
-    private func tabChip(_ label: String, tab target: RangeTab) -> some View {
-        let isActive = tab == target
-        return Text(label)
-            .font(DispersionType.ui(12, weight: .medium))
-            .foregroundStyle(isActive ? DesignTokens.primaryForeground : DesignTokens.foreground)
-            .frame(minWidth: Self.tabChipMinWidth)
-            .padding(.vertical, 6)
-            .background(Capsule().fill(isActive ? DesignTokens.primary : Color.clear))
-    }
-
-    private var tabDragGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                let stepWidth = Self.tabChipMinWidth + Self.tabChipSpacing
-                let firstCenter = Self.tabClusterHPad + Self.tabChipMinWidth / 2
-                let raw = Int(((value.location.x - firstCenter) / stepWidth).rounded())
-                let clamped = max(0, min(Self.tabOrder.count - 1, raw))
-                let target = Self.tabOrder[clamped]
-                if tab != target { switchTab(target) }
-            }
-    }
-
-    private func switchTab(_ next: RangeTab) {
-        tab = next
-        historyPath = NavigationPath()
-        Haptics.light()
-    }
 }
 
 // MARK: - Live range (was RangeScreen)
@@ -1006,7 +951,7 @@ struct LiveRangeView: View {
         Button { action(); Haptics.light() } label: {
             HStack(spacing: 4) {
                 Image(systemName: icon).font(.system(size: 11))
-                Text(label).font(DispersionType.mono(11, weight: .medium))
+                Text(label).font(DispersionType.ui(13, weight: .medium))
             }
             .floatingPillStyle()
         }
@@ -1018,7 +963,7 @@ struct LiveRangeView: View {
         Button { action(); Haptics.light() } label: {
             HStack(spacing: 4) {
                 Image(systemName: icon).font(.system(size: 11, weight: .semibold))
-                Text(label).font(DispersionType.mono(11, weight: .medium))
+                Text(label).font(DispersionType.ui(13, weight: .medium))
             }
             .foregroundStyle(tint)
             .padding(.horizontal, 12)

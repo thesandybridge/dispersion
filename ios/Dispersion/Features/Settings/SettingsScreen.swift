@@ -20,6 +20,7 @@ public struct SettingsScreen: View {
     @State private var devTapCount: Int = 0
     @State private var showDev: Bool = false
     @State private var showHelp: Bool = false
+    @State private var showTuning = false
 
     private enum StatusKind { case ok, err }
 
@@ -33,7 +34,6 @@ public struct SettingsScreen: View {
                 VStack(alignment: .leading, spacing: 0) {
                     hero
                     VStack(alignment: .leading, spacing: 16) {
-                        helpGroup
                         unitsGroup
                         themeGroup
                         iconGroup
@@ -42,10 +42,27 @@ public struct SettingsScreen: View {
                             customPaletteGroup
                         }
                         feedbackGroup
-                        conditionsTuningGroup
-                        recommendationTuningGroup
-                        lieMultipliersGroup
-                        outlierGroup
+                        helpGroup
+                        DisclosureGroup(isExpanded: $showTuning) {
+                            VStack(spacing: 20) {
+                                conditionsTuningGroup
+                                recommendationTuningGroup
+                                lieMultipliersGroup
+                                outlierGroup
+                            }
+                            .padding(.top, 16)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Fine-tune your recommendations")
+                                    .font(DispersionType.ui(16, weight: .medium))
+                                    .foregroundStyle(DesignTokens.foreground)
+                                Text("Conditions, lies and shot filtering")
+                                    .font(DispersionType.ui(13))
+                                    .foregroundStyle(DesignTokens.mutedForeground)
+                            }
+                        }
+                        .padding(16)
+                        .background(ThemedCardFill())
                         storageGroup
                         dataGroup
                         if showDev { developerGroup }
@@ -127,30 +144,23 @@ public struct SettingsScreen: View {
     // MARK: sections
 
     private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
-            LinearGradient(
-                gradient: Gradient(colors: [DesignTokens.ink, DesignTokens.backgroundDeep]),
-                startPoint: .top, endPoint: .bottom
-            )
-            RadialGradient(
-                gradient: Gradient(colors: [DesignTokens.bentgrass.opacity(0.32), .clear]),
-                center: .topTrailing, startRadius: 0, endRadius: 220
-            )
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Settings").eyebrow(color: DesignTokens.primary)
-                Text("Preferences")
-                    .font(DispersionType.display(40, weight: .regular))
-                    .tracking(-1)
+        HStack(alignment: .center, spacing: 20) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("MAKE IT YOURS").eyebrow()
+                Text("Settings")
+                    .font(DispersionType.display(34))
                     .foregroundStyle(DesignTokens.foreground)
-                let shotCount = (try? ShotsRepo(context: modelContext).countAll()) ?? 0
-                Text("Local-only · \(clubModels.count) clubs · \(shotCount) shots")
-                    .font(DispersionType.mono(11))
+                Text("Your game. Your preferences.")
+                    .font(DispersionType.ui(14))
                     .foregroundStyle(DesignTokens.mutedForeground)
             }
-            .padding(20)
+            Spacer()
+            BrandMark().foregroundStyle(DesignTokens.primary)
+                .frame(width: 58, height: 58)
+                .accessibilityHidden(true)
         }
-        .frame(height: 180)
-        .clipShape(RoundedRectangle(cornerRadius: 0))
+        .padding(20)
+        .padding(.top, 8)
     }
 
     private var unitsGroup: some View {
@@ -839,6 +849,8 @@ public struct SettingsScreen: View {
                 try? coursesRepo.deleteRound(id: r.id)
             }
 
+            try modelContext.delete(model: CourseShotModel.self)
+
             // Active session pointer (if any) is now stale — clear it.
             SessionStore.shared.clear()
 
@@ -889,7 +901,9 @@ public struct SettingsScreen: View {
         let data = Backup.build(
             clubs: clubs, sessions: sessions, shots: shots,
             faceStrikes: allStrikes,
-            courses: courses, holeInfos: allHoleInfos, polygons: allPolygons
+            courses: courses, holeInfos: allHoleInfos, polygons: allPolygons,
+            courseShots: ((try? modelContext.fetch(FetchDescriptor<CourseShotModel>())) ?? []).map { $0.toValue() },
+            rounds: (try? coursesRepo.rounds(limit: Int.max)) ?? []
         )
         exportData = ExportFile(data: data)
     }
@@ -916,6 +930,7 @@ public struct SettingsScreen: View {
                 for c in (try? coursesRepo.list()) ?? [] {
                     try? coursesRepo.deleteCourse(id: c.id)
                 }
+                try modelContext.delete(model: RoundModel.self)
                 let clubsRepo = ClubsRepo(context: modelContext)
                 for c in parsed.clubs { try clubsRepo.create(c) }
                 let sessionsRepo = SessionsRepo(context: modelContext)
@@ -927,6 +942,8 @@ public struct SettingsScreen: View {
                 for c in parsed.courses { try coursesRepo.createCourse(c) }
                 for h in parsed.holeInfos { try coursesRepo.upsertHoleInfo(h) }
                 if !parsed.polygons.isEmpty { try coursesRepo.insertPolygons(parsed.polygons) }
+                for shot in parsed.courseShots { try coursesRepo.createShot(shot) }
+                for round in parsed.rounds { try coursesRepo.createRound(round) }
                 var msg = "Imported \(parsed.clubs.count) clubs, \(parsed.courses.count) courses, \(parsed.shots.count) shots."
                 if !parsed.warnings.isEmpty {
                     msg += " (\(parsed.warnings.count) items skipped)"
@@ -994,18 +1011,19 @@ private struct SettingsRow<Trailing: View>: View {
     @ViewBuilder var trailing: () -> Trailing
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(DispersionType.ui(14, weight: .medium))
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label).font(DispersionType.ui(15, weight: .medium))
                     .foregroundStyle(DesignTokens.foreground)
                 if let helper {
                     Text(helper)
-                        .font(DispersionType.ui(12))
+                        .font(DispersionType.ui(13))
                         .foregroundStyle(DesignTokens.mutedForeground)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Spacer()
             trailing()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
         .background(divider, alignment: .bottom)

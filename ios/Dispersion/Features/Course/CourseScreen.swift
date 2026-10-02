@@ -172,7 +172,7 @@ public struct CourseScreen: View {
                 Button { importerOpen = true; Haptics.light() } label: {
                     Image(systemName: "square.and.arrow.down")
                         .font(.system(size: 13, weight: .medium))
-                        .padding(10)
+                        .frame(width: 44, height: 44)
                         .background(Circle().fill(DesignTokens.surface))
                         .foregroundStyle(DesignTokens.foreground)
                 }
@@ -182,7 +182,7 @@ public struct CourseScreen: View {
                 Button { searchOpen = true; Haptics.light() } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .semibold))
-                        .padding(10)
+                        .frame(width: 44, height: 44)
                         .background(Circle().fill(accent))
                         .foregroundStyle(DesignTokens.primaryForeground)
                 }
@@ -195,22 +195,32 @@ public struct CourseScreen: View {
     // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Spacer().frame(height: 40)
-            Text("No courses yet")
-                .font(DispersionType.display(24, weight: .regular))
-                .foregroundStyle(DesignTokens.foreground)
-            Text("Search for a course, then build your course map.")
-                .font(DispersionType.ui(14))
-                .foregroundStyle(DesignTokens.mutedForeground)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Button { searchOpen = true; Haptics.light() } label: {
-                Text("Add a course")
+        VStack(alignment: .leading, spacing: 20) {
+            BrandMark()
+                .foregroundStyle(accent)
+                .frame(width: 84, height: 84)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Your next round\nstarts here.")
+                    .font(DispersionType.display(34))
+                    .foregroundStyle(DesignTokens.foreground)
+                Text("Find your course, set up its map and take your distances onto the fairway.")
+                    .font(DispersionType.ui(15))
+                    .foregroundStyle(DesignTokens.mutedForeground)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .buttonStyle(.dispersion(.primary))
+            Button { searchOpen = true; Haptics.light() } label: {
+                Label("Find a course", systemImage: "magnifyingglass")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.dispersion(.primary, size: .lg))
+            Label("Track shots from your Apple Watch", systemImage: "applewatch")
+                .font(DispersionType.ui(13))
+                .foregroundStyle(DesignTokens.mutedForeground)
         }
-        .frame(maxWidth: .infinity)
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ThemedCardFill(cornerRadius: 24))
     }
 
     // MARK: - Course card

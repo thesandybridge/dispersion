@@ -14,7 +14,13 @@ struct CoursePlayView: View {
     var courseId: String
     var onBack: () -> Void
 
-    @State private var tracker = RoundTracker()
+    @State private var tracker: RoundTracker
+
+    init(courseId: String, onBack: @escaping () -> Void) {
+        self.courseId = courseId
+        self.onBack = onBack
+        _tracker = State(initialValue: WatchRoundBridge.shared.tracker(for: courseId))
+    }
     @State private var showClubPicker = false
     @State private var pendingShotStart: Coord?
     @State private var pendingShotEnd: Coord?
@@ -75,7 +81,8 @@ struct CoursePlayView: View {
 
     // Current ball position — last shot landing or tee
     private var ballPosition: Coord? {
-        if let last = tracker.shotsForHole(tracker.currentHole).last {
+        if let position = tracker.lastPosition { return position }
+        if let last = tracker.shotsForHole(tracker.currentHole).last(where: { !$0.isPenalty }) {
             return Coord(lat: last.endLat, lng: last.endLng)
         }
         return teeCoord
@@ -113,6 +120,27 @@ struct CoursePlayView: View {
         clubs.first { ClubCategoryRegistry.categorize(name: $0.name, carryYards: $0.carryYards) == .putter }
     }
 
+    private var watchRound: WatchRound? {
+        guard tracker.state != .idle, tracker.state != .roundComplete,
+              let course = cachedCourse else { return nil }
+        return WatchRound(
+            sessionId: tracker.sessionId, courseId: courseId, courseName: course.name,
+            hole: tracker.currentHole, par: holePar,
+            target: flagCoord.map { WatchPoint(latitude: $0.lat, longitude: $0.lng) },
+            clubs: clubs.filter {
+                ClubCategoryRegistry.categorize(name: $0.name, carryYards: $0.carryYards) != .putter
+            }.map { WatchClub(id: $0.id, name: $0.name, carryYards: $0.carryYards) },
+            usesMeters: SettingsStore.shared.unit == .meters,
+            score: tracker.scores[tracker.currentHole]?.score,
+            putts: tracker.scores[tracker.currentHole]?.putts,
+            penalties: tracker.scores[tracker.currentHole]?.penaltyStrokes,
+            lastHole: tracker.lastHole,
+            green: holePolygons.first { $0.surface == .green }?.coordinates.map { WatchPoint(latitude: $0.lat, longitude: $0.lng) }
+        )
+    }
+
+    @State private var showShotReview = false
+
     var body: some View {
         VStack(spacing: 0) {
             mapSection
@@ -128,6 +156,9 @@ struct CoursePlayView: View {
             location.requestPermission()
             loadCourseData()
             loadHoleData()
+            if tracker.state != .idle, tracker.state != .roundComplete, let c = cachedCourse {
+                SessionStore.shared.setActive(ActiveSession(id: tracker.sessionId, kind: .round, label: c.name))
+            }
             if tracker.state == .idle, let c = cachedCourse {
                 if tracker.loadIfExists(courseId: c.id) {
                     // Resume existing round
@@ -143,6 +174,18 @@ struct CoursePlayView: View {
         .onChange(of: tracker.currentHole) { _, _ in
             loadHoleData()
         }
+        .onChange(of: tracker.state) { _, state in
+            if state == .roundComplete,
+               (try? CoursesRepo(context: modelContext).round(id: tracker.sessionId)) != nil {
+                showRoundSummary = true
+            }
+        }
+        .onChange(of: watchRound, initial: true) { _, round in
+            if let round {
+                tracker.save()
+                WatchRoundBridge.shared.publish(round)
+            }
+        }
         .dispersionSheet(isPresented: $showClubPicker, detents: [.medium]) {
             clubPickerContent
         }
@@ -150,6 +193,13 @@ struct CoursePlayView: View {
             scoreEditContent
         }
         .dispersionSheet(isPresented: $showScorecard, detents: [.large]) {
+            Button { showShotReview = true } label: {
+                Label("Review shots & penalties", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+            }
+            .buttonStyle(.dispersion(.secondary))
+            .dispersionSheet(isPresented: $showShotReview, detents: [.large], scrollable: false) {
+                CourseShotReview(sessionId: tracker.sessionId, courseId: courseId, initialHole: tracker.currentHole)
+            }
             scorecardContent(isComplete: false)
         }
         .dispersionSheet(isPresented: $showRoundSetup, detents: [.medium]) {
@@ -398,7 +448,7 @@ struct CoursePlayView: View {
         ZStack(alignment: .top) {
         HoleMapView(
             polygons: holePolygons,
-            shots: tracker.shotsForHole(tracker.currentHole),
+            shots: tracker.shotsForHole(tracker.currentHole).filter { !$0.isPenalty },
             centerCoord: course.map { Coord(lat: $0.centerLat, lng: $0.centerLng) },
             teeCoord: ballPosition ?? teeCoord,
             greenCoord: flagCoord,
@@ -493,7 +543,7 @@ struct CoursePlayView: View {
 
     private var puttingPanel: some View {
         VStack(spacing: 10) {
-            let shotCount = tracker.shotsForHole(tracker.currentHole).count
+            let shotCount = tracker.shotsForHole(tracker.currentHole).filter { !$0.isPenalty }.count
             let putts = tracker.scores[tracker.currentHole]?.putts ?? 2
 
             HStack(spacing: 20) {
@@ -594,7 +644,7 @@ struct CoursePlayView: View {
                     .frame(maxWidth: .infinity)
                 }
 
-                let shotCount = tracker.shotsForHole(tracker.currentHole).count
+                let shotCount = tracker.shotsForHole(tracker.currentHole).filter { !$0.isPenalty }.count
                 VStack(spacing: 0) {
                     Text("\(shotCount)")
                         .font(DispersionType.display(22, weight: .regular))
@@ -674,8 +724,7 @@ struct CoursePlayView: View {
                     if tracker.scores[h] == nil {
                         tracker.scores[h] = HoleScore(hole: h, par: holePar)
                     }
-                    tracker.scores[h]?.penaltyStrokes += 1
-                    tracker.scores[h]?.score += 1
+                    tracker.setPenalties(hole: h, count: (tracker.scores[h]?.penaltyStrokes ?? 0) + 1)
                     Haptics.error()
                 } label: {
                     Text("+1")
@@ -685,8 +734,8 @@ struct CoursePlayView: View {
                 .buttonStyle(.dispersion(.ghost, size: .icon))
 
                 Button {
-                    let shots = tracker.shotsForHole(tracker.currentHole).count
-                    tracker.setScore(hole: tracker.currentHole, score: max(shots, 1))
+                    let shots = tracker.shotsForHole(tracker.currentHole).filter { !$0.isPenalty }.count
+                    tracker.setScore(hole: tracker.currentHole, score: max(tracker.scores[tracker.currentHole]?.score ?? 0, shots + (tracker.scores[tracker.currentHole]?.penaltyStrokes ?? 0) + (tracker.scores[tracker.currentHole]?.putts ?? 2)))
                     showScoreEdit = true
                 } label: {
                     Image(systemName: "flag.checkered").font(.system(size: 14))
@@ -769,7 +818,7 @@ struct CoursePlayView: View {
         let dist = haversineYards(from: ball, to: flag)
 
         // Tee shot on par 4/5 → longest club (driver)
-        let shotCount = tracker.shotsForHole(tracker.currentHole).count
+        let shotCount = tracker.shotsForHole(tracker.currentHole).filter { !$0.isPenalty }.count
         if shotCount == 0 && holePar >= 4, let longest = clubs.first {
             selectedClubId = longest.id
             selectedSwing = .full
@@ -785,12 +834,7 @@ struct CoursePlayView: View {
 
     // MARK: - Actions
 
-    private func shotStart() -> Coord? {
-        if let last = tracker.shotsForHole(tracker.currentHole).last {
-            return Coord(lat: last.endLat, lng: last.endLng)
-        }
-        return teeCoord
-    }
+    private func shotStart() -> Coord? { ballPosition }
 
     private func logShot() {
         guard let landing = crosshairCoord, let start = shotStart() else { return }
@@ -813,57 +857,38 @@ struct CoursePlayView: View {
 
     private func completeShot(clubId: String?, swing: SwingType = .full, shotType: ShotType = .full) {
         guard let start = pendingShotStart, let end = pendingShotEnd else { return }
-        tracker.logShot(from: start, to: end, clubId: clubId, accuracy: location.accuracy)
-        if let shot = tracker.shots.last {
-            _ = try? CoursesRepo(context: modelContext).createShot(shot)
-        }
-
-        // Drop/penalty: add penalty stroke
         if shotType == .penalty {
-            let h = tracker.currentHole
-            if tracker.scores[h] == nil {
-                tracker.scores[h] = HoleScore(hole: h, par: holePar)
-            }
-            tracker.scores[h]?.penaltyStrokes += 1
-            tracker.scores[h]?.score += 1
+            var penalty = CourseShot(id: UUID().uuidString.lowercased(), courseId: courseId,
+                                     holeNumber: tracker.currentHole, shotNumber: tracker.shotsForHole(tracker.currentHole).filter { !$0.isPenalty }.count + 1,
+                                     startLat: end.lat, startLng: end.lng, endLat: end.lat, endLng: end.lng)
+            penalty.sessionId = tracker.sessionId
+            penalty.kind = "penalty"
+            penalty.penaltyStrokes = 1
+            penalty.excludedFromDistances = true
+            do { try CoursesRepo(context: modelContext).createShot(penalty) }
+            catch { return }
+            tracker.acceptWatchShot(penalty)
+            tracker.lastPosition = end
+            pendingShotStart = nil
+            pendingShotEnd = nil
+            tracker.save()
+            Haptics.success()
+            return
+        }
+        tracker.logShot(from: start, to: end, clubId: clubId, accuracy: location.accuracy)
+        if var shot = tracker.shots.last {
+            shot.kind = shotType == .full && swing != .full ? "partial" : shotType.rawValue
+            tracker.replaceCourseShot(shot)
+            _ = try? CoursesRepo(context: modelContext).createShot(shot)
         }
 
         // Auto-detect shot outcome relative to target line
         if let flag = flagCoord {
             lastShotOutcome = classifyShot(from: start, landing: end, target: flag, clubId: clubId, swing: swing)
 
-            // Log to main Shot system — only if shot type counts for dispersion
-            // Delta is relative to the CLUB'S expected carry, not the flag
-            if let clubId, shotType.countsForDispersion {
-                let club = clubs.first(where: { $0.id == clubId })
-                let clubCarry = (club?.carryYards ?? 0) * swing.carryMultiplier
-                let shotDist = haversineYards(from: start, to: end)
-                let bearing = bearingRad(from: start, to: flag)
-                let shotBearing = bearingRad(from: start, to: end)
-                var angleDiff = shotBearing - bearing
-                while angleDiff > .pi { angleDiff -= 2 * .pi }
-                while angleDiff < -.pi { angleDiff += 2 * .pi }
-                let along = shotDist * cos(angleDiff)
-                let across = shotDist * sin(angleDiff)
-                let ld = along - clubCarry
-                let tags = autoOutcomeTags(longDelta: ld, latDelta: across)
-                // Mirror the CourseShot's id onto the main Shot so undo
-                // can find and delete it without a parallel lookup table.
-                let courseShotId = tracker.shotsForHole(tracker.currentHole).last?.id
-                    ?? UUID().uuidString.lowercased()
-                let mainShot = Shot(
-                    id: courseShotId,
-                    sessionId: tracker.sessionId, clubId: clubId,
-                    targetDistanceYards: clubCarry,
-                    longDelta: ld,
-                    latDelta: across,
-                    outcomes: tags
-                )
-                _ = try? ShotsRepo(context: modelContext).create(mainShot)
-            }
-
+            // GPS records total travel, so it stays out of carry calibration.
             // Auto-detect FIR (tee shot landed on fairway polygon)
-            let shotNum = tracker.shotsForHole(tracker.currentHole).count
+            let shotNum = tracker.shotsForHole(tracker.currentHole).filter { !$0.isPenalty }.count
             if shotNum == 1 && holePar >= 4 {
                 let fairways = holePolygons.filter { $0.surface == .fairway && $0.coordinates.count >= 3 }
                 let onFairway = fairways.contains { pointInPolygon(end, polygon: $0.coordinates) }
@@ -982,10 +1007,7 @@ struct CoursePlayView: View {
 
     private func undoShot() {
         if let removed = tracker.undoLastShot() {
-            try? CoursesRepo(context: modelContext).deleteShots(courseId: courseId, hole: tracker.currentHole)
-            for shot in tracker.shotsForHole(tracker.currentHole) {
-                _ = try? CoursesRepo(context: modelContext).createShot(shot)
-            }
+            try? CoursesRepo(context: modelContext).deleteShot(id: removed.id)
             // Drop the corresponding row from the per-club Shot log so the
             // undone shot doesn't pollute the calculator's σ aggregates.
             // The mainShot id matches the CourseShot id by construction
@@ -1222,6 +1244,7 @@ struct CoursePlayView: View {
     }
 
     private func finishRound() {
+        WatchRoundBridge.shared.end(sessionId: tracker.sessionId)
         tracker.state = .roundComplete
 
         // Compute strokes gained from session shots
@@ -1286,13 +1309,15 @@ struct CoursePlayView: View {
     }
 
     private func cancelRound() {
+        WatchRoundBridge.shared.end(sessionId: tracker.sessionId)
+        tracker.state = .idle
         // Delete all shots from this session — both the course-specific
         // CourseShot rows AND the per-club Shot rows that fed the
         // calculator's σ aggregates. Keeping the latter would mean
         // discarded rounds still influenced calibration.
         let shots = tracker.shots
         for shot in shots {
-            try? CoursesRepo(context: modelContext).deleteShots(courseId: courseId, hole: shot.holeNumber)
+            try? CoursesRepo(context: modelContext).deleteShot(id: shot.id)
         }
         if !tracker.sessionId.isEmpty {
             try? ShotsRepo(context: modelContext).deleteBySession(tracker.sessionId)
@@ -1305,7 +1330,7 @@ struct CoursePlayView: View {
 
     private func prevHole() {
         tracker.currentHole -= 1
-        tracker.state = .holeInProgress(hole: tracker.currentHole, shotCount: tracker.shotsForHole(tracker.currentHole).count)
+        tracker.state = .holeInProgress(hole: tracker.currentHole, shotCount: tracker.shotsForHole(tracker.currentHole).filter { !$0.isPenalty }.count)
         Haptics.light()
     }
 
@@ -1318,7 +1343,7 @@ struct CoursePlayView: View {
         let preselected = selectedOption
 
         DSheetHeader(
-            eyebrow: "Shot \(tracker.shotsForHole(tracker.currentHole).count + 1) · \(shotDist)y",
+            eyebrow: "Shot \(tracker.shotsForHole(tracker.currentHole).filter { !$0.isPenalty }.count + 1) · \(shotDist)y",
             title: "What did you hit?"
         )
 
@@ -1442,7 +1467,7 @@ struct CoursePlayView: View {
 
         DSheetHeader(eyebrow: "Hole \(h) · Par \(holePar) · \(holeYardage)y", title: "Score")
 
-        let minScore = max(tracker.shotsForHole(h).count, 1)
+        let minScore = max(tracker.shotsForHole(h).filter { !$0.isPenalty }.count, 1)
 
         // Score stepper
         HStack {
@@ -1475,14 +1500,13 @@ struct CoursePlayView: View {
         }
 
         // Putts stepper — also updates total score
-        let shotCount = tracker.shotsForHole(h).count
+        let shotCount = tracker.shotsForHole(h).filter { !$0.isPenalty }.count
         HStack {
             Text("Putts").eyebrow()
             Spacer()
             Button {
                 let newPutts = max(0, putts - 1)
-                tracker.scores[h]?.putts = newPutts
-                tracker.setScore(hole: h, score: shotCount + newPutts)
+                tracker.setPutts(hole: h, count: newPutts)
                 Haptics.light()
             } label: {
                 Image(systemName: "minus").font(.system(size: 12))
@@ -1495,8 +1519,7 @@ struct CoursePlayView: View {
                 .frame(width: 36, alignment: .center)
             Button {
                 let newPutts = putts + 1
-                tracker.scores[h]?.putts = newPutts
-                tracker.setScore(hole: h, score: shotCount + newPutts)
+                tracker.setPutts(hole: h, count: newPutts)
                 Haptics.light()
             } label: {
                 Image(systemName: "plus").font(.system(size: 12))
@@ -1525,7 +1548,7 @@ struct CoursePlayView: View {
         HStack {
             Text("Penalties").eyebrow()
             Spacer()
-            Button { if (tracker.scores[h]?.penaltyStrokes ?? 0) > 0 { tracker.scores[h]?.penaltyStrokes -= 1 }; Haptics.light() } label: {
+            Button { tracker.setPenalties(hole: h, count: (tracker.scores[h]?.penaltyStrokes ?? 0) - 1); Haptics.light() } label: {
                 Image(systemName: "minus").font(.system(size: 10))
                     .frame(width: 28, height: 28).background(Circle().fill(DesignTokens.surface))
             }
@@ -1534,7 +1557,7 @@ struct CoursePlayView: View {
                 .font(DispersionType.mono(14, weight: .medium))
                 .foregroundStyle(DesignTokens.pPoor)
                 .frame(width: 28, alignment: .center)
-            Button { tracker.scores[h]?.penaltyStrokes += 1; Haptics.light() } label: {
+            Button { tracker.setPenalties(hole: h, count: (tracker.scores[h]?.penaltyStrokes ?? 0) + 1); Haptics.light() } label: {
                 Image(systemName: "plus").font(.system(size: 10))
                     .frame(width: 28, height: 28).background(Circle().fill(DesignTokens.surface))
             }
@@ -1549,7 +1572,7 @@ struct CoursePlayView: View {
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.dispersion(.primary, size: .lg))
-        .disabled(score == 0)
+        .disabled(score == 0 || putts + (tracker.scores[h]?.penaltyStrokes ?? 0) > score)
 
         // Mini scorecard
         ScrollView(.horizontal, showsIndicators: false) {

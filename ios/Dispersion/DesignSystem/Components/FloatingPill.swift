@@ -13,11 +13,12 @@ private struct FloatingPillStyle: ViewModifier {
         content
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            .frame(minHeight: 44)
             .foregroundStyle(.white)
             .background(
                 Capsule()
-                    .fill(DesignTokens.popover.opacity(0.92))
-                    .overlay(Capsule().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+                    .fill(DesignTokens.ink.opacity(0.94))
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.16), lineWidth: 1))
             )
             .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
     }

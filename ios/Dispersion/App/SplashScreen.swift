@@ -23,47 +23,16 @@ struct SplashScreen: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Logo mark — dispersion rings + reticle
-                ZStack {
-                    // Outer rings
-                    ForEach(0..<5) { i in
-                        Circle()
-                            .strokeBorder(
-                                DesignTokens.primary.opacity(0.08 + Double(i) * 0.06),
-                                lineWidth: 1
-                            )
-                            .frame(width: CGFloat(180 - i * 28), height: CGFloat(180 - i * 28))
-                    }
+                BrandMark()
+                    .foregroundStyle(DesignTokens.cream)
+                    .frame(width: 180, height: 180)
                     .scaleEffect(ringScale)
-
-                    // Reticle
-                    VStack(spacing: 0) {
-                        Rectangle().fill(Color.white.opacity(0.5)).frame(width: 1, height: 16)
-                        Spacer().frame(height: 6)
-                        Rectangle().fill(Color.white.opacity(0.5)).frame(width: 1, height: 16)
-                    }
-                    .frame(height: 38)
                     .opacity(logoOpacity)
-
-                    HStack(spacing: 0) {
-                        Rectangle().fill(Color.white.opacity(0.5)).frame(width: 16, height: 1)
-                        Spacer().frame(width: 6)
-                        Rectangle().fill(Color.white.opacity(0.5)).frame(width: 16, height: 1)
-                    }
-                    .frame(width: 38)
-                    .opacity(logoOpacity)
-
-                    Circle()
-                        .fill(DesignTokens.primary)
-                        .frame(width: 6, height: 6)
-                        .opacity(logoOpacity)
-                }
-                .frame(width: 180, height: 180)
 
                 // App name
-                Text("DISPERSION")
-                    .font(.system(size: 24, weight: .light, design: .default))
-                    .tracking(8)
+                Text("Dispersion")
+                    .font(.system(size: 36, weight: .regular, design: .serif))
+                    .tracking(-1)
                     .foregroundStyle(DesignTokens.cream)
                     .opacity(logoOpacity)
                     .padding(.top, 28)

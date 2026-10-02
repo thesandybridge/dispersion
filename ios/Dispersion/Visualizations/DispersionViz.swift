@@ -217,12 +217,12 @@ public struct DispersionViz: View {
                 center: meanCenter,
                 rx: CGFloat(lateralSd) * CGFloat(k) * scale,
                 ry: CGFloat(carrySd) * CGFloat(k) * scale,
-                facets: facets
+                facets: max(facets, 96)
             )
-            let t = Double(i) / Double(max(n - 1, 1))
-            let alpha = 0.05 + t * 0.55
-            let color = ramp[min(i, ramp.count - 1)].opacity(alpha)
-            ctx.fill(path, with: .color(color))
+            let density = 1 - Double(i) / Double(max(n - 1, 1))
+            let color = ramp[Int(density * Double(ramp.count - 1))]
+            ctx.fill(path, with: .color(color.opacity(0.08 + density * 0.3)))
+            ctx.stroke(path, with: .color(color.opacity(0.25 + density * 0.35)), lineWidth: 1)
         }
     }
 
@@ -237,8 +237,8 @@ public struct DispersionViz: View {
             path,
             with: .linearGradient(
                 Gradient(colors: [
-                    DesignTokens.bentgrass.opacity(0.18),
-                    DesignTokens.fairwayShadow.opacity(0.10)
+                    palette.primary.opacity(0.08),
+                    palette.primary.opacity(0.03)
                 ]),
                 startPoint: CGPoint(x: rect.midX, y: rect.minY),
                 endPoint: CGPoint(x: rect.midX, y: rect.maxY)
@@ -248,7 +248,7 @@ public struct DispersionViz: View {
         // Accent-tinted border, thicker than before.
         ctx.stroke(
             path,
-            with: .color(DesignTokens.bentgrass.opacity(0.65)),
+            with: .color(palette.primary.opacity(0.5)),
             style: StrokeStyle(lineWidth: 1.5)
         )
 
@@ -258,7 +258,7 @@ public struct DispersionViz: View {
         let innerPath = Path(roundedRect: innerRect, cornerRadius: innerR)
         ctx.stroke(
             innerPath,
-            with: .color(.white.opacity(0.10)),
+            with: .color(DesignTokens.foreground.opacity(0.10)),
             style: StrokeStyle(lineWidth: 0.5)
         )
     }
@@ -278,7 +278,7 @@ public struct DispersionViz: View {
             width: outerRadius * 2,
             height: outerRadius * 2
         ))
-        ctx.stroke(ring, with: .color(.white.opacity(0.85)), lineWidth: 1.2)
+        ctx.stroke(ring, with: .color(DesignTokens.foreground.opacity(0.85)), lineWidth: 1.2)
 
         let core = Path(ellipseIn: CGRect(
             x: point.x - coreRadius,
@@ -286,7 +286,7 @@ public struct DispersionViz: View {
             width: coreRadius * 2,
             height: coreRadius * 2
         ))
-        ctx.fill(core, with: .color(.white.opacity(0.95)))
+        ctx.fill(core, with: .color(DesignTokens.foreground.opacity(0.95)))
 
         var ticks = Path()
         ticks.move(to: CGPoint(x: point.x - tickOuter, y: point.y))
@@ -297,7 +297,7 @@ public struct DispersionViz: View {
         ticks.addLine(to: CGPoint(x: point.x, y: point.y - tickInner))
         ticks.move(to: CGPoint(x: point.x, y: point.y + tickInner))
         ticks.addLine(to: CGPoint(x: point.x, y: point.y + tickOuter))
-        ctx.stroke(ticks, with: .color(.white.opacity(0.7)), lineWidth: 1)
+        ctx.stroke(ticks, with: .color(DesignTokens.foreground.opacity(0.7)), lineWidth: 1)
     }
 
     private func drawPin(ctx: GraphicsContext, at point: CGPoint) {
@@ -306,7 +306,7 @@ public struct DispersionViz: View {
         var stick = Path()
         stick.move(to: point)
         stick.addLine(to: stickTop)
-        ctx.stroke(stick, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+        ctx.stroke(stick, with: .color(DesignTokens.foreground.opacity(0.9)), lineWidth: 1.5)
 
         // Flag — small triangle at the top, accent-colored.
         var flag = Path()
@@ -322,7 +322,7 @@ public struct DispersionViz: View {
             x: point.x - 3, y: point.y - 1.5, width: 6, height: 3
         ))
         ctx.fill(cup, with: .color(.black.opacity(0.55)))
-        ctx.stroke(cup, with: .color(.white.opacity(0.6)), lineWidth: 0.8)
+        ctx.stroke(cup, with: .color(DesignTokens.foreground.opacity(0.6)), lineWidth: 0.8)
     }
 
     private func ellipsePath(center: CGPoint, rx: CGFloat, ry: CGFloat, facets: Int) -> Path {
